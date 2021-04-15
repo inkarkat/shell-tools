@@ -32,7 +32,7 @@ HELPDESCRIPTION
     --require-file	Fail with 99 if no FILE arguments have been given.
 Example:
 HELPTEXT
-    printf '%q %s\n' "$(basename "$1")" "zgrep 'status installed' -- /var/log/dpkg.log*"
+    printf '%q %s\n' "$(basename "$1")" 'less /etc/apt/apt.conf.d/*'
 }
 
 # In order to maintain the order of commands, we need to investigate beforehand
