@@ -8,7 +8,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" '[-l|--local-dir] [--with-header|--with-prompt] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command "COMMANDLINE" | SIMPLECOMMAND [...] -- FILE [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[-l|--local-dir] [--with-header|--with-prompt] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command "COMMANDLINE" | SIMPLECOMMAND [...] [--] FILE [...] [-?|-h|--help]'
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '[-l|--local-dir] [--with-header|--with-prompt] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command "COMMANDLINE" | SIMPLECOMMAND [...] -f|--find FIND-ARGS ... [-?|-h|--help]'
 }
@@ -29,6 +29,7 @@ inside COMMANDLINE) individually. So one invocation of COMMAND per FILE.
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
+    echo
     cat <<HELPTEXT
     --local-dir|-l  Change the directory to the one containing the current FILE
 		    before executing COMMAND, and only pass the filename itself.
@@ -103,20 +104,39 @@ do
 			shift; usageRedirectCommand="$1"; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
-	*)		typeset -a cmd=()
-			while [ $# -gt 0 ] && [[ "$1" != @(--|--find|-f) ]]
-			do
-			    cmd+=("$1")
-			    shift
-			done
-			if [ "$isNeedEval" ]; then
-			    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-			    # undo the effects of eval.
-			    printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
-			    printf -v escapedFileMarker %q "$fileMarker"
-			    commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
-			else
-			    commands+=(${commands:+;} "${cmd[@]}")
+	*)		typeset -a files=()
+			if ! containsGlob '@(--|--find|-f)' "$@"; then
+			    # Consume existing FILEs from behind.
+			    while [ $# -gt 0 ]
+			    do
+				lastArg="${!#}"
+				[ -e "$lastArg" ] || break
+				files=("$lastArg" "${files[@]}")
+				set -- "${@:1:$(($#-1))}"
+			    done
+			fi
+
+			if [ $# -gt 0 ]; then
+			    typeset -a cmd=()
+			    while [ $# -gt 0 ] && [[ "$1" != @(--|--find|-f) ]]
+			    do
+				cmd+=("$1")
+				shift
+			    done
+			    if [ "$isNeedEval" ]; then
+				# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+				# undo the effects of eval.
+				printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
+				printf -v escapedFileMarker %q "$fileMarker"
+				commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
+			    else
+				commands+=(${commands:+;} "${cmd[@]}")
+			    fi
+			fi
+
+			if [ ${#files[@]} -gt 0 ]; then
+			    set -- "$@" "${files[@]}"
+			    break
 			fi
 			;;
     esac
