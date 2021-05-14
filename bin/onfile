@@ -284,8 +284,8 @@ getExistingFiles()
     elif [ -n "$sourceCommand" ]; then
 	readarray -t existingFiles < <(eval "$sourceCommand"; printf '\n%d\n' "$?")
 	[ ${existingFiles[-1]} -ne 0 ] && exit ${existingFiles[-1]}
-	unset 'existingFiles[-1]'
-	[ -z "${existingFiles[-1]}" ] && unset 'existingFiles[-1]'
+	unset "existingFiles[$((${#existingFiles[@]}-1))]"
+	[ -z "${existingFiles[-1]}" ] && unset "existingFiles[$((${#existingFiles[@]}-1))]"
     elif [ -n "$dir" ]; then
 	existingFiles=(*)
     fi
