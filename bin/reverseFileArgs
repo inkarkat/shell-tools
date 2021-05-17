@@ -23,7 +23,7 @@ printLongUsage()
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
 Execute COMMAND with all FILE arguments reversed (from last to first) (${fileMarker:+either }
-appended${fileMarker:+ or replacing any $fileMarker marker} inside COMMANDLINE).
+appended to${fileMarker:+ or replacing any $fileMarker marker inside} COMMANDLINE).
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
