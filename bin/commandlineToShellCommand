@@ -71,7 +71,7 @@ do
 	*)		break;;
     esac
 done
-if [ $# -ne 0 ]; then
+if [ $# -ne 0 ] && [ ! "$isTargetArguments" ] && [ ! "$isCommandArguments" ]; then
     # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to undo
     # the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
@@ -94,9 +94,23 @@ elif [ "$isTargetArguments" ] && [ "$isCommandArguments" ]; then
     exit 2
 fi >&2
 
-typeset -a shellCommand=("${SHELL:-sh}" -c "$commands" "${SHELL:-sh}")
+typeset -a shellCommand=("${SHELL:-sh}" -c "$commands")
+
+if [ $# -ne 0 ] && [ "$isCommandArguments" ]; then
+    shellCommand+=("${SHELL:-sh}" "$@")	 # $0 is the shell itself.
+fi
+
 printf -v quotedShellCommand '%q ' "${shellCommand[@]}"; quotedShellCommand="${quotedShellCommand% }"
 typeset -a s=("${shellCommand[@]}")
 interpolatedTargetCommand="${targetCommand//"$commandMarker"/$quotedShellCommand}"
 [ "$interpolatedTargetCommand" = "$targetCommand" ] || s=()
-eval "$interpolatedTargetCommand" '"${s[@]}"'
+
+if [ $# -ne 0 ] && [ "$isTargetArguments" ]; then
+    printf -v quotedArguments '%q ' "$@"; quotedArguments="${quotedArguments% }"
+    typeset -a t=("$@")
+    originalTargetCommand="$interpolatedTargetCommand"
+    interpolatedTargetCommand="${originalTargetCommand//"$targetArgMarker"/$quotedArguments}"
+    [ "$interpolatedTargetCommand" = "$originalTargetCommand" ] || t=()
+fi
+
+eval "$interpolatedTargetCommand" '"${s[@]}" "${t[@]}"'
