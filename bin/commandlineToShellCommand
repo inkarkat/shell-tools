@@ -2,12 +2,18 @@
 
 : ${COMMANDLINETOSHELLCOMMAND_COMMAND_MARKER='{}'}
 commandMarker="$COMMANDLINETOSHELLCOMMAND_COMMAND_MARKER"; unset COMMANDLINETOSHELLCOMMAND_COMMAND_MARKER
+: ${COMMANDLINETOSHELLCOMMAND_TARGETARG_MARKER='{T}'}
+targetArgMarker="$COMMANDLINETOSHELLCOMMAND_TARGETARG_MARKER"; unset COMMANDLINETOSHELLCOMMAND_TARGETARG_MARKER
 
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
     printf 'Usage: %q %s\n' "$(basename "$1")" '-t|--target-command TARGET-COMMANDLINE -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-t|--target-command TARGET-COMMANDLINE -T|--target-arguments -c|--command "COMMANDLINE" [-c ...] [--] [TARGET-ARGUMENTS ...] [-?|-h|--help]'
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" "-t|--target-command TARGET-COMMANDLINE -A|--arguments -c|--command 'COMMANDLINE \"\$1\" \"\$2\"' [-c ...] [--] [COMMAND-ARGUMENTS ...] [-?|-h|--help]"
 }
 printUsage()
 {
@@ -35,11 +41,19 @@ HELPDESCRIPTION
 			shell invocation that executes the passed COMMANDLINE(s)
 			will ${commandMarker:+either }be appended${commandMarker:+ or replace any $commandMarker marker inside
 			TARGET-COMMANDLINE}.
+    --target-arguments|-T
+			Take additional TARGET-ARGUMENTS and ${targetArgMarker:+either }append
+			(after the shell invocation)${targetArgMarker:+ or replace any $targetArgMarker marker
+			inside TARGET-COMMANDLINE}.
+    --arguments|-A	Take additional COMMAND-ARGUMENTS and pass them to the
+			shell invocation as command-line arguments (i.e.
+			addressable as "\$1", "\$2", etc.)
     --command|-c CMD	The cmdline(s) fed to TARGET-COMMAND.
-
 HELPTEXT
 }
 
+isTargetArguments=
+isCommandArguments=
 targetCommand=
 commands=
 while [ $# -ne 0 ]
@@ -48,6 +62,9 @@ do
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 	--target-command|-t)
 			shift; targetCommand="$1"; shift;;
+	--target-arguments|-T)
+			shift; isTargetArguments=t;;
+	--arguments|-A) shift; isCommandArguments=t;;
 	--command|-c)	shift; commands="${commands}${commands:+; }$1"; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
@@ -67,6 +84,11 @@ if [ -z "$targetCommand" ]; then
     exit 2
 elif [ -z "$commands" ]; then
     echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
+    echo
+    printUsage "$0"
+    exit 2
+elif [ "$isTargetArguments" ] && [ "$isCommandArguments" ]; then
+    echo 'ERROR: Cannot combine -T|--target-arguments with -A|--arguments.'
     echo
     printUsage "$0"
     exit 2
