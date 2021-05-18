@@ -1,0 +1,55 @@
+#!/bin/bash
+
+: ${COMMANDLINETOSHELLCOMMAND_COMMAND_MARKER='{}'}
+commandMarker="$COMMANDLINETOSHELLCOMMAND_COMMAND_MARKER"; unset COMMANDLINETOSHELLCOMMAND_COMMAND_MARKER
+
+printUsage()
+{
+    cat <<HELPTEXT
+Take COMMAND, wrap in in a single shell invocation, and feed this to
+TARGET-COMMAND (that just takes a single command but does not interpret an
+entire command-line) ${commandMarker:+either }appended to${commandMarker:+ or replacing any $commandMarker marker inside}
+TARGET-COMMAND.
+HELPTEXT
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-t|--target-command TARGET-COMMANDLINE -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+}
+
+targetCommand=
+commands=
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+	--target-command|-t)
+			shift; targetCommand="$1"; shift;;
+	--command|-c)	shift; commands="${commands}${commands:+; }$1"; shift;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to undo
+    # the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    commands="${commands}${commands:+; }${quotedSimpleCommand% }"
+fi
+if [ -z "$targetCommand" ]; then
+    echo 'ERROR: No -t|--target-command TARGET-COMMANDLINE specified.'
+    echo
+    printUsage "$0"
+    exit 2
+elif [ -z "$commands" ]; then
+    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+typeset -a shellCommand=("${SHELL:-sh}" -c "$commands" "${SHELL:-sh}")
+printf -v quotedShellCommand '%q ' "${shellCommand[@]}"; quotedShellCommand="${quotedShellCommand% }"
+typeset -a s=("${shellCommand[@]}")
+interpolatedTargetCommand="${targetCommand//"$commandMarker"/$quotedShellCommand}"
+[ "$interpolatedTargetCommand" = "$targetCommand" ] || s=()
+eval "$interpolatedTargetCommand" '"${s[@]}"'
