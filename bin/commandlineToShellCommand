@@ -11,9 +11,9 @@ printShortUsage()
     # skim the long one.
     printf 'Usage: %q %s\n' "$(basename "$1")" '-t|--target-command TARGET-COMMANDLINE -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" '-t|--target-command TARGET-COMMANDLINE -T|--target-arguments -c|--command "COMMANDLINE" [-c ...] [--] [TARGET-ARGUMENTS ...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-t|--target-command TARGET-COMMANDLINE -T|--target-arguments [-F|--forward-foreign] -c|--command "COMMANDLINE" [-c ...] [--] [TARGET-ARGUMENTS ...] [-?|-h|--help]'
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "-t|--target-command TARGET-COMMANDLINE -A|--arguments -c|--command 'COMMANDLINE \"\$1\" \"\$2\"' [-c ...] [--] [COMMAND-ARGUMENTS ...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "-t|--target-command TARGET-COMMANDLINE -A|--arguments [-F|--forward-foreign] -c|--command 'COMMANDLINE \"\$1\" \"\$2\"' [-c ...] [--] [COMMAND-ARGUMENTS ...] [-?|-h|--help]"
 }
 printUsage()
 {
@@ -48,10 +48,17 @@ HELPDESCRIPTION
     --arguments|-A	Take additional COMMAND-ARGUMENTS and pass them to the
 			shell invocation as command-line arguments (i.e.
 			addressable as "\$1", "\$2", etc.)
+    --forward-foreign|-F
+			Forward any command-line option and argument that is not
+			recognized to TARGET-/COMMAND-ARGUMENTS instead of
+			complaining. Useful in aliases to seamlessly forward
+			everything.
     --command|-c CMD	The cmdline(s) fed to TARGET-COMMAND.
 HELPTEXT
 }
 
+isForward=
+typeset -a forwardedArguments=()
 isTargetArguments=
 isCommandArguments=
 targetCommand=
@@ -65,10 +72,25 @@ do
 	--target-arguments|-T)
 			shift; isTargetArguments=t;;
 	--arguments|-A) shift; isCommandArguments=t;;
+	--forward-foreign|-F)
+			shift; isForward=t;;
 	--command|-c)	shift; commands="${commands}${commands:+; }$1"; shift;;
 	--)		shift; break;;
-	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
-	*)		break;;
+	-*)		if [ "$isForward" ]; then
+			    forwardedArguments+=("$1"); shift
+			else
+			    echo "ERROR: Unknown option \"$1\"!"
+			    echo
+			    printUsage "$0"
+			    exit 2
+			fi >&2
+			;;
+	*)		if [ "$isForward" ]; then
+			    forwardedArguments+=("$1"); shift
+			else
+			    break
+			fi
+			;;
     esac
 done
 if [ $# -ne 0 ] && [ ! "$isTargetArguments" ] && [ ! "$isCommandArguments" ]; then
@@ -92,12 +114,17 @@ elif [ "$isTargetArguments" ] && [ "$isCommandArguments" ]; then
     echo
     printUsage "$0"
     exit 2
+elif [ "$isForward" ] && [ ! "$isTargetArguments" ] && [ ! "$isCommandArguments" ]; then
+    echo 'ERROR: -F|--forward-foreign must be combined with -T|--target-arguments or -A|--arguments.'
+    echo
+    printUsage "$0"
+    exit 2
 fi >&2
 
 typeset -a shellCommand=("${SHELL:-sh}" -c "$commands")
 
 if [ $# -ne 0 ] && [ "$isCommandArguments" ]; then
-    shellCommand+=("${SHELL:-sh}" "$@")	 # $0 is the shell itself.
+    shellCommand+=("${SHELL:-sh}" "${forwardedArguments[@]}" "$@")	 # $0 is the shell itself.
 fi
 
 printf -v quotedShellCommand '%q ' "${shellCommand[@]}"; quotedShellCommand="${quotedShellCommand% }"
@@ -106,8 +133,8 @@ interpolatedTargetCommand="${targetCommand//"$commandMarker"/$quotedShellCommand
 [ "$interpolatedTargetCommand" = "$targetCommand" ] || s=()
 
 if [ $# -ne 0 ] && [ "$isTargetArguments" ]; then
-    printf -v quotedArguments '%q ' "$@"; quotedArguments="${quotedArguments% }"
-    typeset -a t=("$@")
+    printf -v quotedArguments '%q ' "${forwardedArguments[@]}" "$@"; quotedArguments="${quotedArguments% }"
+    typeset -a t=("${forwardedArguments[@]}" "$@")
     originalTargetCommand="$interpolatedTargetCommand"
     interpolatedTargetCommand="${originalTargetCommand//"$targetArgMarker"/$quotedArguments}"
     [ "$interpolatedTargetCommand" = "$originalTargetCommand" ] || t=()
