@@ -3,16 +3,41 @@
 : ${COMMANDLINETOSHELLCOMMAND_COMMAND_MARKER='{}'}
 commandMarker="$COMMANDLINETOSHELLCOMMAND_COMMAND_MARKER"; unset COMMANDLINETOSHELLCOMMAND_COMMAND_MARKER
 
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-t|--target-command TARGET-COMMANDLINE -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+}
 printUsage()
 {
-    cat <<HELPTEXT
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
 Take COMMAND, wrap in in a single shell invocation, and feed this to
 TARGET-COMMAND (that just takes a single command but does not interpret an
 entire command-line) ${commandMarker:+either }appended to${commandMarker:+ or replacing any $commandMarker marker inside}
 TARGET-COMMAND.
-HELPTEXT
+HELPDESCRIPTION
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" '-t|--target-command TARGET-COMMANDLINE -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --target-command|-t TARGET-COMMANDLINE
+			Execute TARGET-COMMAND as a command-line. The
+			shell invocation that executes the passed COMMANDLINE(s)
+			will ${commandMarker:+either }be appended${commandMarker:+ or replace any $commandMarker marker inside
+			TARGET-COMMANDLINE}.
+    --command|-c CMD	The cmdline(s) fed to TARGET-COMMAND.
+
+HELPTEXT
 }
 
 targetCommand=
@@ -20,7 +45,7 @@ commands=
 while [ $# -ne 0 ]
 do
     case "$1" in
-	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 	--target-command|-t)
 			shift; targetCommand="$1"; shift;;
 	--command|-c)	shift; commands="${commands}${commands:+; }$1"; shift;;
