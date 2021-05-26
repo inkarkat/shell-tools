@@ -35,7 +35,7 @@ HELPTEXT
 
 initialDelay=0.2
 case "$1" in
-    --help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+    --help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
     +([0-9])?([smhd]))	initialDelay="$1"; shift;;
 esac
 
