@@ -20,7 +20,7 @@ STABILIZED_TIME=2147483647
 
 printShortUsage()
 {
-    printf 'Usage: %q %s\n' "$(basename "$1")" "-d|--dir DIR|-g|--glob 'GLOB' [-d|--dir DIR]|--source-command SOURCE-COMMAND [-d|--dir DIR] [--accept-existing] [-n|--count N|-1] [--delay NUMBER[SUFFIX]] [--stabilization-time NUMBER[SUFFIX]] [-i|--interval NUMBER[SUFFIX] [-l|--max-files N] [-D|--stop-on-empty-dir] [-S|--stop-on-empty-file [--delete-empty-file]] [-s|--stop-on-filename PATTERN] [-t|--stop-after TIMEOUT[SUFFIX]] --print] [[--bare|--no-capture-output] [--prefix-command PC] [--prefix-command-command PCC] [--parallel [--rate-limit NUMBER[SUFFIX]]] [--exit-on-success|--exit-on-failure|--exit-on|-exit-unless NUM] [--delete-on-success|--delete-on-failure|--delete-on NUM|--delete-unless NUM] -c|--command \"COMMANDLINE\" | [--] SIMPLECOMMAND [...]] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "-d|--dir DIR|-g|--glob 'FILE-GLOB' [-d|--dir DIR]|--source-command SOURCE-COMMAND [-d|--dir DIR] [--accept-existing] [-n|--count N|-1] [--delay NUMBER[SUFFIX]] [--stabilization-time NUMBER[SUFFIX]] [-i|--interval NUMBER[SUFFIX] [-l|--max-files N] [-D|--stop-on-empty-dir] [-S|--stop-on-empty-file [--delete-empty-file]] [-s|--stop-on-filename PATTERN] [-t|--stop-after TIMEOUT[SUFFIX]] --print] [[--bare|--no-capture-output] [--prefix-command PC] [--prefix-command-command PCC] [--parallel [--rate-limit NUMBER[SUFFIX]]] [--exit-on-success|--exit-on-failure|--exit-on|-exit-unless NUM] [--delete-on-success|--delete-on-failure|--delete-on NUM|--delete-unless NUM] -c|--command \"COMMANDLINE\" | [--] SIMPLECOMMAND [...]] [-?|-h|--help]"
 }
 printUsage()
 {
@@ -42,8 +42,9 @@ HELPDESCRIPTION
     cat <<HELPTEXT
     --dir|-d DIR	The directory that is observed; subdirectories and
 			hidden files are ignored.
-    --glob|-g 'GLOB'	Only files matching GLOB are observed. Can be combined
-			with --dir to go to DIR first.
+    --glob|-g 'FILE-GLOB'
+			Only files matching FILE-GLOB are observed. Can be
+			combined with --dir to go to DIR first.
     --source-command SOURCE-COMMAND
 			SOURCE-COMMAND is invoked repeatedly and should return
 			the observed files one per line. A non-successful exit
@@ -230,12 +231,12 @@ if [ $# -ne 0 ]; then
     commands+=(${commands:+;} "${prefixCommand}${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
 fi
 if [ -z "${dir}${glob}${sourceCommand}" ]; then
-    echo 'ERROR: No -d|--dir DIR|-g|--glob 'GLOB'|--source-command SOURCE-COMMAND passed.'
+    echo 'ERROR: No -d|--dir DIR|-g|--glob 'FILE-GLOB'|--source-command SOURCE-COMMAND passed.'
     echo
     printUsage "$0"
     exit 2
 elif [ -n "$glob" -a -n "$sourceCommand" ]; then
-    echo "ERROR: Can only pass either -g|--glob 'GLOB' or --source-command SOURCE-COMMAND."
+    echo "ERROR: Can only pass either -g|--glob 'FILE-GLOB' or --source-command SOURCE-COMMAND."
     echo
     printUsage "$0"
     exit 2
