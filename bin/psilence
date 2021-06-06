@@ -1,19 +1,20 @@
 #!/bin/bash
 
-printShortUsage()
+printUsage()
 {
-    cat <<SHORTHELPTEXT
-Usage: "$(basename "")" program|pid [-?|-h|--help]
-SHORTHELPTEXT
+    cat <<HELPTEXT
+Suppress output of the passed process PID or the name of the running PROGRAM.
+HELPTEXT
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" 'PROGRAM|PID [-?|-h|--help]'
 }
-
+case "$1" in
+    --help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+esac
 if [ $# -eq 0 ]; then
-    echo >&2 'Pass either the process ID or the name of the program that you want to silence.'
+    printUsage "$0" >&2
     exit 2
 fi
-case "$1" in
-    --help|-h|-\?)	shift; printShortUsage ""; exit 0;;
-esac
 
 if [[ "$1" =~ ^[0-9]*$ ]]; then
     pid=$1
