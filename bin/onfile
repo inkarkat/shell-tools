@@ -274,6 +274,8 @@ fi
 
 mtime()
 {
+    # Note: No --dereference to only consider files directly added into the
+    # directory (like inotifywait).
     stat --format=%Y "$@" 2>/dev/null || echo '-1'
 }
 
