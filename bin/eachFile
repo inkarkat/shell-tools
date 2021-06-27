@@ -86,7 +86,6 @@ makeAbsolute()
 typeset -a findArgs=()
 with=
 typeset -a commands=()
-typeset -a simpleCommands=()
 betweenCommand=
 usageRedirectCommand=
 while [ $# -ne 0 ]
