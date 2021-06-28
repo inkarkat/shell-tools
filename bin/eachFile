@@ -8,9 +8,9 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" '[-l|--local-dir] [--with-header|--with-prompt] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command "COMMANDLINE" | SIMPLECOMMAND [...] [--] FILE [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[-l|--local-dir] [--with-header|--with-prompt [--initial-status NUM] [--trailing-prompt|--no-trailing-prompt] [--no-output-no-prompt] [--no-output-no-error] [--no-success-no-count|--no-count-on N] [--exit-on-success|--exit-on-failure|--exit-on NUM] [--emulate-prompt] [--worst-status] [--comment COMMENT] [--summarize-failed ERROR-TEXT [--summarize-failed-separator SEP]]] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command "COMMANDLINE" [...] | SIMPLECOMMAND [...] [--] FILE [...] [-?|-h|--help]'
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" '[-l|--local-dir] [--with-header|--with-prompt] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command "COMMANDLINE" | SIMPLECOMMAND [...] -f|--find FIND-ARGS ... [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[...] -c|--command "COMMANDLINE" [...] | SIMPLECOMMAND [...] -f|--find FIND-ARGS ...'
 }
 printUsage()
 {
@@ -37,6 +37,21 @@ HELPDESCRIPTION
 		    execution.
     --with-prompt   Emulate a full prompt (as if invoking COMMAND) before each
 		    execution.
+    --initial-status NUM    Customizations of the prompt emulation around
+    --trailing-prompt	    COMMAND; cp. runWithPrompt
+    --no-trailing-prompt
+    --no-output-no-prompt
+    --no-output-no-error
+    --no-success-no-count
+    --no-count-on N
+    --exit-on-success
+    --exit-on-failure
+    --exit-on NUM
+    --emulate-prompt
+    --worst-status
+    --comment COMMENT
+    --summarize-failed ERROR-TEXT
+    --summarize-failed-separator SEP
     --between-command BETWEEN-COMMAND
 		    Execute BETWEEN-COMMAND in between each COMMAND execution.
     --find|-f	    Execute find with the following FIND-ARGS to obtain the list
@@ -49,7 +64,8 @@ HELPDESCRIPTION
 		    usage instructions instead of printing this command's usage.
 		    Useful for wrapper scripts to delegate back to themselves.
 EXIT STATUS:
-Overall exit status is the highest status of all.
+Overall exit status is the highest status of all. If you specify any
+runWithPrompt argument, --worst-status needs to be explicitly passed.
 
 Example:
 HELPTEXT
@@ -88,6 +104,7 @@ with=
 typeset -a commands=()
 betweenCommand=
 usageRedirectCommand=
+typeset -a runWithPromptArgs=()
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -97,6 +114,12 @@ do
 	--command|-c)	shift; commands+=("$1"); isNeedEval=t; shift;;
 	--with-header)	shift; with=header;;
 	--with-prompt)	shift; with=prompt;;
+
+	--trailing-prompt|--no-trailing-prompt|--no-output-no-prompt|--no-output-no-error|--no-success-no-count|--exit-on-success|--exit-on-failure|--emulate-prompt|--worst-status)
+			runWithPromptArgs+=("$1"); shift;;
+	--initial-status|--no-count-on|--exit-on|--comment|--summarize-failed|--summarize-failed-separator)
+			runWithPromptArgs+=("$1" "$2"); shift; shift;;
+
 	--between-command)
 			shift; betweenCommand="$1"; shift;;
 	--usage-redirect)
@@ -159,6 +182,7 @@ isFirst=t
 dirspec=.
 case "$with" in
     prompt)
+	[ ${#runWithPromptArgs[@]} -eq 0 ] && runWithPromptArgs=(--worst-status)
 	quoter='%q'; [ "$isNeedEval" ] && quoter='%s'
 	eval '$fileSource "$@"' "${fileProcessor:+|}" "$fileProcessor" | while IFS=$'\n' read -r filespec || [ -n "$filespec" ]
 	do
@@ -184,7 +208,7 @@ case "$with" in
 	    printf "$quoter " "${interpolatedCommands[@]}" "${f[@]}"
 	    printf '\n'
 	    isFirst=
-	done | runWithPrompt --worst-status
+	done | runWithPrompt "${runWithPromptArgs[@]}"
 	;;
     *)
 	status=0
