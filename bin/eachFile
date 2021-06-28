@@ -8,7 +8,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" '[-l|--local-dir] [--with-header|--with-prompt [--initial-status NUM] [--trailing-prompt|--no-trailing-prompt] [--no-output-no-prompt] [--no-output-no-error] [--no-success-no-count|--no-count-on N] [--exit-on-success|--exit-on-failure|--exit-on NUM] [--emulate-prompt] [--worst-status] [--comment COMMENT] [--summarize-failed ERROR-TEXT [--summarize-failed-separator SEP]]] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command "COMMANDLINE" [...] | SIMPLECOMMAND [...] [--] FILE [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[-l|--local-dir] [--with-header|--with-prompt [--initial-status NUM] [--trailing-prompt|--no-trailing-prompt] [--no-output-no-prompt] [--no-output-no-error] [--emulate-prompt]] [--no-success-no-count|--no-count-on N] [--exit-on-success|--exit-on-failure|--exit-on NUM] [--worst-status] [--comment COMMENT] [--summarize-failed ERROR-TEXT [--summarize-failed-separator SEP]] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command "COMMANDLINE" [...] | SIMPLECOMMAND [...] [--] FILE [...] [-?|-h|--help]'
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '[...] -c|--command "COMMANDLINE" [...] | SIMPLECOMMAND [...] -f|--find FIND-ARGS ...'
 }
@@ -37,17 +37,17 @@ HELPDESCRIPTION
 		    execution.
     --with-prompt   Emulate a full prompt (as if invoking COMMAND) before each
 		    execution.
-    --initial-status NUM    Customizations of the prompt emulation around
-    --trailing-prompt	    COMMAND; cp. runWithPrompt
+    --emulate-prompt	    Customizations of the prompt emulation around
+    --initial-status NUM    COMMAND; cp. runWithPrompt
+    --trailing-prompt
     --no-trailing-prompt
     --no-output-no-prompt
     --no-output-no-error
-    --no-success-no-count
-    --no-count-on N
+    --no-success-no-count   Stop on condition / summarize at end; cp. runWith
+    --no-count-on N	    Cannot be combined with --with-header.
     --exit-on-success
     --exit-on-failure
     --exit-on NUM
-    --emulate-prompt
     --worst-status
     --comment COMMENT
     --summarize-failed ERROR-TEXT
@@ -65,7 +65,7 @@ HELPDESCRIPTION
 		    Useful for wrapper scripts to delegate back to themselves.
 EXIT STATUS:
 Overall exit status is the highest status of all. If you specify any
-runWithPrompt argument, --worst-status needs to be explicitly passed.
+runWith[Prompt] argument, --worst-status needs to be explicitly passed.
 
 Example:
 HELPTEXT
@@ -104,6 +104,7 @@ with=
 typeset -a commands=()
 betweenCommand=
 usageRedirectCommand=
+runWithCommand=runWith
 typeset -a runWithPromptArgs=()
 while [ $# -ne 0 ]
 do
@@ -113,7 +114,7 @@ do
 	--find|-f)	shift; findArgs=("$@"); set --; fileSource='finder'; break;;
 	--command|-c)	shift; commands+=("$1"); isNeedEval=t; shift;;
 	--with-header)	shift; with=header;;
-	--with-prompt)	shift; with=prompt;;
+	--with-prompt)	shift; with=prompt; runWithCommand=runWithPrompt;;
 
 	--trailing-prompt|--no-trailing-prompt|--no-output-no-prompt|--no-output-no-error|--no-success-no-count|--exit-on-success|--exit-on-failure|--emulate-prompt|--worst-status)
 			runWithPromptArgs+=("$1"); shift;;
@@ -164,9 +165,16 @@ do
     esac
 done
 if [ ${#commands[@]} -eq 0 ]; then
-    echo >&2 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
+    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
+    echo
+    printUsage "$0"
     exit 2
-fi
+elif [ ${#runWithPromptArgs[@]} -gt 0 -a "$with" = header ]; then
+    echo 'ERROR: Cannot combine runWith[Prompt] arguments with --with-header.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
 if [ $# -eq 0 -a ${#findArgs[@]} -eq 0 ]; then
     echo >&2 'ERROR: No FILE(s) passed.'
     echo >&2
@@ -208,7 +216,7 @@ case "$with" in
 	    printf "$quoter " "${interpolatedCommands[@]}" "${f[@]}"
 	    printf '\n'
 	    isFirst=
-	done | runWithPrompt "${runWithPromptArgs[@]}"
+	done | ${runWithCommand:?} "${runWithPromptArgs[@]}"
 	;;
     *)
 	status=0
