@@ -20,7 +20,7 @@ STABILIZED_TIME=2147483647
 
 printShortUsage()
 {
-    printf 'Usage: %q %s\n' "$(basename "$1")" "-d|--dir DIR|-g|--glob 'FILE-GLOB' [-d|--dir DIR]|--source-command SOURCE-COMMAND [-d|--dir DIR] [--accept-existing] [-n|--count N|-1] [--delay NUMBER[SUFFIX]] [--stabilization-time NUMBER[SUFFIX]] [-i|--interval NUMBER[SUFFIX] [-l|--max-files N] [-D|--stop-on-empty-dir] [-S|--stop-on-empty-file [--delete-empty-file]] [-s|--stop-on-filename PATTERN] [-t|--stop-after TIMEOUT[SUFFIX]] --print] [[--bare|--no-capture-output] [--prefix-command PC] [--prefix-command-command PCC] [--parallel [--rate-limit NUMBER[SUFFIX]]] [--exit-on-success|--exit-on-failure|--exit-on|-exit-unless NUM] [--delete-on-success|--delete-on-failure|--delete-on NUM|--delete-unless NUM] -c|--command \"COMMANDLINE\" | [--] SIMPLECOMMAND [...]] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "-d|--dir DIR|-g|--glob 'FILE-GLOB' [-d|--dir DIR]|--source-command SOURCE-COMMAND [-d|--dir DIR] [--accept-existing] [-n|--count N|-1] [--delay NUMBER[SUFFIX]] [--stabilization-time NUMBER[SUFFIX]] [-i|--interval NUMBER[SUFFIX] [-l|--max-files N] [-D|--stop-on-empty-dir] [-S|--stop-on-empty-file [--delete-empty-file]] [-s|--stop-on-filename PATTERN] [-t|--stop-after TIMEOUT[SUFFIX]] --print] [[--bare|[--no-capture-output [--initial-status NUM] [--trailing-prompt|--no-trailing-prompt] [--no-output-no-prompt] [--no-output-no-error] [--emulate-prompt]] [--prefix-command PC] [--prefix-command-command PCC] [--parallel [--rate-limit NUMBER[SUFFIX]]] [--exit-on-success|--exit-on-failure|--exit-on|-exit-unless NUM] [--delete-on-success|--delete-on-failure|--delete-on NUM|--delete-unless NUM] -c|--command \"COMMANDLINE\" | [--] SIMPLECOMMAND [...]] [-?|-h|--help]"
 }
 printUsage()
 {
@@ -56,6 +56,12 @@ HELPDESCRIPTION
     --print		Print the added filespecs.
     --bare		Do not print a status line before and after launching
 			the COMMAND.
+    --initial-status NUM    Customizations of the prompt emulation around
+    --trailing-prompt	    COMMAND; cp. runWithPrompt
+    --no-trailing-prompt
+    --no-output-no-prompt
+    --no-output-no-error
+    --emulate-prompt
     --no-capture-output	By default, no status line is printed if the COMMAND did
 			not have any output, and failing parallel invocations
 			without output are ignored altogether. This option turns
@@ -170,6 +176,7 @@ prefixCommandCommand=
 isPrint=
 isBare=
 isCaptureOutput=t
+typeset -a runWithPromptArgs=()
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -264,10 +271,12 @@ fi
 # space. Parallel execution is supposedly mostly used to control resource usage
 # (e.g. just one instance via singleton or not too frequent actions via
 # oncePer). In that case, ignore failing invocations altogether.
-typeset -a runWithPromptArgs=(); [ "$isCaptureOutput" ] && runWithPromptArgs+=(--no-output-no-prompt)
-if [ "$isParallel" ]; then
-    [ "$isCaptureOutput" ] && runWithPromptArgs+=(--no-output-no-error)
-    runWithPromptArgs+=(--no-count-on 99)
+if [ ${#runWithPromptArgs[@]} -eq 0 ]; then
+    [ "$isCaptureOutput" ] && runWithPromptArgs+=(--no-output-no-prompt)
+    if [ "$isParallel" ]; then
+	[ "$isCaptureOutput" ] && runWithPromptArgs+=(--no-output-no-error)
+	runWithPromptArgs+=(--no-count-on 99)
+    fi
 fi
 
 
