@@ -7,7 +7,7 @@ printShortUsage()
     # skim the long one.
     printf 'Usage: %q %s\n' "$(basename "$1")" 'NUMBER[SUFFIX] [-b|--before NUMBER[SUFFIX]] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
     echo
-    printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" 'NUMBER[SUFFIX] [-b|--before NUMBER[SUFFIX]] [--bare|[--initial-status NUM] [--trailing-prompt|--no-trailing-prompt] [--no-output-no-prompt] [--no-output-no-error] [--no-success-no-count|--no-count-on N] [--exit-on-success|--exit-on-failure|--exit-on NUM] [--emulate-prompt] [--worst-status] [--comment COMMENT] [--summarize-failed ERROR-TEXT [--summarize-failed-separator SEP]]] [-?|-h|--help]'
+    printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" 'NUMBER[SUFFIX] [-b|--before NUMBER[SUFFIX]] [--bare|[--initial-status NUM] [--trailing-prompt|--no-trailing-prompt] [--no-output-no-prompt] [--no-output-no-error] [--emulate-prompt]] [--no-success-no-count|--no-count-on N] [--exit-on-success|--exit-on-failure|--exit-on NUM] [--worst-status] [--comment COMMENT] [--summarize-failed ERROR-TEXT [--summarize-failed-separator SEP]] [-?|-h|--help]'
     echo
     printf 'Usage: %q %s <<EOF\n  COMMANDLINE\n...\nEOF\n' "$(basename "$1")" '[...]'
 }
@@ -35,17 +35,17 @@ HELPDESCRIPTION
 			already counts towards the entire runtime.
     --bare		Do not print a status line before and after launching
 			the COMMAND.
-    --initial-status NUM    Customizations of the prompt emulation around
-    --trailing-prompt	    COMMAND; cp. runWithPrompt
+    --emulate-prompt	    Customizations of the prompt emulation around
+    --initial-status NUM    COMMAND; cp. runWithPrompt
+    --trailing-prompt
     --no-trailing-prompt
     --no-output-no-prompt
     --no-output-no-error
-    --no-success-no-count
+    --no-success-no-count   Stop on condition / summarize at end; cp. runWith
     --no-count-on N
     --exit-on-success
     --exit-on-failure	    (This also works with --bare.)
     --exit-on NUM
-    --emulate-prompt
     --worst-status
     --comment COMMENT
     --summarize-failed ERROR-TEXT
@@ -75,6 +75,7 @@ isBare=
 isNeedEval=
 typeset -a commands=()
 typeset -a bashArgs=()
+runWithCommand=runWithPrompt
 typeset -a runWithPromptArgs=()
 while [ $# -ne 0 ]
 do
@@ -82,7 +83,7 @@ do
 	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
 	--before|-b)	shift; before="$(timeToSeconds "$1")" || exit $?; shift;;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
-	--bare)		shift; isBare=t;;
+	--bare)		shift; isBare=t; runWithCommand=runWith;;
 	--exit-on-failure)
 			bashArgs+=(-e); runWithPromptArgs+=("$1"); shift;;
 	--trailing-prompt|--no-trailing-prompt|--no-output-no-prompt|--no-output-no-error|--no-success-no-count|--exit-on-success|--emulate-prompt|--worst-status)
@@ -109,10 +110,10 @@ fi
 SECONDS=0
 [ "$before" ] && sleep "$before"
 if [ ${#commands[@]} -eq 0 ]; then
-    if [ "$isBare" ]; then
+    if [ "$isBare" ] && [ ${#runWithPromptArgs[@]} -eq 0 -o "${#runWithPromptArgs[*]}" = --exit-on-failure ]; then
 	bash "${bashArgs[@]}" -
     else
-	runWithPrompt "${runWithPromptArgs[@]}"
+	${runWithCommand:?} "${runWithPromptArgs[@]}"
     fi
 elif [ "$isNeedEval" ]; then
     eval "${commands[@]}"
