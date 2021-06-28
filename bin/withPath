@@ -42,7 +42,7 @@ a higher precedence.
     --no-success-no-count
     --no-count-on N
     --exit-on-success
-    --exit-on-failure
+    --exit-on-failure	    (This also works with --bare.)
     --exit-on NUM
     --emulate-prompt
     --worst-status
@@ -69,6 +69,7 @@ export PATH="${pathAdd}:$PATH"; shift
 isBare=
 isNeedEval=
 typeset -a commands=()
+typeset -a bashArgs=()
 typeset -a runWithPromptArgs=()
 while [ $# -ne 0 ]
 do
@@ -77,7 +78,9 @@ do
 	--clean|-C)	shift; PATH="${pathAdd}:$(pam_getenv PATH)" || exit $?;;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
 	--bare)		shift; isBare=t;;
-	--trailing-prompt|--no-trailing-prompt|--no-output-no-prompt|--no-output-no-error|--no-success-no-count|--exit-on-success|--exit-on-failure|--emulate-prompt|--worst-status)
+	--exit-on-failure)
+			bashArgs+=(-e); runWithPromptArgs+=("$1"); shift;;
+	--trailing-prompt|--no-trailing-prompt|--no-output-no-prompt|--no-output-no-error|--no-success-no-count|--exit-on-success|--emulate-prompt|--worst-status)
 			runWithPromptArgs+=("$1"); shift;;
 	--initial-status|--no-count-on|--exit-on|--comment|--summarize-failed|--summarize-failed-separator)
 			runWithPromptArgs+=("$1" "$2"); shift; shift;;
@@ -98,7 +101,7 @@ if [ $# -ne 0 ]; then
 fi
 if [ ${#commands[@]} -eq 0 ]; then
     if [ "$isBare" ]; then
-	exec bash -
+	exec bash "${bashArgs[@]}" -
     else
 	exec runWithPrompt "${runWithPromptArgs[@]}"
     fi
