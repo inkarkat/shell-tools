@@ -132,9 +132,10 @@ typeset -a s=("${shellCommand[@]}")
 interpolatedTargetCommand="${targetCommand//"$commandMarker"/$quotedShellCommand}"
 [ "$interpolatedTargetCommand" = "$targetCommand" ] || s=()
 
-if [ $# -ne 0 ] && [ "$isTargetArguments" ]; then
+typeset -a t=()
+if [ ${#forwardedArguments[@]} -gt 0 -o $# -gt 0 ] && [ "$isTargetArguments" ]; then
     printf -v quotedArguments '%q ' "${forwardedArguments[@]}" "$@"; quotedArguments="${quotedArguments% }"
-    typeset -a t=("${forwardedArguments[@]}" "$@")
+    t=("${forwardedArguments[@]}" "$@")
     originalTargetCommand="$interpolatedTargetCommand"
     interpolatedTargetCommand="${originalTargetCommand//"$targetArgMarker"/$quotedArguments}"
     [ "$interpolatedTargetCommand" = "$originalTargetCommand" ] || t=()
