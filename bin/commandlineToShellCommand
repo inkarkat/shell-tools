@@ -43,7 +43,7 @@ HELPDESCRIPTION
 			TARGET-COMMANDLINE}.
     --target-arguments|-T
 			Take additional TARGET-ARGUMENTS and ${targetArgMarker:+either }append
-			(after the shell invocation)${targetArgMarker:+ or replace any $targetArgMarker marker
+			(after TARGET-COMMANDLINE)${targetArgMarker:+ or replace any $targetArgMarker marker
 			inside TARGET-COMMANDLINE}.
     --arguments|-A	Take additional COMMAND-ARGUMENTS and pass them to the
 			shell invocation as command-line arguments (i.e.
@@ -141,4 +141,4 @@ if [ ${#forwardedArguments[@]} -gt 0 -o $# -gt 0 ] && [ "$isTargetArguments" ]; 
     [ "$interpolatedTargetCommand" = "$originalTargetCommand" ] || t=()
 fi
 
-eval "$interpolatedTargetCommand" '"${s[@]}" "${t[@]}"'
+eval "$interpolatedTargetCommand" '"${t[@]}" "${s[@]}"'
