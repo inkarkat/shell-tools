@@ -1,34 +1,66 @@
 #!/bin/bash
 
+: ${TEMPFILE_FILE_MARKER='{}'}
+fileMarker="$TEMPFILE_FILE_MARKER"; unset TEMPFILE_FILE_MARKER
+
 printUsage()
 {
     cat <<HELPTEXT
-Capture output from stdin into a temp file whose name is then printed.
+Capture output from stdin into a temp file whose name is then printed / passed
+to COMMAND (${fileMarker:+either }appended${fileMarker:+ or replacing any $fileMarker marker }inside COMMANDLINE)..
 Additionally, statistics about the amount of captured text is printed to stderr.
 HELPTEXT
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[--basename BASE] [--extension EXT] [-?|-h|--help]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[--basename BASE] [--extension EXT] [-c|--command "COMMANDLINE" [-c ...] [--] SIMPLECOMMAND [...]] [-?|-h|--help]'
 }
 
 basename=
 extension=
+typeset -a commands=()
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
 	--basename)	shift; basename="$1"; shift;;
 	--extension)	shift; extension="$1"; shift;;
-	*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
     esac
 done
+if [ $# -ne 0 ]; then
+    if [ "$isNeedEval" ]; then
+	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+	# undo the effects of eval.
+	printf -v quotedSimpleCommand '%q ' "$@"
+	printf -v escapedFileMarker %q "$fileMarker"
+	commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
+    else
+	commands=("$@")
+    fi
+fi
 [ "$basename" ] || basename="$(basename -- "$0")"
 
-readonly TMPFILE=$(mktemp --tmpdir "${basename}-XXXXXX${extension:+.}${extension}" 2>/dev/null || echo "${TEMP:-/tmp}/${basename}.$$${RANDOM}${extension:+.}${extension}")
+readonly tempFilespec=$(mktemp --tmpdir "${basename}-XXXXXX${extension:+.}${extension}" 2>/dev/null || echo "${TEMP:-/tmp}/${basename}.$$${RANDOM}${extension:+.}${extension}")
 
-cat > "$TMPFILE"
-read lineCnt wordCnt byteCnt _ < <(wc -- "$TMPFILE")
+cat > "$tempFilespec"
+read lineCnt wordCnt byteCnt _ < <(wc -- "$tempFilespec")
 lineCntPlural=s; [ $lineCnt -eq 1 ] && lineCntPlural=
 wordCntPlural=s; [ $wordCnt -eq 1 ] && wordCntPlural=
 byteCntPlural=s; [ $byteCnt -eq 1 ] && byteCntPlural=
 
 printf >&2 '%d line%s, %d word%s, %d byte%s read\n' "$lineCnt" "$lineCntPlural" "$wordCnt" "$wordCntPlural" "$byteCnt" "$byteCntPlural"
-printf '%s\n' "$TMPFILE"
+
+if [ ${#commands[@]} -eq 0 ]; then
+    printf '%s\n' "$tempFilespec"
+else
+    typeset -a f=("$tempFilespec")
+    [ "$isNeedEval" ] && printf -v tempFilespec '%q' "$tempFilespec"
+    typeset -a interpolatedCommands=("${commands[@]//"$fileMarker"/$tempFilespec}")
+    [ "${interpolatedCommands[*]}" = "${commands[*]}" ] || f=()
+    if [ "$isNeedEval" ]; then
+	eval "${interpolatedCommands[@]}" '"${f[@]}"'
+    else
+	"${interpolatedCommands[@]}" "${f[@]}"
+    fi
+fi
