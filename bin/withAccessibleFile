@@ -1,0 +1,163 @@
+#!/bin/bash
+
+: ${WITHACCESSIBLEFILE_FILE_MARKER='{}'}
+targetMarker="$WITHACCESSIBLEFILE_FILE_MARKER"; unset WITHACCESSIBLEFILE_FILE_MARKER
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" 'TARGET [...] [-r|--read] [-g|--group GROUP] [-m|--mode MODE] [-o|--owner OWNER] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Execute COMMAND while TARGET(s) are made writable (temporarily, using sudo) for
+everyone. ${targetMarker:+The string $targetMarker is replaced by the first TARGET.}
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+When you need to update file system location(s) that are not accessible by the
+current user, but the updating command has to be executed by the current user
+(i.e. execution through sudo is not possible).
+
+    --read|-r		Just make TARGET(s) readable for everyone, not writable.
+    --group|-g GROUP	For each newly created dir / file in a TARGET directory,
+			set group ownership to GROUP.
+    --mode|-m MODE	For each newly created dir / file in a TARGET directory,
+			set permission mode (as in chmod) to MODE.
+    --owner|-o OWNER	For each newly created dir / file in a TARGET directory,
+			set ownership to OWNER.
+HELPTEXT
+}
+
+case "$1" in
+    --help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+esac
+
+if [ $# -eq 0 ]; then
+    echo 'ERROR: No TARGET passed.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+firstTarget=
+typeset -a targetDirspecs=() targetFilespecs=()
+while [ $# -ne 0 -a "$1" != -- -a -e "$1" ]
+do
+    [ -z "$firstTarget" ] && firstTarget="$1"
+    if [ -d "$1" ]; then
+	targetDirspecs+=("$1"); shift
+    else
+	targetFilespecs+=("$1"); shift
+    fi
+done
+
+tempPermissions='o+w'
+isChangeNew=
+group=
+mode=
+owner=
+isNeedEval=
+typeset -a commands=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--read|-r)	shift; tempPermissions='o+r';;
+	--group|-g)	shift; group="$1"; shift; isChangeNew=t;;
+	--mode|-m)	shift; mode="$1"; shift; isChangeNew=t;;
+	--owner|-o)	shift; owner="$1"; shift; isChangeNew=t;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    if [ "$isNeedEval" ]; then
+	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+	# undo the effects of eval.
+	printf -v quotedSimpleCommand '%q ' "$@"
+	printf -v escapedTargetMarker %q "$targetMarker"
+	commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedTargetMarker"/$targetMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
+    else
+	commands=("$@")
+    fi
+fi
+if [ ${#commands[@]} -eq 0 ]; then
+    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+SUDO=sudo; [ $EUID -eq 0 ] && SUDO=''
+
+if [ "$isChangeNew" -a ${#targetDirspecs[@]} -gt 0 ]; then
+    shopt -qs globstar dotglob nullglob
+
+    typeset -A existingFiles=()
+    for d in "${targetDirspecs[@]}"
+    do
+	for f in "${d}"/**
+	do
+	    existingFiles["$f"]=t
+	done
+    done
+fi
+
+savedPermissionsFilespec="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TEMP:-/tmp}/$(basename -- "$0").$$$RANDOM")"
+
+# Use sudo already for the retrieval; first, some directories may not be
+# accessible at all to the current user, second, to ensure that the current user
+# has sudo rights and everything's working fine.
+$SUDO getfacl --absolute-names -- "${targetDirspecs[@]}" "${targetFilespecs[@]}" > "$savedPermissionsFilespec" || exit $?
+
+[ ${#targetDirspecs[@]} -eq 0 ] || \
+    $SUDO chmod "${tempPermissions}x" -- "${targetDirspecs[@]}" || exit $?
+[ ${#targetFilespecs[@]} -eq 0 ] || \
+    $SUDO chmod "${tempPermissions}" -- "${targetFilespecs[@]}" || exit $?
+
+restorePermissions()
+{
+    if [ "$isChangeNew" -a ${#targetDirspecs[@]} -gt 0 ]; then
+	typeset -a newFiles=()
+	local d f; for d in "${targetDirspecs[@]}"
+	do
+	    for f in "${d}"/**
+	    do
+		[ "${existingFiles["$f"]}" ] || \
+		    newFiles+=("$f")
+	    done
+	done
+
+	if [ ${#newFiles[@]} -gt 0 ]; then
+	    [ -n "$group" ] && $SUDO chgrp "$group" -- "${newFiles[@]}"
+	    [ -n "$mode" ] && $SUDO chmod "$mode" -- "${newFiles[@]}"
+	    [ -n "$owner" ] && $SUDO chown "$owner" -- "${newFiles[@]}"
+	fi
+    fi
+
+    $SUDO setfacl --restore "$savedPermissionsFilespec"
+    rm -f -- "$savedPermissionsFilespec" 2>/dev/null
+}
+trap 'restorePermissions' EXIT
+
+typeset -a interpolatedCommands=("${commands[@]//"$targetMarker"/$firstTarget}")
+if [ "$isNeedEval" ]; then
+    eval "${interpolatedCommands[@]}"
+else
+    "${interpolatedCommands[@]}"
+fi
