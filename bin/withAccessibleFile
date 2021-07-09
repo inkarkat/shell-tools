@@ -1,0 +1,111 @@
+#!/bin/bash
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" 'TARGET [...] [-r|--read] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Execute COMMAND while TARGET(s) are made writable (temporarily, using sudo) for
+everyone.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+When you need to update file system location(s) that are not accessible by the
+current user, but the updating command has to be executed by the current user
+(i.e. execution through sudo is not possible).
+
+    --read|-r		Just make TARGET(s) readable for everyone, not writable.
+HELPTEXT
+}
+
+case "$1" in
+    --help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+esac
+
+if [ $# -eq 0 ]; then
+    echo 'ERROR: No TARGET passed.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+typeset -a targetDirspecs=() targetFilespecs=()
+while [ $# -ne 0 -a "$1" != -- -a -e "$1" ]
+do
+    if [ -d "$1" ]; then
+	targetDirspecs+=("$1"); shift
+    else
+	targetFilespecs+=("$1"); shift
+    fi
+done
+
+tempPermissions='o+w'
+isNeedEval=
+typeset -a commands=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--read|-r)	shift; tempPermissions='o+r';;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    if [ "$isNeedEval" ]; then
+	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+	# undo the effects of eval.
+	printf -v quotedSimpleCommand '%q ' "$@"
+	commands+=(${commands:+;} "${quotedSimpleCommand% }")
+    else
+	commands=("$@")
+    fi
+fi
+if [ ${#commands[@]} -eq 0 ]; then
+    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+SUDO=sudo; [ $EUID -eq 0 ] && SUDO=''
+
+savedPermissionsFilespec="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TEMP:-/tmp}/$(basename -- "$0").$$$RANDOM")"
+
+# Use sudo already for the retrieval; first, some directories may not be
+# accessible at all to the current user, second, to ensure that the current user
+# has sudo rights and everything's working fine.
+$SUDO getfacl --absolute-names -- "${targetDirspecs[@]}" "${targetFilespecs[@]}" > "$savedPermissionsFilespec" || exit $?
+
+[ ${#targetDirspecs[@]} -eq 0 ] || \
+    $SUDO chmod "${tempPermissions}x" -- "${targetDirspecs[@]}" || exit $?
+[ ${#targetFilespecs[@]} -eq 0 ] || \
+    $SUDO chmod "${tempPermissions}" -- "${targetFilespecs[@]}" || exit $?
+restorePermissions()
+{
+    $SUDO setfacl --restore "$savedPermissionsFilespec"
+    rm -f -- "$savedPermissionsFilespec" 2>/dev/null
+}
+trap 'restorePermissions' EXIT
+
+if [ "$isNeedEval" ]; then
+    eval "${commands[@]}"
+else
+    "${commands[@]}"
+fi
