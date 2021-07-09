@@ -1,5 +1,8 @@
 #!/bin/bash
 
+: ${WITHACCESSIBLEFILE_FILE_MARKER='{}'}
+targetMarker="$WITHACCESSIBLEFILE_FILE_MARKER"; unset WITHACCESSIBLEFILE_FILE_MARKER
+
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
@@ -19,7 +22,7 @@ printLongUsage()
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
 Execute COMMAND while TARGET(s) are made writable (temporarily, using sudo) for
-everyone.
+everyone. ${targetMarker:+The string $targetMarker is replaced by the first TARGET.}
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
@@ -43,9 +46,11 @@ if [ $# -eq 0 ]; then
     printUsage "$0"
     exit 2
 fi >&2
+firstTarget=
 typeset -a targetDirspecs=() targetFilespecs=()
 while [ $# -ne 0 -a "$1" != -- -a -e "$1" ]
 do
+    [ -z "$firstTarget" ] && firstTarget="$1"
     if [ -d "$1" ]; then
 	targetDirspecs+=("$1"); shift
     else
@@ -72,7 +77,8 @@ if [ $# -ne 0 ]; then
 	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
 	# undo the effects of eval.
 	printf -v quotedSimpleCommand '%q ' "$@"
-	commands+=(${commands:+;} "${quotedSimpleCommand% }")
+	printf -v escapedTargetMarker %q "$targetMarker"
+	commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedTargetMarker"/$targetMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
     else
 	commands=("$@")
     fi
@@ -104,8 +110,9 @@ restorePermissions()
 }
 trap 'restorePermissions' EXIT
 
+typeset -a interpolatedCommands=("${commands[@]//"$targetMarker"/$firstTarget}")
 if [ "$isNeedEval" ]; then
-    eval "${commands[@]}"
+    eval "${interpolatedCommands[@]}"
 else
-    "${commands[@]}"
+    "${interpolatedCommands[@]}"
 fi
