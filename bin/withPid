@@ -1,0 +1,90 @@
+#!/bin/bash
+
+: ${WITHPID_PID_MARKER='{}'}
+pidMarker="$WITHPID_PID_MARKER"; unset WITHPID_PID_MARKER
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-s|--source-command SOURCE-COMMANDLINE -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Execute SOURCE-COMMAND (asynchronously) and ${pidMarker:+either }append${pidMarker:+ (or replace any $pidMarker
+marker with)} the process ID to COMMAND.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --source-command|-s SOURCE-COMMANDLINE
+			Execute SOURCE-COMMAND as a command-line asynchronously.
+EXIT STATUS:
+    0	Complete success.
+    2	Bad invocation, wrong or missing command-line arguments.
+    126	Failed to invoke SOURCE-COMMAND.
+    *	Any error from COMMAND is returned as-is.
+HELPTEXT
+}
+
+isNeedEval=
+typeset -a commands=()
+sourceCommand=
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--source-command|-s)
+			shift; sourceCommand="$1"; shift;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    if [ "$isNeedEval" ]; then
+	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+	# undo the effects of eval.
+	printf -v quotedSimpleCommand '%q ' "$@"
+	printf -v escapedPidMarker %q "$pidMarker"
+	commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedPidMarker"/$pidMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
+    else
+	commands=("$@")
+    fi
+fi
+if [ -z "$sourceCommand" ]; then
+    echo 'ERROR: No -s|--source-command SOURCE-COMMANDLINE specified.'
+    echo
+    printUsage "$0"
+    exit 2
+elif [ ${#commands[@]} -eq 0 ]; then
+    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+eval "$sourceCommand &" || exit 126
+pid=$!
+
+typeset -a p=("$pid")
+[ "$isNeedEval" ] && printf -v pid '%q' "$pid"
+typeset -a interpolatedCommands=("${commands[@]//"$pidMarker"/$pid}")
+[ "${interpolatedCommands[*]}" = "${commands[*]}" ] || p=()
+if [ "$isNeedEval" ]; then
+    eval "${interpolatedCommands[@]}" '"${p[@]}"'
+else
+    "${interpolatedCommands[@]}" "${p[@]}"
+fi
