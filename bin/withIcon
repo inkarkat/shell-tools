@@ -1,0 +1,89 @@
+#!/bin/bash
+
+: ${WITHICON_TIMEOUT:=30}
+
+printUsage()
+{
+    cat <<HELPTEXT
+Execute COMMAND (asynchronously), wait for the appearance of a window belonging
+to the launched process, and then set a custom ICON for it.
+HELPTEXT
+    echo
+    printf "Usage: [WITHICON_TIMEOUT=${WITHICON_TIMEOUT}] %q %s\\n" "$(basename "$1")" 'ICON|ICON-FILESPEC -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+}
+
+getIconFilespec()
+{
+    local icon="${1:?}"
+    [ -r "$icon" ] || icon="$(findIcon -- "$1" 2>/dev/null)"
+    if [ "$icon" ]; then
+	printf '%s\n' "$icon"
+    else
+	printf >&2 'ERROR: Icon %s does not exist and cannot be located in ICONPATH (%s).\n' "$icon" "${ICONPATH:-empty}"
+	exit 2
+    fi
+}
+
+case "$1" in
+    --help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+esac
+
+if [ $# -eq 0 ]; then
+    echo 'ERROR: No ICON|ICON-FILESPEC passed.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+iconFilespec="$(getIconFilespec "$1")" || exit $?; shift
+
+isNeedEval=
+typeset -a commands=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    if [ "$isNeedEval" ]; then
+	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+	# undo the effects of eval.
+	printf -v quotedSimpleCommand '%q ' "$@"
+	commands+=(${commands:+;} "${quotedSimpleCommand% }")
+    else
+	commands=("$@")
+    fi
+fi
+if [ ${#commands[@]} -eq 0 ]; then
+    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+if [ "$isNeedEval" ]; then
+    eval "${commands[@]}" &
+else
+    "${commands[@]}" &
+fi || exit 126
+pid=$!
+
+SECONDS=0
+windowId=
+
+until [ $SECONDS -ge $WITHICON_TIMEOUT ]
+do
+    windowId="$(wmctrl -l -p | fieldGrep -e "^${pid}\$" 3)"
+    [ -n "$windowId" ] && break
+    sleep 0.25
+done
+if [ -z "$windowId" ]; then
+    printf >&2 'Fatal: Failed to obtain window ID of process %d.\n' "$pid"
+    exit 3
+fi
+
+WINDOWID="$windowId" exec setIcon "$iconFilespec"
