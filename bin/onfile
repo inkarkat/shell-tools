@@ -20,7 +20,7 @@ STABILIZED_TIME=2147483647
 
 printShortUsage()
 {
-    printf 'Usage: %q %s\n' "$(basename "$1")" "-d|--dir DIR|-g|--glob 'FILE-GLOB' [-d|--dir DIR]|--source-command SOURCE-COMMAND [-d|--dir DIR] [--accept-existing] [-n|--count N|-1] [--delay NUMBER[SUFFIX]] [--stabilization-time NUMBER[SUFFIX]] [-i|--interval NUMBER[SUFFIX] [-l|--max-files N] [-D|--stop-on-empty-dir] [-S|--stop-on-empty-file [--delete-empty-file]] [-s|--stop-on-filename PATTERN] [-t|--stop-after TIMEOUT[SUFFIX]] --print] [[--bare|[--no-capture-output [--initial-status NUM] [--trailing-prompt|--no-trailing-prompt] [--no-output-no-prompt] [--no-output-no-error] [--emulate-prompt]] [--prefix-command PC] [--prefix-command-command PCC] [--parallel [--rate-limit NUMBER[SUFFIX]]] [--exit-on-success|--exit-on-failure|--exit-on|-exit-unless NUM] [--delete-on-success|--delete-on-failure|--delete-on NUM|--delete-unless NUM] -c|--command \"COMMANDLINE\" | [--] SIMPLECOMMAND [...]] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "-d|--dir DIR|-g|--glob 'FILE-GLOB' [-d|--dir DIR]|--source-command SOURCE-COMMAND [-d|--dir DIR] [--accept-existing] [-n|--count N|-1] [--delay NUMBER[SUFFIX]] [--stabilization-time NUMBER[SUFFIX]] [-i|--interval NUMBER[SUFFIX] [-l|--max-files N] [-D|--stop-on-empty-dir] [-S|--stop-on-empty-file [--delete-empty-file]] [-s|--stop-on-filename PATTERN] [-t|--stop-after TIMEOUT[SUFFIX]] --print] [[--bare|[--no-capture-output [--initial-status NUM] [--trailing-prompt|--no-trailing-prompt] [--no-output-no-prompt] [--no-output-no-error] [--emulate-prompt]] [--prefix-command PC] [--prefix-command-command PCC] [--parallel [--parallel-limit N] [--rate-limit NUMBER[SUFFIX]]] [--exit-on-success|--exit-on-failure|--exit-on|-exit-unless NUM] [--delete-on-success|--delete-on-failure|--delete-on NUM|--delete-unless NUM] -c|--command \"COMMANDLINE\" | [--] SIMPLECOMMAND [...]] [-?|-h|--help]"
 }
 printUsage()
 {
@@ -116,6 +116,8 @@ HELPDESCRIPTION
     --parallel		Instead of waiting for one COMMAND to finish before
 			executing the next, run each one the moment the change
 			is triggered. The default is sequential invocation.
+    --parallel-limit N	Wait when more than N parallel jobs are already running
+			to avoid triggering too many simultaneous executions.
     --rate-limit NUMBER[SUFFIX]]
 			Sleep for NUMBER[SUFFIX]] before triggering the next
 			parallel execution of COMMAND. This can avoid triggering
@@ -165,6 +167,7 @@ isStopOnEmptyFile=
 isDeleteEmptyFile=
 stopAfter=
 stopFilenamePattern=
+parallelLimit=
 rateLimit=
 exitOn=
 exitComparison=-eq
@@ -224,6 +227,7 @@ do
 	--stop-after|-t)	shift; stopAfter="$(timeToSeconds "$1")" || exit $?; shift;;
 	--delete-empty-file)	shift; isDeleteEmptyFile=t;;
 	--stop-on-filename|-s)	shift; stopFilenamePattern="$1"; shift;;
+	--parallel-limit)	shift; parallelLimit="$1"; shift;;
 	--rate-limit)		shift; rateLimit="$1"; shift;;
 	--)			shift; break;;
 	-*)			{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
@@ -286,6 +290,14 @@ mtime()
     # Note: No --dereference to only consider files directly added into the
     # directory (like inotifywait).
     stat --format=%Y "$@" 2>/dev/null || echo '-1'
+}
+
+waitForParallelLimit()
+{
+    until [ $(jobs -pr | wc -l) -lt ${parallelLimit:?} ]
+    do
+	sleep 0.1
+    done
 }
 
 typeset -a existingFiles=()
@@ -451,6 +463,7 @@ executeTrigger()
 	fi
 
 	[ "$rateLimit" ] && sleep "$rateLimit"
+	[ "$isParallel" ] && [ "$parallelLimit" ] && waitForParallelLimit
 	eval 'triggerFile "$@"' ${isParallel:+&}
     fi
 
