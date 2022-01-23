@@ -4,6 +4,8 @@ set -o noglob -o pipefail
 : ${PROCESSADDEDFILES_FILE_MARKER='{}'}
 fileMarker="$PROCESSADDEDFILES_FILE_MARKER"; unset PROCESSADDEDFILES_FILE_MARKER
 
+readonly scriptName="$(basename -- "${BASH_SOURCE[0]}")"
+
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
@@ -162,7 +164,7 @@ fi >&2
 
 database()
 {
-    miniDB --table processAddedFiles --schema 'ID LAST' "$@"
+    miniDB --table "$scriptName" --schema 'ID LAST' "$@"
 }
 updateDatabase()
 {
