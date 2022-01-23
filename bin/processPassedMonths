@@ -1,0 +1,179 @@
+#!/bin/bash
+set -o pipefail
+
+: ${DATE:=date}
+
+: ${PROCESSPASTMONTHS_MARKER='{}'}
+marker="$PROCESSPASTMONTHS_MARKER"; unset PROCESSPASTMONTHS_MARKER
+
+readonly scriptName="$(basename -- "${BASH_SOURCE[0]}")"
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-i|--id ID [--start-at YYYY-MM] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Any months that have been passed between the previous run and now are passed to
+COMMANDLINE. If that execution succeeds, the new baseline is stored for the
+following run. This allows processing of any additions, even when the invocation
+interval is irregular (e.g. triggered by anacron).
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    cat <<HELPTEXT
+    --id|-i ID		Identifier under which the state of the last processed
+			file is stored.
+    --start-at YYYY-MM	On the very first run, use YYYY-MM as the first month
+			(instead of the current month).
+    --command|-c CMD	Execute CMD as a command-line. The months that have been
+			added will ${marker:+either }be appended${marker:+ or replace any $marker marker
+			inside CMD}.
+EXIT STATUS:
+    0	Complete success.
+    2	Bad invocation, wrong or missing command-line arguments.
+    3	Internal error or failed assertion.
+    4	No added files have been found.
+    *	any exit status from COMMANDS
+
+Example:
+HELPTEXT
+    printf '%q %s\n' "$(basename "$1")" '--id MailPreviousTexts --skip "$(date +%F).txt" --after -- emailfiles {} me@example.com'
+}
+
+id=
+startAtYear=
+startAtMonth=
+isNeedEval=
+typeset -a commands=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--id|-i)	shift; id="$1"; shift;;
+	--start-at)	shift
+			if [[ "$1" =~ ^([[:digit:]]{4})-([01][0-9])$ ]]; then
+			    startAtYear="${BASH_REMATCH[1]}"
+			    startAtMonth="${BASH_REMATCH[2]}"
+			else
+			    printf >&2 'ERROR: Invalid start date; must be YYYY-MM: %s\n' "$1"
+			    exit 2
+			fi
+			shift
+			;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    if [ "$isNeedEval" ]; then
+	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+	# undo the effects of eval.
+	printf -v quotedSimpleCommand '%q ' "$@"
+	printf -v escapedMarker %q "$marker"
+	commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedMarker"/$marker}")	# %q escapes {}, we don't want that to have it interpolated later.
+    else
+	commands=("$@")
+    fi
+fi
+if [ -z "$id" ]; then
+    echo 'ERROR: No -i|--id ID passed.'
+    echo
+    printUsage "$0"
+    exit 2
+elif [ ${#commands[@]} -eq 0 ]; then
+    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+readonly THIS_YEAR="$($DATE +%-Y)"
+readonly THIS_MONTH="$($DATE +%-m)"
+
+database()
+{
+    miniDB --table "$scriptName" --schema 'ID LAST_YEAR LAST_MONTH' "$@"
+}
+updateDatabase()
+{
+    database --update "${id:?}	${1?}	${2?}"
+}
+readDatabase()
+{
+    local queryResult; queryResult="$(database --query "${id:?}" --columns 'LAST_YEAR LAST_MONTH' --as-shell-variables)"
+    case $? in
+	0)	eval "$queryResult";;
+	1)	updateDatabase "${startAtYear:-"$THIS_YEAR"}" "${startAtMonth:-"$THIS_MONTH"}";&
+	4)	LAST_YEAR="${startAtYear:-"$THIS_YEAR"}"
+		LAST_MONTH="${startAtMonth:-"$THIS_MONTH"}"
+		;;
+	*)	return 3;;
+    esac
+}
+
+addMonthsUntil()
+{
+    local endCompareOp="${1:?}"; shift
+    local endMonth="${1:?}"; shift
+    while [ $LAST_MONTH $endCompareOp $endMonth ]
+    do
+	local addedMonth; printf -v addedMonth '%04d-%02d' "$LAST_YEAR" "$LAST_MONTH"
+	passedMonths+=("$addedMonth")
+	let LAST_MONTH+=1
+    done
+}
+
+IFS=$'\n'
+readDatabase || exit 3
+typeset -a passedMonths=()
+while [ $LAST_YEAR -lt $THIS_YEAR ]
+do
+    addMonthsUntil -le 12
+    let LAST_MONTH=1
+    let LAST_YEAR+=1
+done
+[ $LAST_YEAR -eq $THIS_YEAR ] && \
+    addMonthsUntil -lt $THIS_MONTH
+
+[ ${#passedMonths[@]} -eq 0 ] && exit 4
+
+if [ "$isNeedEval" ]; then
+    printf -v quotedPassedMonths '%q ' "${passedMonths[@]}"; quotedPassedMonths="${quotedPassedMonths% }"
+    typeset -a interpolatedCommands=("${commands[@]//"$marker"/$quotedPassedMonths}")
+    [ "${interpolatedCommands[*]}" = "${commands[*]}" ] && interpolatedCommands+=("$quotedPassedMonths")
+
+    eval "${interpolatedCommands[@]}"
+else
+    didInterpolate=
+    typeset -a interpolatedCommands=()
+    for c in "${commands[@]}"
+    do
+	if [ "$c" = "$marker" ]; then
+	    interpolatedCommands+=("${passedMonths[@]}")
+	    didInterpolate=t
+	else
+	    interpolatedCommands+=("$c")
+	fi
+    done
+    [ "$didInterpolate" ] || interpolatedCommands+=("${passedMonths[@]}")
+
+    "${interpolatedCommands[@]}"
+fi
+status=$?; [ $status -eq 0 ] || exit $status
+
+updateDatabase "$LAST_YEAR" "$LAST_MONTH" || exit 3
