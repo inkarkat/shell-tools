@@ -121,8 +121,9 @@ readDatabase()
 	1)	updateDatabase "${startAtYear:-"$THIS_YEAR"}" "${startAtMonth:-"$THIS_MONTH"}";&
 	4)	LAST_YEAR="${startAtYear:-"$THIS_YEAR"}"
 		LAST_MONTH="${startAtMonth:-"$THIS_MONTH"}"
+		return 1
 		;;
-	*)	return 3;;
+	*)	exit 3;;
     esac
 }
 
@@ -139,7 +140,7 @@ addMonthsUntil()
 }
 
 IFS=$'\n'
-readDatabase || exit 3
+readDatabase
 typeset -a passedMonths=()
 while [ $LAST_YEAR -lt $THIS_YEAR ]
 do
