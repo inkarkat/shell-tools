@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export XDG_CONFIG_HOME="${BATS_TMPDIR}"
+export XDG_DATA_HOME="${BATS_TMPDIR}"
 
 setDate()
 {
