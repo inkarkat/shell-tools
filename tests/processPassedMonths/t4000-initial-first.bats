@@ -22,3 +22,11 @@ load fixture
     [ "$output" = "[2021-02]-[2021-03]-[2021-04]-" ]
     assert_last_month 2021 5
 }
+
+@test "initial call with start 18 months prior passes the first 2 months" {
+    setDate 2021-05-05
+    run processPassedMonths --id ID --start-at 2019-12 --initial-first 2 -- printf '[%s]-'
+    [ $status -eq 0 ]
+    [ "$output" = "[2019-12]-[2020-01]-" ]
+    assert_last_month 2020 2
+}

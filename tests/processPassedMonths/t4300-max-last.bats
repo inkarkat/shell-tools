@@ -23,3 +23,17 @@ load fixture
     [ "$output" = "[2021-07]-[2021-08]-" ]
     assert_last_month 2021 9
 }
+
+@test "subsequent call after 18 months passes last 2 months" {
+    setDate 2020-03-05
+    run processPassedMonths --id ID --start-at 2019-12 --max-last 2 -- printf '[%s]-'
+    [ $status -eq 0 ]
+    [ "$output" = "[2019-12]-[2020-01]-[2020-02]-" ]
+    assert_last_month 2020 3
+
+    setDate 2021-09-09
+    run processPassedMonths --id ID --start-at 2020-12 --max-last 2 -- printf '[%s]-'
+    [ $status -eq 0 ]
+    [ "$output" = "[2021-07]-[2021-08]-" ]
+    assert_last_month 2021 9
+}

@@ -180,13 +180,17 @@ addMonthsUntil()
 {
     local endCompareOp="${1:?}"; shift
     local endMonth="${1:?}"; shift
-    while [ $LAST_MONTH $endCompareOp $endMonth ] && [ $offset -le 0 -o $monthCount -lt $offset ]
+    while [ $offset -le 0 -o $monthCount -lt $offset ]
     do
+	[ $LAST_MONTH $endCompareOp $endMonth ] || return 0
+
 	local addedMonth; printf -v addedMonth '%04d-%02d' "$LAST_YEAR" "$LAST_MONTH"
 	passedMonths+=("$addedMonth")
 	let LAST_MONTH+=1
 	let monthCount+=1
     done
+
+    return 1
 }
 
 IFS=$'\n'
@@ -194,7 +198,7 @@ readDatabase && offset="${maxOffset:-0}" || offset="${initialOffset:-0}"
 typeset -a passedMonths=()
 while [ $LAST_YEAR -lt $THIS_YEAR ]
 do
-    addMonthsUntil -le 12
+    addMonthsUntil -le 12 || break
     let LAST_MONTH=1
     let LAST_YEAR+=1
 done
