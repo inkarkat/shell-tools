@@ -64,7 +64,7 @@ EXIT STATUS:
 
 Example:
 HELPTEXT
-    printf '%q %s\n' "$(basename "$1")" '--id MailPreviousTexts --skip "$(date +%F).txt" --after -- emailfiles {} me@example.com'
+    printf '%q %s\n' "$(basename "$1")" "--id dpkg-log --start-at 2020-01 --initial-first 5 --max-first 3 -- eachArg -c 'printf %s \"Log actions for {}: \"; grep -c \"^{}-\" /var/log/dpkg.log.1 || :' --"
 }
 
 abortFirstLastFilter()
