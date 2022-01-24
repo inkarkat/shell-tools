@@ -14,7 +14,7 @@ lastFiles()
     fi
 }
 export -f lastFiles
-newerFiles()
+newestFiles()
 {
     { printf '> '; printf '%q ' "$@"; printf \\n; } > "$ARG_FILESPEC"
 
@@ -24,7 +24,7 @@ newerFiles()
 	echo -e "$NEWERFILES" | awk -v start=1000 '{ print ++start "\t" $0 }'
     fi
 }
-export -f newerFiles
+export -f newestFiles
 
 export ARG_FILESPEC="${BATS_TMPDIR}/args"
 assert_args() {
