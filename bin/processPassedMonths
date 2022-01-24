@@ -12,7 +12,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" '-i|--id ID [--start-at YYYY-MM] [--initial-first|--initial-last I] [--max-first|--max-last M] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-i|--id ID [--start-at YYYY-MM] [--initial-first|--initial-last I] [--max-first|--max-last M] [-f|--format FORMAT] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
 }
 printUsage()
 {
@@ -50,6 +50,8 @@ HELPDESCRIPTION
     --max-last M	Only process the last M months that were added since the
 			last run. If more are available, these will be skipped
 			over, also by subsequent runs.
+    --format|-f FORMAT	Use date's FORMAT instead of YYYY-MM to render the month
+			into the command-line.
     --command|-c CMD	Execute CMD as a command-line. The months that have been
 			added will ${marker:+either }be appended${marker:+ or replace any $marker marker
 			inside CMD}.
@@ -79,6 +81,7 @@ startAtYear=
 startAtMonth=
 initialOffset=
 maxOffset=
+format=
 isNeedEval=
 typeset -a commands=()
 while [ $# -ne 0 ]
@@ -117,6 +120,7 @@ do
 			maxOffset=-${1:?}
 			shift
 			;;
+	--format|-f)	shift; format="$1"; shift;;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
@@ -202,6 +206,15 @@ if [ $offset -lt 0 ]; then
 fi
 
 [ ${#passedMonths[@]} -eq 0 ] && exit 4
+
+if [ -n "$format" ]; then
+    typeset -a renderedMonths=()
+    for m in "${passedMonths[@]}"
+    do
+	renderedMonths+=("$(date --date="${m}-01" "+$format")")	# Don't use $DATE here.
+    done
+    passedMonths=("${renderedMonths[@]}")
+fi
 
 if [ "$isNeedEval" ]; then
     printf -v quotedPassedMonths '%q ' "${passedMonths[@]}"; quotedPassedMonths="${quotedPassedMonths% }"
