@@ -52,6 +52,21 @@ load fixture
     [ "$output" = "[2021-04]-[2021-05]-" ]
 }
 
+@test "another call three months later passes the previous three months to simple command" {
+    setDate 2021-04-20
+    run processPassedMonths --id ID -- false
+
+    setDate 2021-06-01
+    run processPassedMonths --id ID -- printf '[%s]-'
+    [ $status -eq 0 ]
+    [ "$output" = "[2021-04]-[2021-05]-" ]
+
+    setDate 2021-09-01
+    run processPassedMonths --id ID -- printf '[%s]-'
+    [ $status -eq 0 ]
+    [ "$output" = "[2021-06]-[2021-07]-[2021-08]-" ]
+}
+
 @test "call seven months later passes the previous seven months to simple command" {
     setDate 2021-04-20
     run processPassedMonths --id ID -- false

@@ -12,7 +12,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" '-i|--id ID [--start-at YYYY-MM] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-i|--id ID [--start-at YYYY-MM] [--initial-first|--initial-last I] [--max-first|--max-last M] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
 }
 printUsage()
 {
@@ -38,6 +38,18 @@ HELPDESCRIPTION
 			file is stored.
     --start-at YYYY-MM	On the very first run, use YYYY-MM as the first month
 			(instead of the current month).
+    --initial-first I	On the very first run (with that ID), only process up to
+			I months, starting from the first. If more are
+			available, these will be picked up by a subsequent run.
+    --initial-last I	On the very first run (with that ID), only process the
+			last I months. If more are available, these will be
+			skipped over, also by subsequent runs.
+    --max-first M	Only process up to M months, starting from the first
+			added since the last run. If more are available, these
+			will be picked up by a subsequent run.
+    --max-last M	Only process the last M months that were added since the
+			last run. If more are available, these will be skipped
+			over, also by subsequent runs.
     --command|-c CMD	Execute CMD as a command-line. The months that have been
 			added will ${marker:+either }be appended${marker:+ or replace any $marker marker
 			inside CMD}.
@@ -53,9 +65,20 @@ HELPTEXT
     printf '%q %s\n' "$(basename "$1")" '--id MailPreviousTexts --skip "$(date +%F).txt" --after -- emailfiles {} me@example.com'
 }
 
+abortFirstLastFilter()
+{
+    local what="${1:?}"; shift
+    echo >&2 "ERROR: Only one of --${what}-first or --${what}-last can be passed."
+    echo >&2
+    printUsage "$1" >&2
+    exit 2
+}
+
 id=
 startAtYear=
 startAtMonth=
+initialOffset=
+maxOffset=
 isNeedEval=
 typeset -a commands=()
 while [ $# -ne 0 ]
@@ -71,6 +94,27 @@ do
 			    printf >&2 'ERROR: Invalid start date; must be YYYY-MM: %s\n' "$1"
 			    exit 2
 			fi
+			shift
+			;;
+	--initial-first)
+			shift
+			[ -z "$initialOffset" ] || abortFirstLastFilter initial
+			initialOffset=${1:?}
+			shift
+			;;
+	--initial-last) shift
+			[ -z "$initialOffset" ] || abortFirstLastFilter initial
+			initialOffset=-${1:?}
+			shift
+			;;
+	--max-first)	shift
+			[ -z "$maxOffset" ] || abortFirstLastFilter max
+			maxOffset=${1:?}
+			shift
+			;;
+	--max-last)	shift
+			[ -z "$maxOffset" ] || abortFirstLastFilter max
+			maxOffset=-${1:?}
 			shift
 			;;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
@@ -127,20 +171,22 @@ readDatabase()
     esac
 }
 
+let monthCount=0
 addMonthsUntil()
 {
     local endCompareOp="${1:?}"; shift
     local endMonth="${1:?}"; shift
-    while [ $LAST_MONTH $endCompareOp $endMonth ]
+    while [ $LAST_MONTH $endCompareOp $endMonth ] && [ $offset -le 0 -o $monthCount -lt $offset ]
     do
 	local addedMonth; printf -v addedMonth '%04d-%02d' "$LAST_YEAR" "$LAST_MONTH"
 	passedMonths+=("$addedMonth")
 	let LAST_MONTH+=1
+	let monthCount+=1
     done
 }
 
 IFS=$'\n'
-readDatabase
+readDatabase && offset="${maxOffset:-0}" || offset="${initialOffset:-0}"
 typeset -a passedMonths=()
 while [ $LAST_YEAR -lt $THIS_YEAR ]
 do
@@ -150,6 +196,10 @@ do
 done
 [ $LAST_YEAR -eq $THIS_YEAR ] && \
     addMonthsUntil -lt $THIS_MONTH
+if [ $offset -lt 0 ]; then
+    # Only process the last months; skip previous ones.
+    passedMonths=("${passedMonths[@]:$((${#passedMonths[@]} + offset))}")
+fi
 
 [ ${#passedMonths[@]} -eq 0 ] && exit 4
 
