@@ -26,7 +26,7 @@ printLongUsage()
     # This is the long "man page" when launched with the help argument.
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
-Any months that have been passed between the previous run and now are passed to
+Any months that have passed between the previous run and now are passed to
 COMMANDLINE. If that execution succeeds, the new baseline is stored for the
 following run. This allows processing of any additions, even when the invocation
 interval is irregular (e.g. triggered by anacron).
@@ -45,7 +45,7 @@ EXIT STATUS:
     0	Complete success.
     2	Bad invocation, wrong or missing command-line arguments.
     3	Internal error or failed assertion.
-    4	No added files have been found.
+    4	No months have passed.
     *	any exit status from COMMANDS
 
 Example:
@@ -65,8 +65,8 @@ do
 	--id|-i)	shift; id="$1"; shift;;
 	--start-at)	shift
 			if [[ "$1" =~ ^([[:digit:]]{4})-([01][0-9])$ ]]; then
-			    startAtYear="${BASH_REMATCH[1]}"
-			    startAtMonth="${BASH_REMATCH[2]}"
+			    let startAtYear=10#${BASH_REMATCH[1]}
+			    let startAtMonth=10#${BASH_REMATCH[2]}
 			else
 			    printf >&2 'ERROR: Invalid start date; must be YYYY-MM: %s\n' "$1"
 			    exit 2
