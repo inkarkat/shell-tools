@@ -50,8 +50,8 @@ HELPDESCRIPTION
     --max-last M	Only process the last M months that were added since the
 			last run. If more are available, these will be skipped
 			over, also by subsequent runs.
-    --format|-f FORMAT	Use date's FORMAT instead of YYYY-MM to render the month
-			into the command-line.
+    --format|-f FORMAT	Use date's FORMAT (instead of %Y-%m which results in
+			YYYY-MM) to render the month into the command-line.
     --command|-c CMD	Execute CMD as a command-line. The months that have been
 			added will ${marker:+either }be appended${marker:+ or replace any $marker marker
 			inside CMD}.
