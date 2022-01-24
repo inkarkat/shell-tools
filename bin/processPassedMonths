@@ -155,7 +155,7 @@ readonly THIS_MONTH="$($DATE +%-m)"
 
 database()
 {
-    miniDB --table "$scriptName" --schema 'ID LAST_YEAR LAST_MONTH' "$@"
+    miniDB --table "$scriptName" --schema 'ID YEAR MONTH' "$@"
 }
 updateDatabase()
 {
@@ -163,12 +163,12 @@ updateDatabase()
 }
 readDatabase()
 {
-    local queryResult; queryResult="$(database --query "${id:?}" --columns 'LAST_YEAR LAST_MONTH' --as-shell-variables)"
+    local queryResult; queryResult="$(database --query "${id:?}" --columns 'YEAR MONTH' --as-shell-variables)"
     case $? in
 	0)	eval "$queryResult";;
 	1)	updateDatabase "${startAtYear:-"$THIS_YEAR"}" "${startAtMonth:-"$THIS_MONTH"}";&
-	4)	LAST_YEAR="${startAtYear:-"$THIS_YEAR"}"
-		LAST_MONTH="${startAtMonth:-"$THIS_MONTH"}"
+	4)	YEAR="${startAtYear:-"$THIS_YEAR"}"
+		MONTH="${startAtMonth:-"$THIS_MONTH"}"
 		return 1
 		;;
 	*)	exit 3;;
@@ -182,11 +182,11 @@ addMonthsUntil()
     local endMonth="${1:?}"; shift
     while [ $offset -le 0 -o $monthCount -lt $offset ]
     do
-	[ $LAST_MONTH $endCompareOp $endMonth ] || return 0
+	[ $MONTH $endCompareOp $endMonth ] || return 0
 
-	local addedMonth; printf -v addedMonth '%04d-%02d' "$LAST_YEAR" "$LAST_MONTH"
+	local addedMonth; printf -v addedMonth '%04d-%02d' "$YEAR" "$MONTH"
 	passedMonths+=("$addedMonth")
-	let LAST_MONTH+=1
+	let MONTH+=1
 	let monthCount+=1
     done
 
@@ -196,13 +196,13 @@ addMonthsUntil()
 IFS=$'\n'
 readDatabase && offset="${maxOffset:-0}" || offset="${initialOffset:-0}"
 typeset -a passedMonths=()
-while [ $LAST_YEAR -lt $THIS_YEAR ]
+while [ $YEAR -lt $THIS_YEAR ]
 do
     addMonthsUntil -le 12 || break
-    let LAST_MONTH=1
-    let LAST_YEAR+=1
+    let MONTH=1
+    let YEAR+=1
 done
-[ $LAST_YEAR -eq $THIS_YEAR ] && \
+[ $YEAR -eq $THIS_YEAR ] && \
     addMonthsUntil -lt $THIS_MONTH
 if [ $offset -lt 0 ]; then
     # Only process the last months; skip previous ones.
@@ -244,4 +244,4 @@ else
 fi
 status=$?; [ $status -eq 0 ] || exit $status
 
-updateDatabase "$LAST_YEAR" "$LAST_MONTH" || exit 3
+updateDatabase "$YEAR" "$MONTH" || exit 3
