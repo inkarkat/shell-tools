@@ -59,7 +59,7 @@ EXIT STATUS:
     0	Complete success.
     2	Bad invocation, wrong or missing command-line arguments.
     3	Internal error or failed assertion.
-    4	No months have passed.
+    99	No months have passed.
     *	any exit status from COMMANDS
 
 Example:
@@ -209,7 +209,7 @@ if [ $offset -lt 0 ]; then
     passedMonths=("${passedMonths[@]:$((${#passedMonths[@]} + offset))}")
 fi
 
-[ ${#passedMonths[@]} -eq 0 ] && exit 4
+[ ${#passedMonths[@]} -eq 0 ] && exit 99
 
 if [ -n "$format" ]; then
     typeset -a renderedMonths=()

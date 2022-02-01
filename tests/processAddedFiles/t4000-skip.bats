@@ -12,11 +12,11 @@ load fixture
     assert_last 'with space'
 }
 
-@test "initial call returns 4 when all after files match glob" {
+@test "initial call returns 99 when all after files match glob" {
     LASTFILES='foo\nbar\nfff\nbaz\nwith space\nfor\nfox'
     run processAddedFiles --id ID --after --skip '*' -- printf '[%s]-'
 
-    [ $status -eq 4 ]
+    [ $status -eq 99 ]
     [ "$output" = "" ]
     assert_args '--count 2147483647 --'
     assert_last ''
@@ -32,11 +32,11 @@ load fixture
     assert_last 1005
 }
 
-@test "initial call returns 4 when all newer files match glob" {
+@test "initial call returns 99 when all newer files match glob" {
     NEWERFILES='foo\nbar\nfff\nbaz\nwith space\nfor\nfox'
     run processAddedFiles --id ID --newer --skip '*[fbw]*' -- printf '[%s]-'
 
-    [ $status -eq 4 ]
+    [ $status -eq 99 ]
     [ "$output" = "" ]
     assert_args '> --include-epoch --newer-than 0 --'
     assert_last ''

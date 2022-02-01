@@ -40,7 +40,7 @@ load fixture
     LASTFILES=''
     run processAddedFiles --id ID --after -- printf '[%s]-'
 
-    [ $status -eq 4 ]
+    [ $status -eq 99 ]
     [ "$output" = "" ]
     assert_args '--after files --'
     assert_last 'files'

@@ -54,7 +54,7 @@ EOF
 
     run processAddedFiles --id ID --after -- printf '[%s]-'
 
-    [ $status -eq 4 ]
+    [ $status -eq 99 ]
     [ "$output" = "" ]
     assert_args '--count 2147483647 --'
     assert_last 'set'

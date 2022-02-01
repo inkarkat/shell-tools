@@ -2,20 +2,20 @@
 
 load fixture
 
-@test "initial call exits with 4" {
+@test "initial call exits with 99" {
     run processPassedMonths --id ID -- printf '[%s]-'
 
-    [ $status -eq 4 ]
+    [ $status -eq 99 ]
     [ "$output" = "" ]
 }
 
-@test "call on the same month exits with 4" {
+@test "call on the same month exits with 99" {
     setDate 2021-04-20
     run processPassedMonths --id ID -- false
 
     setDate 2021-04-30
     run processPassedMonths --id ID -- printf '[%s]-'
-    [ $status -eq 4 ]
+    [ $status -eq 99 ]
     [ "$output" = "" ]
 }
 
@@ -29,7 +29,7 @@ load fixture
     [ "$output" = "[2021-04]-" ]
 }
 
-@test "second call on the following month exits with 4" {
+@test "second call on the following month exits with 99" {
     setDate 2021-04-20
     run processPassedMonths --id ID -- false
 
@@ -38,7 +38,7 @@ load fixture
 
     setDate 2021-05-12
     run processPassedMonths --id ID -- printf '[%s]-'
-    [ $status -eq 4 ]
+    [ $status -eq 99 ]
     [ "$output" = "" ]
 }
 

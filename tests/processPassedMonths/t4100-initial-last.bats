@@ -19,7 +19,7 @@ load fixture
 
     setDate 2021-05-10
     run processPassedMonths --id ID --start-at 2020-12 --initial-last 2 -- printf '[%s]-'
-    [ $status -eq 4 ]
+    [ $status -eq 99 ]
     [ "$output" = "" ]
     assert_last_month 2021 5
 }

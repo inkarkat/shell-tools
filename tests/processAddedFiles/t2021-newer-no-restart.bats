@@ -2,7 +2,7 @@
 
 load fixture
 
-@test "when the second update has no newer results, 4 is returned immediately without another initial call" {
+@test "when the second update has no newer results, 99 is returned immediately without another initial call" {
     NEWERFILES='foo\nbar\nwith space'
     run processAddedFiles --id ID --newer -- printf '[%s]-'
 
@@ -22,7 +22,7 @@ load fixture
     NEWERFILES=''
     run processAddedFiles --id ID --newer -- printf '[%s]-'
 
-    NEWERFILES_EXIT=4
+    NEWERFILES_EXIT=99
     [ "$output" = "" ]
     assert_args '> --include-epoch --newer-than 1001 --'
     assert_last 1001

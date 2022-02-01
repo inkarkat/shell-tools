@@ -64,7 +64,7 @@ EXIT STATUS:
     0	Complete success.
     2	Bad invocation, wrong or missing command-line arguments.
     3	Internal error or failed assertion.
-    4	No added files have been found.
+    99	No added files have been found.
     *	any exit status from COMMANDS
 
 Example:
@@ -195,8 +195,8 @@ addedFilespecs=($(
     else
 	eval '"${allFileCommand[@]}" -- "${dirspecs[@]}"' "${initialFilter:+|}" '"${initialFilter[@]}"'
     fi
-)) || exit 4
-[ ${#addedFilespecs[@]} -eq 0 ] && exit 4
+)) || exit 99
+[ ${#addedFilespecs[@]} -eq 0 ] && exit 99
 
 if [ ${#skipGlobs[@]} -gt 0 ]; then
     if [ ${#fileExtractor[@]} -gt 0 ]; then
@@ -210,7 +210,7 @@ if [ ${#skipGlobs[@]} -gt 0 ]; then
     else
 	addedFilespecs=($(globmatch --files-not-matching "${skipGlobs[@]}" -- "${addedFilespecs[@]}"))
     fi
-    [ ${#addedFilespecs[@]} -eq 0 ] && exit 4
+    [ ${#addedFilespecs[@]} -eq 0 ] && exit 99
 fi
 
 last="${addedFilespecs[-1]}"

@@ -40,7 +40,7 @@ load fixture
     NEWERFILES=''
     run processAddedFiles --id ID --newer -- printf '[%s]-'
 
-    [ $status -eq 4 ]
+    [ $status -eq 99 ]
     [ "$output" = "" ]
     assert_args '> --include-epoch --newer-than 1002 --'
     assert_last 1002
