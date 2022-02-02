@@ -7,7 +7,7 @@ printUsage()
 {
     cat <<HELPTEXT
 Capture output from stdin into a temp file whose name is then printed / passed
-to COMMAND (${fileMarker:+either }appended${fileMarker:+ or replacing any $fileMarker marker }inside COMMANDLINE)..
+to COMMAND (${fileMarker:+either }appended${fileMarker:+ or replacing any $fileMarker marker }inside COMMANDLINE).
 Additionally, statistics about the amount of captured text is printed to stderr.
 HELPTEXT
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[--basename BASE] [--extension EXT] [-c|--command "COMMANDLINE" [-c ...] [--] SIMPLECOMMAND [...]] [-?|-h|--help]'
