@@ -9,7 +9,7 @@ setDate()
 
 database()
 {
-    miniDB --table processPassedMonths --schema 'ID LAST_YEAR LAST_MONTH' "$@"
+    miniDB --table processPassedMonths "$@"
 }
 
 assert_last_month() {
