@@ -10,7 +10,7 @@ load fixture
     assert_last_month 2021 2
 }
 
-@test "initial call with start six months prior passes the first 2 months and a later call the remaining 3" {
+@test "initial call with start five months prior passes the first 2 months and a later call the remaining 3" {
     setDate 2021-05-05
     run processPassedMonths --id ID --start-at 2020-12 --initial-first 2 -- printf '[%s]-'
     [ $status -eq 0 ]
