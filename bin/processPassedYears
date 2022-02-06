@@ -1,0 +1,227 @@
+#!/bin/bash
+set -o pipefail
+
+: ${DATE:=date}
+
+: ${PROCESSPASTYEARS_MARKER='{}'}
+marker="$PROCESSPASTYEARS_MARKER"; unset PROCESSPASTYEARS_MARKER
+
+readonly scriptName="$(basename -- "${BASH_SOURCE[0]}")"
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-i|--id ID [--start-at YYYY] [--initial-first|--initial-last I] [--max-first|--max-last M] [-f|--format FORMAT] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Any years that have passed between the previous run and now are passed to
+COMMANDLINE. If that execution succeeds, the new baseline is stored for the
+following run. This allows processing of any additions, even when the invocation
+interval is irregular (e.g. triggered by anacron).
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    cat <<HELPTEXT
+    --id|-i ID		Identifier under which the state of the last processed
+			file is stored.
+    --start-at YYYY	On the very first run, use YYYY as the first year
+			(instead of the current year).
+    --initial-first I	On the very first run (with that ID), only process up to
+			I years, starting from the first. If more are available,
+			these will be picked up by a subsequent run.
+    --initial-last I	On the very first run (with that ID), only process the
+			last I years. If more are available, these will be
+			skipped over, also by subsequent runs.
+    --max-first M	Only process up to M years, starting from the first
+			added since the last run. If more are available, these
+			will be picked up by a subsequent run.
+    --max-last M	Only process the last M years that were added since the
+			last run. If more are available, these will be skipped
+			over, also by subsequent runs.
+    --format|-f FORMAT	Use date's FORMAT (instead of %Y which results in YYYY)
+			to render the year into the command-line.
+    --command|-c CMD	Execute CMD as a command-line. The years that have been
+			added will ${marker:+either }be appended${marker:+ or replace any $marker marker
+			inside CMD}.
+EXIT STATUS:
+    0	Complete success.
+    2	Bad invocation, wrong or missing command-line arguments.
+    3	Internal error or failed assertion.
+    99	No years have passed.
+    *	any exit status from COMMANDS
+
+Example:
+HELPTEXT
+    printf '%q %s\n' "$(basename "$1")" "--id dpkg-log --start-at 2020 --initial-first 5 --max-first 3 -- eachArg -c 'printf %s \"Log actions for {}: \"; grep -c \"^{}-\" /var/log/dpkg.log.1 || :' --"
+}
+
+abortFirstLastFilter()
+{
+    local what="${1:?}"; shift
+    echo >&2 "ERROR: Only one of --${what}-first or --${what}-last can be passed."
+    echo >&2
+    printUsage "$1" >&2
+    exit 2
+}
+
+id=
+startAtYear=
+initialOffset=
+maxOffset=
+format=
+isNeedEval=
+typeset -a commands=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--id|-i)	shift; id="$1"; shift;;
+	--start-at)	shift
+			if [[ "$1" =~ ^([[:digit:]]{4})$ ]]; then
+			    let startAtYear=10#$1
+			else
+			    printf >&2 'ERROR: Invalid start date; must be YYYY: %s\n' "$1"
+			    exit 2
+			fi
+			shift
+			;;
+	--initial-first)
+			shift
+			[ -z "$initialOffset" ] || abortFirstLastFilter initial
+			initialOffset=${1:?}
+			shift
+			;;
+	--initial-last) shift
+			[ -z "$initialOffset" ] || abortFirstLastFilter initial
+			initialOffset=-${1:?}
+			shift
+			;;
+	--max-first)	shift
+			[ -z "$maxOffset" ] || abortFirstLastFilter max
+			maxOffset=${1:?}
+			shift
+			;;
+	--max-last)	shift
+			[ -z "$maxOffset" ] || abortFirstLastFilter max
+			maxOffset=-${1:?}
+			shift
+			;;
+	--format|-f)	shift; format="$1"; shift;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    if [ "$isNeedEval" ]; then
+	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+	# undo the effects of eval.
+	printf -v quotedSimpleCommand '%q ' "$@"
+	printf -v escapedMarker %q "$marker"
+	commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedMarker"/$marker}")	# %q escapes {}, we don't want that to have it interpolated later.
+    else
+	commands=("$@")
+    fi
+fi
+if [ -z "$id" ]; then
+    echo 'ERROR: No -i|--id ID passed.'
+    echo
+    printUsage "$0"
+    exit 2
+elif [ ${#commands[@]} -eq 0 ]; then
+    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+readonly THIS_YEAR="$($DATE +%-Y)"
+
+database()
+{
+    miniDB --table "$scriptName" --schema 'ID YEAR' "$@"
+}
+updateDatabase()
+{
+    database --update "${id:?}	${1?}"
+}
+readDatabase()
+{
+    YEAR="$(database --query "${id:?}" --columns 'YEAR')"
+    case $? in
+	0)	;;
+	1)	updateDatabase "${startAtYear:-"$THIS_YEAR"}";&
+	4)	YEAR="${startAtYear:-"$THIS_YEAR"}"
+		return 1
+		;;
+	*)	exit 3;;
+    esac
+}
+
+IFS=$'\n'
+readDatabase && offset="${maxOffset:-0}" || offset="${initialOffset:-0}"
+typeset -a passedYears=()
+let yearCount=0
+while [ $offset -le 0 -o $yearCount -lt $offset ]
+do
+    [ $YEAR -lt $THIS_YEAR ] || break
+
+    printf -v addedYear '%04d' "$YEAR"
+    passedYears+=("$addedYear")
+    let YEAR+=1
+    let yearCount+=1
+done
+if [ $offset -lt 0 ]; then
+    # Only process the last years; skip previous ones.
+    passedYears=("${passedYears[@]:$((${#passedYears[@]} + offset))}")
+fi
+
+[ ${#passedYears[@]} -eq 0 ] && exit 99
+
+if [ -n "$format" ]; then
+    typeset -a renderedYears=()
+    for y in "${passedYears[@]}"
+    do
+	renderedYears+=("$(date --date="${y}-01-01" "+$format")")	# Don't use $DATE here.
+    done
+    passedYears=("${renderedYears[@]}")
+fi
+
+if [ "$isNeedEval" ]; then
+    printf -v quotedPassedYears '%q ' "${passedYears[@]}"; quotedPassedYears="${quotedPassedYears% }"
+    typeset -a interpolatedCommands=("${commands[@]//"$marker"/$quotedPassedYears}")
+    [ "${interpolatedCommands[*]}" = "${commands[*]}" ] && interpolatedCommands+=("$quotedPassedYears")
+
+    eval "${interpolatedCommands[@]}"
+else
+    didInterpolate=
+    typeset -a interpolatedCommands=()
+    for c in "${commands[@]}"
+    do
+	if [ "$c" = "$marker" ]; then
+	    interpolatedCommands+=("${passedYears[@]}")
+	    didInterpolate=t
+	else
+	    interpolatedCommands+=("$c")
+	fi
+    done
+    [ "$didInterpolate" ] || interpolatedCommands+=("${passedYears[@]}")
+
+    "${interpolatedCommands[@]}"
+fi
+status=$?; [ $status -eq 0 ] || exit $status
+
+updateDatabase "$YEAR" || exit 3
