@@ -63,6 +63,11 @@ HELPDESCRIPTION
 		    When no FILE(s) are passed, redirect to COMMAND --help for
 		    usage instructions instead of printing this command's usage.
 		    Useful for wrapper scripts to delegate back to themselves.
+SEE ALSO:
+- processEachFile also passes each FILE individually to COMMAND; instead of the
+  header and prompt handling, it checks for changes and COMMAND success and can
+  abort and print messages.
+
 EXIT STATUS:
 Overall exit status is the highest status of all. If you specify any
 runWith[Prompt] argument, --worst-status needs to be explicitly passed.
