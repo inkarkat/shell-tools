@@ -57,7 +57,7 @@ HELPDESCRIPTION
     --find|-f	    Execute find with the following FIND-ARGS to obtain the list
 		    of files instead of directly taking FILEs. This allows
 		    recursing into and filtering of subdirectories.
-		    (But you could alternatively directly use find --exec {} ;
+		    (But you could alternatively directly use find -exec {} ;
 		    to do the same.)
     --usage-redirect COMMAND
 		    When no FILE(s) are passed, redirect to COMMAND --help for
