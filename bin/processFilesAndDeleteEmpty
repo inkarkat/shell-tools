@@ -1,0 +1,70 @@
+#!/bin/bash
+
+: ${PROCESSFILESANDDELETEEMPTY_FILE_MARKER='{}'}
+fileMarker="$PROCESSFILESANDDELETEEMPTY_FILE_MARKER"; unset PROCESSFILESANDDELETEEMPTY_FILE_MARKER
+
+printUsage()
+{
+    cat <<HELPTEXT
+Passes FILEs to COMMAND(s) (as the last command-line argument${fileMarker:+, or replacing any
+$fileMarker marker inside COMMAND}), assuming it writes the output back into the same
+FILEs (i.e. performs an in-place update). If COMMAND(s) succeed and a resulting
+FILE becomes completely empty, it is removed.
+HELPTEXT
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" "-c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND ... ${fileMarker:+[}${fileMarker}${fileMarker:+]} ; [...] [--] FILE [...] [-?|-h|--help]"
+}
+
+typeset -a commands=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
+	--exec)		shift
+			cmd=
+			printf -v escapedFileMarker %q "$fileMarker"
+			while [ $# -gt 0 -a "$1" != ';' ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd="${cmd}${cmd:+ }${quotedArg//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo 'ERROR: --exec command must be concluded with ;!'; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			commands+=(${commands:+;} "$cmd")
+			;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ ${#commands[@]} -eq 0 ]; then
+    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or --exec SIMPLECOMMAND ... ;.'
+    echo
+    printUsage "$0"
+    exit 2
+elif [ $# -eq 0 ]; then
+    echo 'ERROR: No FILE(s) to process.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+printf -v quotedFiles '%q ' "$@"; quotedFiles="${quotedFiles% }"
+typeset -a interpolatedCommands=("${commands[@]//"$fileMarker"/$quotedFiles}")
+[ "${interpolatedCommands[*]}" = "${commands[*]}" ] && interpolatedCommands+=("$quotedFiles")
+
+eval "${interpolatedCommands[@]}" || exit $?
+
+status=0
+for filespec
+do
+    if [ -e "$filespec" -a ! -s "$filespec" ]; then
+	rm --force -- "$filespec" || status=$?
+    fi
+done
+exit $status
