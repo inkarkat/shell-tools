@@ -22,7 +22,7 @@ printLongUsage()
     # This is the long "man page" when launched with the help argument.
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
-Execute COMMAND with all FILE arguments in an order provided by ls (${fileMarker:+either }
+Execute COMMAND with all FILE arguments in an order provided by ls (${fileMarker:+either}
 appended to${fileMarker:+ or replacing any $fileMarker marker inside} COMMANDLINE).
 HELPDESCRIPTION
     echo
