@@ -44,7 +44,7 @@ timeToSeconds()
     printf %s "$time"
 }
 case "$1" in
-    --help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+    --help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
     '')			echo >&2 'ERROR: No duration (NUMBER[SUFFIX]) passed.'; echo >&2; printUsage "$0" >&2; exit 2;;
 esac
 
