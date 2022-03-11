@@ -1,5 +1,5 @@
 #!/bin/bash
-set -o noglob -o pipefail
+set -o pipefail
 
 : ${PROCESSADDEDFILES_FILE_MARKER='{}'}
 fileMarker="$PROCESSADDEDFILES_FILE_MARKER"; unset PROCESSADDEDFILES_FILE_MARKER
@@ -180,22 +180,26 @@ readDatabase()
     esac
 }
 
-IFS=$'\n'
 last="$(readDatabase)" || exit 3
 typeset -a addedFilespecs=()
-addedFilespecs=($(
+readarray -t addedFilespecs < <(
     if [ "$last" ]; then
 	eval '"${addedFileCommand[@]}" "$last" -- "${dirspecs[@]}"' "${maxFilter:+|}" '"${maxFilter[@]}"'
 	typeset -a status=("${PIPESTATUS[@]}")
 	if [ -n "$restartExitStatus" ] && [ ${status[0]} -eq $restartExitStatus ]; then
 	    eval '"${allFileCommand[@]}" -- "${dirspecs[@]}"' "${initialFilter:+|}" '"${initialFilter[@]}"'
+	    printf '\n%d\n' "$?"
 	else
-	    exit ${status[-1]}
+	    printf '\n%d\n' ${status[-1]}
 	fi
     else
 	eval '"${allFileCommand[@]}" -- "${dirspecs[@]}"' "${initialFilter:+|}" '"${initialFilter[@]}"'
+	printf '\n%d\n' "$?"
     fi
-)) || exit 99
+)   # Exit status from the process substitution is lost; return the actual exit status via an appended additional line.
+[ ${addedFilespecs[-1]} -ne 0 ] && exit 99
+unset 'addedFilespecs[-1]'
+[ -z "${addedFilespecs[-1]}" ] && unset 'addedFilespecs[-1]'
 [ ${#addedFilespecs[@]} -eq 0 ] && exit 99
 
 if [ ${#skipGlobs[@]} -gt 0 ]; then
@@ -208,14 +212,17 @@ if [ ${#skipGlobs[@]} -gt 0 ]; then
 	done
 	addedFilespecs=("${acceptedFilespecs[@]}")
     else
-	addedFilespecs=($(globmatch --files-not-matching "${skipGlobs[@]}" -- "${addedFilespecs[@]}"))
+	readarray -t addedFilespecs < <(globmatch --files-not-matching "${skipGlobs[@]}" -- "${addedFilespecs[@]}")
     fi
     [ ${#addedFilespecs[@]} -eq 0 ] && exit 99
 fi
 
 last="${addedFilespecs[-1]}"
 if [ ${#fileExtractor[@]} -gt 0 ]; then
-    addedFilespecs=($(printf '%s\n' "${addedFilespecs[@]}" | "${fileExtractor[@]}")) || exit 3
+    readarray -t addedFilespecs < <(printf '%s\n' "${addedFilespecs[@]}" | "${fileExtractor[@]}"; printf '\n%d\n' "$?")	# Exit status from the process substitution is lost; return the actual exit status via an appended additional line.
+    [ ${addedFilespecs[-1]} -ne 0 ] && exit 3
+    unset 'addedFilespecs[-1]'
+    [ -z "${addedFilespecs[-1]}" ] && unset 'addedFilespecs[-1]'
 fi
 
 if [ "$isNeedEval" ]; then
