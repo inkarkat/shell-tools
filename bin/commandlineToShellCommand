@@ -74,7 +74,7 @@ do
 	--arguments|-A) shift; isCommandArguments=t;;
 	--forward-foreign|-F)
 			shift; isForward=t;;
-	--command|-c)	shift; commands="${commands}${commands:+; }$1"; shift;;
+	--command|-c)	shift; commands+="${commands:+; }$1"; shift;;
 	--)		shift; break;;
 	-*)		if [ "$isForward" ]; then
 			    forwardedArguments+=("$1"); shift
@@ -97,7 +97,7 @@ if [ $# -ne 0 ] && [ ! "$isTargetArguments" ] && [ ! "$isCommandArguments" ]; th
     # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to undo
     # the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
-    commands="${commands}${commands:+; }${quotedSimpleCommand% }"
+    commands+="${commands:+; }${quotedSimpleCommand% }"
 fi
 if [ -z "$targetCommand" ]; then
     echo 'ERROR: No -t|--target-command TARGET-COMMANDLINE specified.'
