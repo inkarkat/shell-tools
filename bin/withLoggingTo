@@ -1,0 +1,76 @@
+#!/bin/bash
+set -o pipefail
+
+printUsage()
+{
+    cat <<HELPTEXT
+Execute COMMAND with all of its output logged to LOGFILESPEC.
+HELPTEXT
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" 'LOGFILESPEC [-a|--append] [-t|--tee] [-1|--stdout|-2|--stderr] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+}
+
+case "$1" in
+    --help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+esac
+if [ $# -eq 0 ]; then
+    echo 'ERROR: No LOGFILESPEC passed.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+logFilespec="${1:?}"; shift
+
+redirPrefix=
+redirOp='>'
+redirSuffix='2>&1'
+isTee=
+teePrefix='2>&1'
+teeSuffix=
+isNeedEval=
+typeset -a commands=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+	--append|-a)	shift; redirOp='>>'; teeArg='--append';;
+	--tee|-t)	shift; isTee=t;;
+	--stdout|-1)	shift; redirSuffix=''; teePrefix='';;
+	--stderr|-2)	shift; redirPrefix='2'; redirSuffix=''; teePrefix='3>&1 1>&2 2>&3 3>&-'; teeSuffix='3>&1 1>&2 2>&3 3>&-';;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    if [ "$isNeedEval" ]; then
+	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+	# undo the effects of eval.
+	printf -v quotedSimpleCommand '%q ' "$@"
+	commands+=(${commands:+;} "${quotedSimpleCommand% }")
+    else
+	commands=("$@")
+    fi
+fi
+if [ ${#commands[@]} -eq 0 ]; then
+    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+execute()
+{
+    if [ "$isNeedEval" ]; then
+	eval "${commands[@]}"
+    else
+	"${commands[@]}"
+    fi
+}
+
+if [ "$isTee" ]; then
+    eval "{ execute ${teePrefix} | tee $teeArg -- \"\$logFilespec\"; } ${teeSuffix}"
+else
+    eval "execute ${redirPrefix}${redirOp} \"\$logFilespec\" ${redirSuffix}"
+fi
