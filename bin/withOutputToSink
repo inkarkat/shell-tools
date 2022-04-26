@@ -1,0 +1,115 @@
+#!/bin/bash
+set -o pipefail
+shopt -qs extglob
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-s|--sink-command SINK-COMMANDLINE | -S|--sink-exec SIMPLE-SINK-COMMAND [...] ; [...] [-t|--tee] [-1|--stdout|-2|--stderr] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Execute COMMAND with all of its output piped into SINK-COMMAND(s).
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    -s|--sink-command SINK-COMMAND
+			Execute SINK-COMMAND with the output piped into it.
+			Multiple SINK-COMMANDs are joined with | as pipeline
+			steps.
+    -S|--sink-exec SINK-COMMAND [...] ;
+			Execute SINK-COMMAND with the output piped into it; all
+			following arguments are taken to be arguments to the
+			SINK-COMMAND until an argument consisting of ';' is
+			encountered. Multiple SINK-COMMANDs are joined with | as
+			pipeline steps.
+    --tee|-t		Also print the output in addition to piping it.
+    --stdout|-1		Only pipe output to standard output; error output is
+			output normally.
+    --stderr|-2		Only pipe error output; other output is output normally.
+    --command|-c CMD	The command line to be captured. When this is a simple
+			command, it can also be passed as such.
+HELPTEXT
+}
+
+isTee=
+teePrefix='2>&1'
+teeSuffix=
+isNeedEval=
+typeset -a sinkCommands=()
+typeset -a commands=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--tee|-t)	shift; isTee=t;;
+	--stdout|-1)	shift; teePrefix='';;
+	--stderr|-2)	shift; teePrefix='3>&1 1>&2 2>&3 3>&-'; teeSuffix='3>&1 1>&2 2>&3 3>&-';;
+	--sink-command|-s)
+			shift; sinkCommands+=(${sinkCommands:+|} "$1"); shift;;
+	--sink-exec|-S)	shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != ';' ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd="${cmd}${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo 'ERROR: -S|--sink-exec command must be concluded with ;!'; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			sinkCommands+=(${sinkCommands:+|} "$cmd")
+			;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    if [ "$isNeedEval" ]; then
+	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+	# undo the effects of eval.
+	printf -v quotedSimpleCommand '%q ' "$@"
+	commands+=(${commands:+;} "${quotedSimpleCommand% }")
+    else
+	commands=("$@")
+    fi
+fi
+if [ ${#commands[@]} -eq 0 ]; then
+    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
+    echo
+    printUsage "$0"
+    exit 2
+elif [ ${#sinkCommands[@]} -eq 0 ]; then
+    echo 'ERROR: No SINK-COMMAND(s) specified; need to pass -s|--sink-command "COMMANDLINE", or -S|--sink-exec SIMPLE-SINK-COMMAND [...] ;'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+execute()
+{
+    if [ "$isNeedEval" ]; then
+	eval "${commands[@]}"
+    else
+	"${commands[@]}"
+    fi
+}
+
+eval "{ execute ${teePrefix} | ${isTee:+"tee >("}" "${sinkCommands[@]}" "${isTee:+)}; } ${teeSuffix}"
