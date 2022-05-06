@@ -1,0 +1,107 @@
+#!/bin/bash
+shopt -qs extglob
+
+printUsage()
+{
+    cat <<HELPTEXT
+Show the age in seconds since the Epoch (or seconds passed with -d|--diff) of
+all passed DATE(s). With --grep or --sed, all following arguments are passed to
+the corresponding command and date(s) are expected (one per line) in their
+output.
+HELPTEXT
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[-d|--diff] [-f|--with-filename] (--grep GREP-ARGS ...|--sed SED-ARGS ...|[--] DATE [...]) [-?|-h|--help]'
+    printf 'Usage: reldate --epoch "$(%q %s)"\n' "$(basename "$1")" '(--grep GREP-ARGS ...|--sed SED-ARGS ...|[--] DATE)'
+    printf 'Usage: %q %s | reldate --epoch-lines\n' "$(basename "$1")" '(--grep GREP-ARGS ...|--sed SED-ARGS ...|[--] DATE [...])'
+    echo
+    cat <<HELPTEXT
+Test whether the age of [all] DATE[s] is greater / smaller than AGE.
+SUFFIX may be 's' for seconds (the default), 'm' for minutes, 'h' for hours, 'd'
+for days, 'w' for weeks, 'mo' for months, 'y' for years, 'g' for generations.
+HELPTEXT
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-n|--newer|-o|--older|-lt|-le|-eq|-ne|-ge|-gt AGE[SUFFIX] (--grep GREP-ARGS ...|--sed SED-ARGS ...|[--] DATE [...])'
+    echo
+    cat <<HELPTEXT
+SEE ALSO:
+- reldate extracts dates, but keeps the surrounding text and converts into
+  relative dates.
+
+EXIT STATUS:
+    0	Complete success.
+    1	The comparison failed; at least one DATE did not pass it.
+    2	Bad invocation, wrong or missing command-line arguments.
+    4	Some of the passed DATE(s) are invalid.
+HELPTEXT
+}
+
+timeToSeconds()
+{
+    case "$1" in
+	+([0-9])?(s))   age="${1%s}";;
+	+([0-9])m)	age=$((${1%m} * 60));;
+	+([0-9])h)	age=$((${1%h} * 3600));;
+	+([0-9])d)	age=$((${1%d} * 86400));;
+	+([0-9])w)	age=$((${1%w} * 86400 * 7));;
+	+([0-9])mo)	age=$((${1%mo} * 86400 * 30));;
+	+([0-9])y)	age=$((${1%y} * 86400 * 365));;
+	+([0-9])g)	age=$((${1%g} * 86400 * 9131));;
+	*)		printf >&2 'ERROR: Illegal age: %s\n' "$1"; exit 2;;
+    esac
+    printf %s "$age"
+}
+
+compareOp=
+isDiff=
+typeset -a sourceCommand=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+	--diff|-d)	shift; isDiff=t;;
+	--newer|-n)	shift; age="$(timeToSeconds "$1")" || exit $?; shift; compareOp=-lt;;
+	--older|-o)	shift; age="$(timeToSeconds "$1")" || exit $?; shift; compareOp=-gt;;
+	-lt|-le|-eq|-ne|-ge|-gt)
+			compareOp="$1"; shift; age="$(timeToSeconds "$1")" || exit $?; shift;;
+	--@(grep|sed))	sourceCommand=("${1#--}"); shift; sourceCommand+=("$@"); set --;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+typeset -a requiredArgs=(-ge 1); [ -n "$compareOp" ] && requiredArgs=(-eq 1)
+if [ $# -eq 0 -a ${#sourceCommand[@]} -eq 0 ]; then
+    printUsage "$0" >&2
+    exit 2
+fi
+
+getEpoch()
+{
+    if [ ${#sourceCommand[@]} -eq 0 ]; then
+	printf '%s\n' "$@"
+    else
+	"${sourceCommand[@]}"
+    fi | \
+	date --file=- +%s || return 4
+}
+
+if [ -n "$compareOp" ]; then
+    now="$(date +%s)"
+    exitStatus=3
+    compareStatus=0
+    while IFS=$'\n' read -r epoch || { exitStatus="$epoch"; break; }	# Exit status from the process substitution (<(getEpoch)) is lost; return the actual exit status via an incomplete (i.e. missing the newline) last line.
+    do
+	[ $((now - epoch)) $compareOp $age ] || compareStatus=1
+    done < <(getEpoch "$@"; printf %d "$?")
+    exit $((exitStatus > 0 ? exitStatus : compareStatus))
+elif [ "$isDiff" ]; then
+    now="$(date +%s)"
+    exitStatus=3
+    while IFS=$'\t' read -r epoch addendum || { exitStatus="$epoch"; break; }	# Exit status from the process substitution (<(getEpoch)) is lost; return the actual exit status via an incomplete (i.e. missing the newline) last line.
+    do
+	printf '%d\n' "$((now - epoch))"
+    done < <(getEpoch "$@"; printf %d "$?")
+    exit $exitStatus
+else
+    getEpoch "$@"
+fi
