@@ -176,20 +176,45 @@ do
     case "$format" in
 	color)
 	    case $status in
-		# TODO: Add specialized colors
-		0)  color=''; colorReset='';;
-		*)  color='[31m'; colorReset='[0m';;
+		0)	color=''; colorReset='';;
+		1)	color='[31m';;
+		2)	color='[31m';;
+		3)	color='[01;35m';;
+		4)	color='[35m';;
+		99)	color='[01;33m';;
+		126)	color='[36m';;
+		127)	color='[36m';;
+		*)	if [ $status -ge 128 ]; then
+			    color='[01;36m'
+			else
+			    color='[31m'
+			fi
+			;;
 	    esac
-	    [ -n "$color" ] && printf %s "$color"
+	    if [ -n "$color" ]; then
+		colorReset='[0m'
+		printf %s "$color"
+	    fi
 	    ;;
 	nocolor)
 	    [ -n "$colorReset" ] && printf %s "$colorReset"
 	    ;;
 	icon)
 	    case $status in
-		# TODO: Add more icons
-		0)  icon='✓';;
-		*)  icon='✘';;
+		0)	icon='✔ ';;
+		1)	icon='✘ ';;
+		2)	icon='↯ ';;
+		3)	icon='💣';;
+		4)	icon='❌';;
+		99)	icon='❎';;
+		126)	icon='🐚';;
+		127)	icon='🐚';;
+		*)	if [ $status -ge 128 ]; then
+			    icon='👮'
+			else
+			    icon='Ｘ'
+			fi
+			;;
 	    esac
 	    printf "${isIncompleteLine:+ }${icon}"
 	    isIncompleteLine=t
