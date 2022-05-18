@@ -1,0 +1,262 @@
+#!/bin/bash
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[-i|--icon|-I|--no-icon] [--color|-C|--no-color] [-m|--message MESSAGE] [-k|--success-message MESSAGE] [-M|--fail-message MESSAGE] [-n|--message-for N=MESSAGE [-n ...]] [-s|--command-name|-l|--full-command] [-o|--output|-O|--no-output] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Execute COMMAND and indicate its success or failure via a message.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+By default, the status is visualized with a prepended emoji icon, and the
+command name. Those defaults can be deselected via --no-* flags, or a completely
+new output format can be built via the following options (in the order given):
+    --icon|-i		Insert status indication via an emoji icon.
+    --no-icon|-I	Do not indicate the status (success, failure) via an
+			emoji icon.
+    --color		Insert coloring based on the status.
+    --no-color|-C	Do not color the indication itself. / Drop coloring
+			based on the status.
+    --message|-m MESSAGE
+			Insert MESSAGE (for any kind of result, unless
+			overridden by a more specific one).
+    --success-message|-k MESSAGE
+			Insert MESSAGE for successful execution.
+    --fail-message|-M MESSAGE
+			Insert MESSAGE for failure (unless overridden by a more
+			specific one).
+    --message-for|-n N=MESSAGE
+			Insert MESSAGE for a status of N.
+    --command-name|-s	Print the command name only.
+    --full-command|-l	Print the complete command-line including command
+			arguments.
+    --output|-o		Apply the coloring to COMMAND's output (either stdout or
+			stderr), too. (This resets the default format, so if you
+			want anything else, it needs to be explicitly
+			mentioned. When other formats are put before this,
+			COMMAND's whole output will be buffered until it
+			concludes.)
+    --no-output|-O	Suppress the output of COMMAND(s), so only the status
+			indication itself will be visible.
+    --command|-c CMD	The command line to be executed. When this is a simple
+			command, it can also be passed as such.
+
+SEE ALSO:
+- alert is meant for long-running commands and uses desktop notification and/or
+  sound.
+HELPTEXT
+}
+
+isNeedEval=
+typeset -a commands=()
+redir=
+hasColor=; [ -t 1 ] && hasColor=t
+hasIcon=t
+unset message
+unset successMessage
+unset failMessage
+typeset -A statusMessage=()
+typeset -a formats=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--icon|-i)	shift; formats+=(icon);;
+	--no-icon|-I)	shift; hasIcon=;;
+	--color)	shift; hasColor=t; formats+=(color);;
+	--no-color|-C)	shift; hasColor=; formats+=(nocolor);;
+	--message|-m)	shift
+			contains message "${formats[@]}" || formats+=(message)
+			message="$1"
+			shift
+			;;
+	--success-message|-k)
+			shift
+			contains message "${formats[@]}" || formats+=(message)
+			successMessage="$1"
+			shift
+			;;
+	--fail-message|-M)
+			shift
+			contains message "${formats[@]}" || formats+=(message)
+			failMessage="$1"
+			shift
+			;;
+	--message-for|-n)
+			shift
+			contains message "${formats[@]}" || formats+=(message)
+			if [[ "$1" =~ ^[[:digit:]]+= ]]; then
+			    statusMessage["${1%%=*}"]="${1#*=}"
+			else
+			    echo 'ERROR: No N=MESSAGE format.'
+			    echo
+			    printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			;;
+	--command-name|-s)
+			shift; formats+=(commandname);;
+	--full-command|-l)
+			shift; formats+=(commandline);;
+	--output|-o)	shift
+			formats+=(output)
+			TMPFILE="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TEMP:-/tmp}/$(basename -- "$0").$$$RANDOM")"
+			[ "${DEBUG:-}" ] || trap 'rm -f -- "$TMPFILE" 2>/dev/null' EXIT
+			redir='> "$TMPFILE" 2>&1'
+			;;
+	--no-output|-O)	shift; redir='>/dev/null 2>&1';;
+
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    if [ "$isNeedEval" ]; then
+	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+	# undo the effects of eval.
+	printf -v quotedSimpleCommand '%q ' "$@"
+	commands+=(${commands:+;} "${quotedSimpleCommand% }")
+    else
+	commands=("$@")
+    fi
+fi
+if [ ${#commands[@]} -eq 0 ]; then
+    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+if [ ${#formats[@]} -eq 0 ] || [ ${#formats[@]} -eq 1 -a \( "${formats[0]}" = color -o "${formats[0]}" = nocolor \) ]; then
+    [ "$hasIcon" ] && formats+=(icon)
+    formats+=(commandname)
+fi
+if [ "$hasColor" ]; then
+    contains color "${formats[@]}" || \
+	formats=(color "${formats[@]}")
+
+    # Always undo the coloring at the end.
+    contains nocolor "${formats[@]}" || \
+	formats+=(nocolor)
+fi
+
+runCommand()
+{
+    if [ "$isNeedEval" ]; then
+	eval "${commands[@]}"
+    else
+	"${commands[@]}"
+    fi
+}
+
+eval "runCommand${redir:+ }${redir}"; status=$?
+
+isIncompleteLine=
+for format in "${formats[@]}"
+do
+    case "$format" in
+	color)
+	    case $status in
+		0)	color=''; colorReset='';;
+		1)	color='[31m';;
+		2)	color='[31m';;
+		3)	color='[01;35m';;
+		4)	color='[35m';;
+		99)	color='[01;33m';;
+		126)	color='[36m';;
+		127)	color='[36m';;
+		*)	if [ $status -ge 128 ]; then
+			    color='[01;36m'
+			else
+			    color='[31m'
+			fi
+			;;
+	    esac
+	    if [ -n "$color" ]; then
+		colorReset='[0m'
+		printf %s "$color"
+	    fi
+	    ;;
+	nocolor)
+	    [ -n "$colorReset" ] && printf %s "$colorReset"
+	    ;;
+	icon)
+	    case $status in
+		0)	icon='✔ ';;
+		1)	icon='✘ ';;
+		2)	icon='↯ ';;
+		3)	icon='💣';;
+		4)	icon='❌';;
+		99)	icon='❎';;
+		126)	icon='🐚';;
+		127)	icon='🐚';;
+		*)	if [ $status -ge 128 ]; then
+			    icon='👮'
+			else
+			    icon='Ｘ'
+			fi
+			;;
+	    esac
+	    printf "${isIncompleteLine:+ }${icon}"
+	    isIncompleteLine=t
+	    ;;
+	commandname)
+	    printf "${isIncompleteLine:+ }%s" "$(commandName --no-interpreter --undefined '???' ${isNeedEval:+--eval} "${commands[@]}")"
+	    isIncompleteLine=t
+	    ;;
+	commandline)
+	    printf "${isIncompleteLine:+ }%s" "${commands[*]}"
+	    isIncompleteLine=t
+	    ;;
+	output)
+	    if [ -s "$TMPFILE" ]; then
+		[ "$isIncompleteLine" ] && printf '\n'
+		isIncompleteLine=
+		if [ -n "${color}${colorReset}" ]; then
+		    # Color each line anew, to avoid that a captured ANSI escape
+		    # sequence kills color completely.
+		    sed -e "s/.*/${color}&${colorReset}/" -- "$TMPFILE"
+		else
+		    cat -- "$TMPFILE"
+		fi
+	    fi
+	    ;;
+	message)
+	    if [ -n "${statusMessage["$status"]}" ]; then
+		[ -n "${statusMessage["$status"]}" ] && printf "${isIncompleteLine:+ }%s" "${statusMessage["$status"]}"
+	    elif [ $status -eq 0 -a -n "${successMessage+t}" ]; then
+		[ -n "$successMessage" ] && printf "${isIncompleteLine:+ }%s" "$successMessage"
+	    elif [ $status -ne 0 -a -n "${failMessage+t}" ]; then
+		[ -n "$failMessage" ] && printf "${isIncompleteLine:+ }%s" "$failMessage"
+	    else
+		[ -n "$message" ] && printf "${isIncompleteLine:+ }%s" "$message"
+	    fi
+	    isIncompleteLine=t
+	    ;;
+	*)
+	    printf >&2 'ASSERT: Invalid format: %s\n' "$format"; exit 3
+	    ;;
+    esac
+done
+[ "$isIncompleteLine" ] && printf '\n'
+
+exit $status
