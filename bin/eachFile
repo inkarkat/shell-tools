@@ -210,6 +210,7 @@ case "$with" in
 	    if [ "$isLocalDir" ]; then
 		dirspec="$(dirname -- "$filespec")"
 		filespec="$(basename -- "$filespec")"
+		printf 'cd %q && ' "$dirspec"   # Previous COMMANDS may have changed the directory, so unconditionally do the chdir.
 	    fi
 
 	    [ "$isNeedEval" ] && printf -v filespec '%q' "$filespec"
@@ -217,7 +218,6 @@ case "$with" in
 	    typeset -a f=("$filespec")	# Quoter for isNeedEval=t is off, so need to use quoted arg here.
 	    [ "${interpolatedCommands[*]}" = "${commands[*]}" ] || f=()
 
-	    printf 'cd %q && ' "$dirspec"   # Previous COMMANDS may have changed the directory, so unconditionally do the chdir.
 	    printf "$quoter " "${interpolatedCommands[@]}" "${f[@]}"
 	    printf '\n'
 	    isFirst=
