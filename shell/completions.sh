@@ -1,7 +1,7 @@
 #!/bin/sh source-this-script
 
 completeAsCommand commandlineToShellCommand \
-    eachArg eachFile \
+    eachArg eachDir eachFile \
     exitsWith onfile \
     processAddedFiles replify reverseFileArgs slowcommand sortedFileArgs \
     tempdir tempfile \

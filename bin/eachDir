@@ -1,0 +1,265 @@
+#!/bin/bash
+shopt -qs extglob
+
+: ${EACHDIR_DIR_MARKER='{}'}
+dirMarker="$EACHDIR_DIR_MARKER"; unset EACHDIR_DIR_MARKER
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[-l|--local-dir] [--with-header|--with-prompt [--initial-status NUM] [--trailing-prompt|--no-trailing-prompt] [--no-output-no-prompt] [--no-output-no-error] [--emulate-prompt]] [--no-success-no-count|--no-count-on N] [--exit-on-success|--exit-on-failure|--exit-on NUM] [--worst-status] [--comment COMMENT] [--summarize-failed ERROR-TEXT [--summarize-failed-separator SEP]] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command "COMMANDLINE" [...] | SIMPLECOMMAND [...] [--] DIR [...] [-?|-h|--help]'
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[...] -c|--command "COMMANDLINE" [...] | SIMPLECOMMAND [...] -f|--find FIND-ARGS ...'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Execute COMMAND on each DIR (which ${dirMarker:+either }is appended${dirMarker:+ or replaces any $dirMarker marker}
+inside COMMANDLINE) individually. So one invocation of COMMAND per DIR.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --local-dir|-l  Change the directory to the current DIR before executing
+		    COMMAND; nothing is appended to COMMAND then${dirMarker:+ (but $dirMarker is
+		    still replaced)}.
+    --with-header   Print a header (containing the current DIR) before each
+		    execution.
+    --with-prompt   Emulate a full prompt (as if invoking COMMAND) before each
+		    execution.
+    --emulate-prompt	    Customizations of the prompt emulation around
+    --initial-status NUM    COMMAND; cp. runWithPrompt
+    --trailing-prompt
+    --no-trailing-prompt
+    --no-output-no-prompt
+    --no-output-no-error
+    --no-success-no-count   Stop on condition / summarize at end; cp. runWith
+    --no-count-on N	    Cannot be combined with --with-header.
+    --exit-on-success
+    --exit-on-failure
+    --exit-on NUM
+    --worst-status
+    --comment COMMENT
+    --summarize-failed ERROR-TEXT
+    --summarize-failed-separator SEP
+    --between-command BETWEEN-COMMAND
+		    Execute BETWEEN-COMMAND in between each COMMAND execution.
+    --find|-f	    Execute find with the following FIND-ARGS to obtain the list
+		    of dirspecs instead of directly taking DIRs. This allows
+		    recursing into and filtering of subdirectories.
+		    (But you could alternatively directly use find -exec {} ;
+		    to do the same.)
+    --usage-redirect COMMAND
+		    When no DIR(s) are passed, redirect to COMMAND --help for
+		    usage instructions instead of printing this command's usage.
+		    Useful for wrapper scripts to delegate back to themselves.
+SEE ALSO:
+- eachFile iterates over files instead of directories.
+
+EXIT STATUS:
+Overall exit status is the highest status of all. If you specify any
+runWith[Prompt] argument, --worst-status needs to be explicitly passed.
+
+Example:
+HELPTEXT
+    printf '%q %s\n' "$(basename "$1")" '--local-dir ping -c1 -q -- /var/htdocs/*.com'
+}
+
+# In order to maintain the order of commands, we need to investigate beforehand
+# whether eval is needed.
+isNeedEval=
+for arg
+do
+    case "$arg" in
+	--command|-c)	isNeedEval=t;;
+	--)		break;;
+    esac
+done
+
+isLocalDir=
+dirSource='printf %s\n'
+dirProcessor=
+finder()
+{
+    find "${findArgs[@]}"
+}
+makeAbsolute()
+{
+    # COMMAND may change the directory, so all passed DIR need to be made
+    # absolute first.
+    while IFS=$'\n' read -r dirspec || [ -n "$dirspec" ]
+    do
+	realpath --no-symlinks -- "$dirspec"
+    done
+}
+typeset -a findArgs=()
+with=
+typeset -a commands=()
+betweenCommand=
+usageRedirectCommand=
+runWithCommand=runWith
+typeset -a runWithPromptArgs=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--local-dir|-l)	shift; isLocalDir=t; dirProcessor='makeAbsolute';;
+	--find|-f)	shift; findArgs=("$@"); set --; dirSource='finder'; break;;
+	--command|-c)	shift; commands+=("$1"); isNeedEval=t; shift;;
+	--with-header)	shift; with=header;;
+	--with-prompt)	shift; with=prompt; runWithCommand=runWithPrompt;;
+
+	--trailing-prompt|--no-trailing-prompt|--no-output-no-prompt|--no-output-no-error|--no-success-no-count|--exit-on-success|--exit-on-failure|--emulate-prompt|--worst-status)
+			runWithPromptArgs+=("$1"); shift;;
+	--initial-status|--no-count-on|--exit-on|--comment|--summarize-failed|--summarize-failed-separator)
+			runWithPromptArgs+=("$1" "$2"); shift; shift;;
+
+	--between-command)
+			shift; betweenCommand="$1"; shift;;
+	--usage-redirect)
+			shift; usageRedirectCommand="$1"; shift;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		typeset -a dirspecs=()
+			if ! containsGlob '@(--|--find|-f)' "$@"; then
+			    # Consume existing DIRs from behind.
+			    while [ $# -gt 0 ]
+			    do
+				lastArg="${!#}"
+				[ -e "$lastArg" ] || break
+				dirspecs=("$lastArg" "${dirspecs[@]}")
+				set -- "${@:1:$(($#-1))}"
+			    done
+			fi
+
+			if [ $# -gt 0 ]; then
+			    typeset -a cmd=()
+			    while [ $# -gt 0 ] && [[ "$1" != @(--|--find|-f) ]]
+			    do
+				cmd+=("$1")
+				shift
+			    done
+			    if [ "$isNeedEval" ]; then
+				# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+				# undo the effects of eval.
+				printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
+				printf -v escapedDirMarker %q "$dirMarker"
+				commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedDirMarker"/$dirMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
+			    else
+				commands+=(${commands:+;} "${cmd[@]}")
+			    fi
+			fi
+
+			if [ ${#dirspecs[@]} -gt 0 ]; then
+			    set -- "$@" "${dirspecs[@]}"
+			    break
+			fi
+			;;
+    esac
+done
+if [ ${#commands[@]} -eq 0 ]; then
+    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
+    echo
+    printUsage "$0"
+    exit 2
+elif [ ${#runWithPromptArgs[@]} -gt 0 -a "$with" = header ]; then
+    echo 'ERROR: Cannot combine runWith[Prompt] arguments with --with-header.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+if [ $# -eq 0 -a ${#findArgs[@]} -eq 0 ]; then
+    echo >&2 'ERROR: No DIR(s) passed.'
+    echo >&2
+    if [ "$usageRedirectCommand" ]; then
+	"$usageRedirectCommand" --help
+    else
+	printUsage "$0" >&2
+    fi
+    exit 2
+fi
+
+isFirst=t
+dirspec=.
+case "$with" in
+    prompt)
+	[ ${#runWithPromptArgs[@]} -eq 0 ] && runWithPromptArgs=(--worst-status)
+	quoter='%q'; [ "$isNeedEval" ] && quoter='%s'
+	eval '$dirSource "$@"' "${dirProcessor:+|}" "$dirProcessor" | while IFS=$'\n' read -r dirspec || [ -n "$dirspec" ]
+	do
+	    if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
+		if [ "${betweenCommand:$((${#betweenCommand} - 1))}" = ';' ]; then
+		    printf '%s ' "$betweenCommand"  # Prepend the BETWEEN-COMMAND to the next DIR's execution (so there's no separate prompt) if it ends with a semicolon. Its exit status is then ignored.
+		else
+		    printf '%s\n' "$betweenCommand" # Use a separate prompt (and with it consider its exit status).
+		fi
+	    fi
+
+	    if [ "$isLocalDir" ]; then
+		printf 'cd %q && ' "$dirspec"   # Previous COMMANDS may have changed the directory, so unconditionally do the chdir.
+		[ "$isNeedEval" ] && printf -v dirspec '%q' "$dirspec"
+		typeset -a interpolatedCommands=("${commands[@]//"$dirMarker"/$dirspec}")
+		f=()
+	    else
+		[ "$isNeedEval" ] && printf -v dirspec '%q' "$dirspec"
+		typeset -a interpolatedCommands=("${commands[@]//"$dirMarker"/$dirspec}")
+		typeset -a f=("$dirspec")	# Quoter for isNeedEval=t is off, so need to use quoted arg here.
+		[ "${interpolatedCommands[*]}" = "${commands[*]}" ] || f=()
+	    fi
+
+
+	    printf "$quoter " "${interpolatedCommands[@]}" "${f[@]}"
+	    printf '\n'
+	    isFirst=
+	done | ${runWithCommand:?} "${runWithPromptArgs[@]}"
+	;;
+    *)
+	status=0
+	exec 3<&0
+	while IFS=$'\n' read -r dirspec || [ -n "$dirspec" ]
+	do
+	    if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
+		eval "$betweenCommand" <&3 || { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
+	    fi
+
+	    if [ "$with" = 'header' ]; then
+		header ${isFirst:+--first} "$dirspec"
+	    fi
+
+	    if [ "$isLocalDir" ]; then
+		if [ "$dirspec" != . -a "$dirspec" != "$PWD" ]; then
+		    if ! cd "$dirspec" 2>/dev/null; then
+			printf >&2 'ERROR: Cannot chdir to %s!\n' "$dirspec"
+			status=1; continue
+		    fi
+		fi
+		typeset -a interpolatedCommands=("${commands[@]//"$dirMarker"/$dirspec}")
+		f=()
+	    else
+		typeset -a f=("$dirspec")	# No quoting, as array provides separation.
+		[ "$isNeedEval" ] && printf -v dirspec '%q' "$dirspec"
+		typeset -a interpolatedCommands=("${commands[@]//"$dirMarker"/$dirspec}")
+		[ "${interpolatedCommands[*]}" = "${commands[*]}" ] || f=()
+	    fi
+
+	    if [ "$isNeedEval" ]; then
+		eval "${interpolatedCommands[@]}" '"${f[@]}"'
+	    else
+		"${interpolatedCommands[@]}" "${f[@]}"
+	    fi <&3 || { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
+	    isFirst=
+	done < <(eval '$dirSource "$@"' "${dirProcessor:+|}" "$dirProcessor")
+	exit $status
+	;;
+esac
