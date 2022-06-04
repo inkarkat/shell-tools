@@ -27,10 +27,14 @@ done
 [ "$basename" ] || basename="$(basename -- "$0")"
 
 readonly TMPFILE=$(mktemp --tmpdir "${basename}-XXXXXX${extension:+.}${extension}" 2>/dev/null || echo "${TEMP:-/tmp}/${basename}.$$${RANDOM}${extension:+.}${extension}")
+cleanup()
+{
+    [ ! -e "$TMPFILE" ] || rm --force "$TMPFILE" 2>/dev/null
+}
 
 cat > "$TMPFILE"
 
-[ "$isEditEmpty" ] || [ -s "$TMPFILE" ] || exit 1
+[ "$isEditEmpty" ] || [ -s "$TMPFILE" ] || { cleanup; exit 1; }
 
 exec </dev/tty	# Reconnect stdin to terminal, to avoid that Vim complains that input is not from a terminal.
 exec "$EDITOR" "$TMPFILE"
