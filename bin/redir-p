@@ -1,0 +1,70 @@
+#!/bin/bash
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: cat FILE [...] | [DEBUG=sudo[!]] %q %s\n' "$(basename "$1")" '[--sudo] [-m|--mode MODE] [-v|--verbose] [-a|--append] [--] FILE [-?|-h|--help]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Redirect standard input into FILE while ensuring that FILE can be created by
+creating parent directories as needed.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --sudo		Create / write with sudo unless already running as the
+			superuser.
+    --mode|-m MODE	Set file mode (as in chmod).
+    --verbose|-v	Print a message for each created directory.
+    --append|-a		Append to FILE instead of overwriting it.
+HELPTEXT
+}
+sudoArg=
+typeset -a mkdirArgs=()
+isAppend=
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--sudo)		shift; sudoArg=sudo;;
+
+	--verbose|-v)	mkdirArgs+=("$1"); shift;;
+	--mode|-m)	mkdirArgs+=("$1" "$2"); shift; shift;;
+
+	--append|-a)	shift; isAppend=t;;
+	--)		shift; break;;
+	-)		break;; # For supporting special - FILE without prior --
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 1 ]; then
+    printUsage "$0" >&2
+    exit 2
+fi
+filespec="$1"; shift
+
+SUDO="$sudoArg"; [ $EUID -eq 0 ] && SUDO=''
+[ -n "$sudoArg" ] && case ",${DEBUG:-}," in *,sudo,*) SUDO="verbose $SUDO";; *,sudo\!,*) SUDO="echotrace $SUDO";; esac
+
+dirspec="$(dirname -- "$filespec")"
+[ -d "$dirspec" ] || $SUDO mkdir --parents "${mkdirArgs[@]}" -- "$dirspec" || exit $?
+
+if [ -n "$SUDO" ]; then
+    exec $SUDO tee ${isAppend:+--append} -- "$filespec" >/dev/null
+else
+    eval "exec cat >${isAppend:+>} \"\$filespec\""
+fi
