@@ -4,7 +4,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: cat FILE [...] | [DEBUG=sudo[!]] %q %s\n' "$(basename "$1")" '[--sudo] [-m|--mode MODE] [-v|--verbose] [-a|--append] [--] FILE [-?|-h|--help]'
+    printf 'Usage: cat FILE [...] | [DEBUG=sudo[!]] %q %s\n' "$(basename "$1")" '[--sudo] [-m|--mode MODE] [-v|--verbose] [-a|--append] [-t|--tee] [--] FILE [-?|-h|--help]'
 }
 printUsage()
 {
@@ -30,11 +30,13 @@ HELPDESCRIPTION
     --mode|-m MODE	Set file mode (as in chmod).
     --verbose|-v	Print a message for each created directory.
     --append|-a		Append to FILE instead of overwriting it.
+    --tee|-t		Also print the output in addition to piping it.
 HELPTEXT
 }
 sudoArg=
 typeset -a mkdirArgs=()
 isAppend=
+isTee=
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -45,6 +47,7 @@ do
 	--mode|-m)	mkdirArgs+=("$1" "$2"); shift; shift;;
 
 	--append|-a)	shift; isAppend=t;;
+	--tee|-t)	shift; isTee=t;;
 	--)		shift; break;;
 	-)		break;; # For supporting special - FILE without prior --
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
@@ -64,7 +67,15 @@ dirspec="$(dirname -- "$filespec")"
 [ -d "$dirspec" ] || $SUDO mkdir --parents "${mkdirArgs[@]}" -- "$dirspec" || exit $?
 
 if [ -n "$SUDO" ]; then
-    exec $SUDO tee ${isAppend:+--append} -- "$filespec" >/dev/null
+    if [ "$isTee" ]; then
+	exec $SUDO tee ${isAppend:+--append} -- "$filespec"
+    else
+	exec $SUDO tee ${isAppend:+--append} -- "$filespec" >/dev/null
+    fi
 else
-    eval "exec cat >${isAppend:+>} \"\$filespec\""
+    if [ "$isTee" ]; then
+	exec tee ${isAppend:+--append} -- "$filespec"
+    else
+	eval "exec cat >${isAppend:+>} \"\$filespec\""
+    fi
 fi
