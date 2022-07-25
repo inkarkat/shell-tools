@@ -10,12 +10,13 @@ SUFFIX may be 's' for seconds (the default), 'm' for minutes, 'h' for hours, 'd'
 for days, 'w' for weeks, 'mo' for months, 'y' for years, 'g' for generations.
 HELPDESCRIPTION
     echo
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] -n|--newer|-o|--older|-lt|-le|-eq|-ne|-ge|-gt AGE[SUFFIX]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-k|--keep-date] -n|--newer|-o|--older|-lt|-le|-eq|-ne|-ge|-gt AGE[SUFFIX]'
     cat <<HELPTEXT
     --field-separator|-F FS
 			Use FS for splitting the data into columns (instead of
 			the default whitespace). Unlike AWK, does not support a
 			regular expression.
+    --keep-date|-k	Keep the age column. By default, the column is dropped.
 EXIT STATUS:
     0	At least one date passed the comparison.
     1	No date passed the comparison.
@@ -40,6 +41,7 @@ timeToSeconds()
     printf %s "$age"
 }
 
+isKeepDate=
 compareOp=
 while [ $# -ne 0 ]
 do
@@ -47,6 +49,7 @@ do
 	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
 	--field-separator|-F)
 			shift; IFS="$1"; shift;;
+	--keep-date|-k)	shift; isKeepDate=t;;
 	--newer|-n)	shift; age="$(timeToSeconds "$1")" || exit $?; shift; compareOp=-lt;;
 	--older|-o)	shift; age="$(timeToSeconds "$1")" || exit $?; shift; compareOp=-gt;;
 	-lt|-le|-eq|-ne|-ge|-gt)
@@ -65,16 +68,18 @@ status=
 SECONDS=0
 now="$(date +%s)"
 isEOL=t
-while read -r epoch remainder || { isEOL=; [ -n "$line" ]; }
+while read -r dateField remainder || { isEOL=; [ -n "$line" ]; }
 do
-    if [[ ! "$epoch" =~ ^@?([0-9]+)$ ]]; then
-	printf >&2 "ERROR: Not a date: '%s'.\\n" "$epoch"
+    if [[ "$dateField" =~ ^@?([0-9]+)$ ]]; then
+	epoch="${BASH_REMATCH[1]}"
+    else
+	printf >&2 "ERROR: Not a date: '%s'.\\n" "$dateField"
 	status=4
 	continue
     fi
 
     [ $((now + SECONDS - epoch)) $compareOp $age ] || continue
-    printf "%s${isEOL:+\\n}" "$remainder"
+    printf "%s${isEOL:+\\n}" "${isKeepDate:+${dateField}${IFS:0:1}}$remainder"
     : ${status:=0}
 done
 exit ${status:-1}
