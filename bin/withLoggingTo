@@ -109,7 +109,11 @@ execute()
 }
 
 if [ "$isTimestamp" ]; then
-    eval "{ execute ${teePrefix} | ${isTee:+"tee >("}timestamp \"\${timestampArgs[@]}\" - ${redirOp} \"\$logFilespec\"${isTee:+)}; } ${teeSuffix}"
+    if [ "$isTee" ]; then
+	eval "{ execute ${teePrefix} | tee >(timestamp \"\${timestampArgs[@]}\" - ${redirOp} \"\$logFilespec\"); } ${teeSuffix}"
+    else
+	eval "{ execute | timestamp \"\${timestampArgs[@]}\" - ${redirOp} \"\$logFilespec\"; }"
+    fi
 elif [ "$isTee" ]; then
     eval "{ execute ${teePrefix} | tee $teeArg -- \"\$logFilespec\"; } ${teeSuffix}"
 else
