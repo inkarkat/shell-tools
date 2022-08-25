@@ -116,7 +116,7 @@ do
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 	--local-dir|-l)	shift; isLocalDir=t; dirProcessor='makeAbsolute';;
 	--find|-f)	shift; findArgs=("$@"); set --; dirSource='finder'; break;;
-	--command|-c)	shift; commands+=("$1"); isNeedEval=t; shift;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
 	--with-header)	shift; with=header;;
 	--with-prompt)	shift; with=prompt; runWithCommand=runWithPrompt;;
 
