@@ -4,11 +4,13 @@ shopt -qs extglob
 : ${EACHDIR_DIR_MARKER='{}'}
 dirMarker="$EACHDIR_DIR_MARKER"; unset EACHDIR_DIR_MARKER
 
+hasProgressNotification=; type -t progressNotification >/dev/null && hasProgressNotification=t
+
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" '[-l|--local-dir] [--with-header|--with-prompt [--initial-status NUM] [--trailing-prompt|--no-trailing-prompt] [--no-output-no-prompt] [--no-output-no-error] [--emulate-prompt]] [--no-success-no-count|--no-count-on N] [--exit-on-success|--exit-on-failure|--exit-on NUM] [--worst-status] [--comment COMMENT] [--summarize-failed ERROR-TEXT [--summarize-failed-separator SEP]] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command "COMMANDLINE" [...] | SIMPLECOMMAND [...] [--] DIR [...] [-?|-h|--help]'
+    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" '[--with-header|--with-prompt [--initial-status NUM] [--trailing-prompt|--no-trailing-prompt] [--no-output-no-prompt] [--no-output-no-error] [--emulate-prompt]] [--no-success-no-count|--no-count-on N] [--exit-on-success|--exit-on-failure|--exit-on NUM] [--worst-status] [--comment COMMENT] [--summarize-failed ERROR-TEXT [--summarize-failed-separator SEP]] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command "COMMANDLINE" [...] | SIMPLECOMMAND [...] [--] DIR [...] [-?|-h|--help]'
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '[...] -c|--command "COMMANDLINE" [...] | SIMPLECOMMAND [...] -f|--find FIND-ARGS ...'
 }
@@ -33,7 +35,9 @@ HELPDESCRIPTION
     cat <<HELPTEXT
     --local-dir|-l  Change the directory to the current DIR before executing
 		    COMMAND; nothing is appended to COMMAND then${dirMarker:+ (but $dirMarker is
-		    still replaced)}.
+		    still replaced)}.${hasProgressNotification:+
+    --progress SINK Report the current DIR through one of the SINKs of the
+	    progressNotification command.}
     --with-header   Print a header (containing the current DIR) before each
 		    execution.
     --with-prompt   Emulate a full prompt (as if invoking COMMAND) before each
@@ -88,6 +92,8 @@ do
 done
 
 isLocalDir=
+progressSink=
+isFixedNumberOfDirs=t
 dirSource='printf %s\n'
 dirProcessor=
 finder()
@@ -115,8 +121,9 @@ do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 	--local-dir|-l)	shift; isLocalDir=t; dirProcessor='makeAbsolute';;
-	--find|-f)	shift; findArgs=("$@"); set --; dirSource='finder'; break;;
+	--find|-f)	shift; findArgs=("$@"); set --; dirSource='finder'; isFixedNumberOfDirs=; break;;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--progress)	shift; progressSink="$1"; shift;;
 	--with-header)	shift; with=header;;
 	--with-prompt)	shift; with=prompt; runWithCommand=runWithPrompt;;
 
@@ -190,6 +197,19 @@ if [ $# -eq 0 -a ${#findArgs[@]} -eq 0 ]; then
     exit 2
 fi
 
+if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
+    typeset progressCountToArgs=(--count-to $#); [ "$isFixedNumberOfDirs" ] || progressCountToArgs=()
+    exec 4> >(progressNotification --to "$progressSink" --prepend-count 'dir' "${progressCountToArgs[@]}" 2>/dev/null)
+
+    reportProgress()
+    {
+	trap 'reportProgress() { :; }; trap PIPE' PIPE
+	printf '%s\n' "$*" >&4 2>/dev/null  # Silence "printf: write error: Broken pipe"
+    }
+else
+    reportProgress() { :; }
+fi
+
 isFirst=t
 dirspec=.
 case "$with" in
@@ -218,7 +238,7 @@ case "$with" in
 		[ "${interpolatedCommands[*]}" = "${commands[*]}" ] || f=()
 	    fi
 
-
+	    reportProgress "$dirspec"
 	    printf "$quoter " "${interpolatedCommands[@]}" "${f[@]}"
 	    printf '\n'
 	    isFirst=
@@ -253,6 +273,7 @@ case "$with" in
 		[ "${interpolatedCommands[*]}" = "${commands[*]}" ] || f=()
 	    fi
 
+	    reportProgress "$dirspec"
 	    if [ "$isNeedEval" ]; then
 		eval "${interpolatedCommands[@]}" '"${f[@]}"'
 	    else

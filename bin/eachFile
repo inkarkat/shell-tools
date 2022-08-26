@@ -4,11 +4,13 @@ shopt -qs extglob
 : ${EACHFILE_FILE_MARKER='{}'}
 fileMarker="$EACHFILE_FILE_MARKER"; unset EACHFILE_FILE_MARKER
 
+hasProgressNotification=; type -t progressNotification >/dev/null && hasProgressNotification=t
+
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" '[-l|--local-dir] [--with-header|--with-prompt [--initial-status NUM] [--trailing-prompt|--no-trailing-prompt] [--no-output-no-prompt] [--no-output-no-error] [--emulate-prompt]] [--no-success-no-count|--no-count-on N] [--exit-on-success|--exit-on-failure|--exit-on NUM] [--worst-status] [--comment COMMENT] [--summarize-failed ERROR-TEXT [--summarize-failed-separator SEP]] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command "COMMANDLINE" [...] | SIMPLECOMMAND [...] [--] FILE [...] [-?|-h|--help]'
+    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" '[--with-header|--with-prompt [--initial-status NUM] [--trailing-prompt|--no-trailing-prompt] [--no-output-no-prompt] [--no-output-no-error] [--emulate-prompt]] [--no-success-no-count|--no-count-on N] [--exit-on-success|--exit-on-failure|--exit-on NUM] [--worst-status] [--comment COMMENT] [--summarize-failed ERROR-TEXT [--summarize-failed-separator SEP]] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command "COMMANDLINE" [...] | SIMPLECOMMAND [...] [--] FILE [...] [-?|-h|--help]'
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '[...] -c|--command "COMMANDLINE" [...] | SIMPLECOMMAND [...] -f|--find FIND-ARGS ...'
 }
@@ -32,7 +34,9 @@ HELPDESCRIPTION
     echo
     cat <<HELPTEXT
     --local-dir|-l  Change the directory to the one containing the current FILE
-		    before executing COMMAND, and only pass the filename itself.
+		    before executing COMMAND, and only pass the filename itself.${hasProgressNotification:+
+    --progress SINK Report the current FILE through one of the SINKs of the
+		    progressNotification command.}
     --with-header   Print a header (containing the current FILE) before each
 		    execution.
     --with-prompt   Emulate a full prompt (as if invoking COMMAND) before each
@@ -89,6 +93,8 @@ do
 done
 
 isLocalDir=
+progressSink=
+isFixedNumberOfFiles=t
 fileSource='printf %s\n'
 fileProcessor=
 finder()
@@ -116,8 +122,9 @@ do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 	--local-dir|-l)	shift; isLocalDir=t; fileProcessor='makeAbsolute';;
-	--find|-f)	shift; findArgs=("$@"); set --; fileSource='finder'; break;;
+	--find|-f)	shift; findArgs=("$@"); set --; fileSource='finder'; isFixedNumberOfFiles=; break;;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--progress)	shift; progressSink="$1"; shift;;
 	--with-header)	shift; with=header;;
 	--with-prompt)	shift; with=prompt; runWithCommand=runWithPrompt;;
 
@@ -191,6 +198,19 @@ if [ $# -eq 0 -a ${#findArgs[@]} -eq 0 ]; then
     exit 2
 fi
 
+if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
+    typeset progressCountToArgs=(--count-to $#); [ "$isFixedNumberOfFiles" ] || progressCountToArgs=()
+    exec 4> >(progressNotification --to "$progressSink" --prepend-count 'file' "${progressCountToArgs[@]}" 2>/dev/null)
+
+    reportProgress()
+    {
+	trap 'reportProgress() { :; }; trap PIPE' PIPE
+	printf '%s\n' "$*" >&4 2>/dev/null  # Silence "printf: write error: Broken pipe"
+    }
+else
+    reportProgress() { :; }
+fi
+
 isFirst=t
 dirspec=.
 case "$with" in
@@ -218,6 +238,7 @@ case "$with" in
 	    typeset -a f=("$filespec")	# Quoter for isNeedEval=t is off, so need to use quoted arg here.
 	    [ "${interpolatedCommands[*]}" = "${commands[*]}" ] || f=()
 
+	    reportProgress "$filespec"
 	    printf "$quoter " "${interpolatedCommands[@]}" "${f[@]}"
 	    printf '\n'
 	    isFirst=
@@ -252,6 +273,7 @@ case "$with" in
 	    typeset -a interpolatedCommands=("${commands[@]//"$fileMarker"/$filespec}")
 	    [ "${interpolatedCommands[*]}" = "${commands[*]}" ] || f=()
 
+	    reportProgress "$filespec"
 	    if [ "$isNeedEval" ]; then
 		eval "${interpolatedCommands[@]}" '"${f[@]}"'
 	    else
