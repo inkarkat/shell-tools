@@ -1,5 +1,6 @@
 #!/bin/bash
 
+: ${EACHARG_ARG_WHAT=arg}
 : ${EACHARG_ARG_MARKER='{}'}
 argMarker="$EACHARG_ARG_MARKER"; unset EACHARG_ARG_MARKER
 
@@ -147,7 +148,7 @@ if [ $# -eq 0 ]; then
 fi
 
 if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
-    exec 4> >(progressNotification --to "$progressSink" --prepend-count 'argument' --count-to $# 2>/dev/null)
+    exec 4> >(progressNotification --to "$progressSink" ${EACHARG_ARG_WHAT:+--prepend-count "$EACHARG_ARG_WHAT"} --count-to $# 2>/dev/null)
 
     reportProgress()
     {

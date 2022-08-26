@@ -1,6 +1,7 @@
 #!/bin/bash
 shopt -qs extglob
 
+: ${EACHDIR_DIR_WHAT=dir}
 : ${EACHDIR_DIR_MARKER='{}'}
 dirMarker="$EACHDIR_DIR_MARKER"; unset EACHDIR_DIR_MARKER
 
@@ -199,7 +200,7 @@ fi
 
 if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
     typeset progressCountToArgs=(--count-to $#); [ "$isFixedNumberOfDirs" ] || progressCountToArgs=()
-    exec 4> >(progressNotification --to "$progressSink" --prepend-count 'dir' "${progressCountToArgs[@]}" 2>/dev/null)
+    exec 4> >(progressNotification --to "$progressSink" ${EACHDIR_DIR_WHAT:+--prepend-count "$EACHDIR_DIR_WHAT"} "${progressCountToArgs[@]}" 2>/dev/null)
 
     reportProgress()
     {
