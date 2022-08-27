@@ -25,7 +25,7 @@ single line; you can reserve more characters via -l|--max-length or lines via
 -L|--reserve-lines).
 HELPTEXT
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" '--first [-l|--max-length COLS|-L|--reserve-lines LINENUM] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '--first [-l|--max-length COLS|-L|--reserve-lines LINENUM] [-c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...]] [-?|-h|--help]'
     printf 'Usage: %q %s\n' "$(basename "$1")" '--subsequent -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
 }
 
@@ -63,7 +63,7 @@ if [ $# -ne 0 ]; then
 	commands=("$@")
     fi
 fi
-if [ ${#commands[@]} -eq 0 ]; then
+if [ ${#commands[@]} -eq 0 ] && [ ! "$isFirst" ]; then
     echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
     echo
     printUsage "$0"
