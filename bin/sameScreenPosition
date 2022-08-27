@@ -3,6 +3,7 @@
 : ${RESTORE_CURSOR_POSITION=[u}
 : ${SAVE_CURSOR_POSITION=[s}
 : ${ERASE_TO_END=[0J}
+: ${CURSOR_UP=[1A}
 
 printUsage()
 {
@@ -19,24 +20,33 @@ HELPTEXT
     cat <<HELPTEXT
 Execute COMMAND and on --subsequent invocations return the cursor to the
 original position and clear to the end, so that these overwrite the COMMAND's
-output (as long as no scrolling happens).
+output (as long as no scrolling happens - by default, output is supposed to be a
+single line; you can reserve more characters via -l|--max-length or lines via
+-L|--reserve-lines).
 HELPTEXT
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" '--first [-l|--max-length COLS] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
-    printf 'Usage: %q %s\n' "$(basename "$1")" '--subsequent [-l|--max-length COLS] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '--first [-l|--max-length COLS|-L|--reserve-lines LINENUM] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '--subsequent -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
 }
 
 before="${SAVE_CURSOR_POSITION}${ERASE_TO_END}"
 after="$RESTORE_CURSOR_POSITION"
+isFirst=
+maxLength=
+reserveLines=1
 isNeedEval=
 typeset -a commands=()
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
-	--first)	shift; after='';;
+	--first)	shift; isFirst=t; after='';;
 	--subsequent)	shift; before="${RESTORE_CURSOR_POSITION}${ERASE_TO_END}"; after='';;
 	--last)		shift; after='';;
+	--max-length|-l)
+			shift; maxLength="$1"; shift;;
+	--reserve-lines|-L)
+			shift; reserveLines="$1"; shift;;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
@@ -59,6 +69,18 @@ if [ ${#commands[@]} -eq 0 ]; then
     printUsage "$0"
     exit 2
 fi >&2
+
+if [ "$isFirst" ]; then
+    if [ -n "$maxLength" ]; then
+	if [ $maxLength -gt 0 ]; then
+	    printf -v spaceOut "%${maxLength}s" ' '
+	    before="${spaceOut}${spaceOut// /}${before}"
+	fi
+    elif [ ${reserveLines:-0} -gt 0 ]; then
+	printf -v spaceOut "%${reserveLines}s" ' '
+	before="${spaceOut// /$'\n'}${CURSOR_UP/1/$reserveLines}${before}"
+    fi
+fi
 
 [ -z "$before" ] || printf >/dev/tty %s "$before"
 [ -z "$after" ] || trap 'printf >/dev/tty %s "$after"' INT QUIT EXIT
