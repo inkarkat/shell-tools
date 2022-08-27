@@ -1,22 +1,42 @@
 #!/bin/bash
 
+: ${RESTORE_CURSOR_POSITION=[u}
+: ${SAVE_CURSOR_POSITION=[s}
+: ${ERASE_TO_END=[0J}
+
 printUsage()
 {
     cat <<HELPTEXT
 Clear the remainder of the screen, execute COMMAND and return the cursor to the
 original position, so that a subsequent invocation will overwrite the COMMAND's
-output (as long as no scrolling happens).
+output (as long as no scrolling happens). If you don't use --last for the final
+invocation, the last COMMAND's output will be overwritten by a shell prompt.
 HELPTEXT
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '-c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '--last -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    echo
+    cat <<HELPTEXT
+Execute COMMAND and on --subsequent invocations return the cursor to the
+original position and clear to the end, so that these overwrite the COMMAND's
+output (as long as no scrolling happens).
+HELPTEXT
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" '--first [-l|--max-length COLS] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '--subsequent [-l|--max-length COLS] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
 }
 
+before="${SAVE_CURSOR_POSITION}${ERASE_TO_END}"
+after="$RESTORE_CURSOR_POSITION"
 isNeedEval=
 typeset -a commands=()
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+	--first)	shift; after='';;
+	--subsequent)	shift; before="${RESTORE_CURSOR_POSITION}${ERASE_TO_END}"; after='';;
+	--last)		shift; after='';;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
@@ -40,12 +60,8 @@ if [ ${#commands[@]} -eq 0 ]; then
     exit 2
 fi >&2
 
-: ${RESTORE_CURSOR_POSITION=[u}
-: ${SAVE_CURSOR_POSITION=[s}
-: ${ERASE_TO_END=[0J}
-
-printf >/dev/tty %s "${SAVE_CURSOR_POSITION}${ERASE_TO_END}"
-trap 'printf >/dev/tty %s "$RESTORE_CURSOR_POSITION"' INT QUIT EXIT
+[ -z "$before" ] || printf >/dev/tty %s "$before"
+[ -z "$after" ] || trap 'printf >/dev/tty %s "$after"' INT QUIT EXIT
 
 if [ "$isNeedEval" ]; then
     eval "${commands[@]}"
