@@ -1,6 +1,6 @@
 #!/bin/bash
 
-: ${WITHICON_TIMEOUT:=30}
+: ${LAUNCHWITHICON_TIMEOUT:=30}
 
 printUsage()
 {
@@ -9,7 +9,7 @@ Execute COMMAND (asynchronously), wait for the appearance of a window belonging
 to the launched process, and then set a custom ICON for it.
 HELPTEXT
     echo
-    printf "Usage: [WITHICON_TIMEOUT=${WITHICON_TIMEOUT}] %q %s\\n" "$(basename "$1")" 'ICON|ICON-FILESPEC -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printf "Usage: [LAUNCHWITHICON_TIMEOUT=${LAUNCHWITHICON_TIMEOUT}] %q %s\\n" "$(basename "$1")" 'ICON|ICON-FILESPEC -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
 }
 
 getIconFilespec()
@@ -75,7 +75,7 @@ pid=$!
 SECONDS=0
 windowId=
 
-until [ $SECONDS -ge $WITHICON_TIMEOUT ]
+until [ $SECONDS -ge $LAUNCHWITHICON_TIMEOUT ]
 do
     windowId="$(wmctrl -l -p | fieldGrep -e "^${pid}\$" 3)"
     [ -n "$windowId" ] && break
