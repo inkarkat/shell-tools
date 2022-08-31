@@ -41,4 +41,16 @@ cat > "$TMPFILE"
 [ "$isEditEmpty" ] || [ -s "$TMPFILE" ] || { cleanup; exit 1; }
 
 exec </dev/tty	# Reconnect stdin to terminal, to avoid that Vim complains that input is not from a terminal.
-$EXEC "$EDITOR" "$TMPFILE"
+if [ "$isPrint" ]; then
+    [ "${DEBUG:-}" ] || trap 'cleanup' EXIT
+
+    tmpModTime=$(stat -c %Y "$TMPFILE")
+    "$EDITOR" "$TMPFILE" || { status=$?; echo >&2 'Unclean exit of editor; aborting!'; exit $status; }
+    newModTime=$(stat -c %Y "$TMPFILE") || { echo >&2 'The tempfile disappeared; aborting!'; exit 4; }
+
+    [ $newModTime -eq $tmpModTime ] && exit 99
+    cat -- "$TMPFILE"
+else
+    $EXEC "$EDITOR" "$TMPFILE"
+    exit $?
+fi
