@@ -1,0 +1,87 @@
+#!/bin/bash
+
+: ${EDITOR:=vi}
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[--basename BASE] [--extension EXT] -P|--no-print [-C|--cleanup] [--edit-empty] [-?|-h|--help]'
+    echo
+    printf 'Usage: cat FILE [...] | result=$(%q %s)\n' "$(basename "$1")" '[--basename BASE] [--extension EXT] [-P|--no-print [-C|--cleanup]] [--edit-empty]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Capture output from stdin into a temp file that is then opened in ${EDITOR}
+for editing, and if successful, the edited contents are printed.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --basename BASE	Use BASE as the prefix of the temp file name.
+    --extension EXT	Use EXT as the temp file extension.
+    --no-print|-P	Just edit, but don't check or print the results.
+    --cleanup|-C	When just editing, don't keep the temp file after the
+			editor exits; the contents will be gone.
+    --edit-empty	Also launch the (empty) editor if nothing got read from
+			stdin.
+HELPTEXT
+}
+
+EXEC=exec
+basename=
+extension=
+isEditEmpty=
+isPrint=t
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+	--basename)	shift; basename="$1"; shift;;
+	--extension)	shift; extension="$1"; shift;;
+	--cleanup|-C)	shift; EXEC=''; [ "${DEBUG:-}" ] || trap 'cleanup' EXIT;;
+	--edit-empty)	shift; isEditEmpty=t;;
+	--no-print|-P)	shift; isPrint=;;
+	*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+    esac
+done
+[ "$basename" ] || basename="$(basename -- "$0")"
+
+readonly TMPFILE="$(mktemp --tmpdir "${basename}-XXXXXX${extension:+.}${extension}" 2>/dev/null || echo "${TEMP:-/tmp}/${basename}.$$${RANDOM}${extension:+.}${extension}")"
+cleanup()
+{
+    [ ! -e "$TMPFILE" ] || rm --force "$TMPFILE" 2>/dev/null
+}
+
+cat > "$TMPFILE"
+
+[ "$isEditEmpty" ] || [ -s "$TMPFILE" ] || { cleanup; exit 1; }
+
+exec </dev/tty	# Reconnect stdin to terminal, to avoid that Vim complains that input is not from a terminal.
+if [ "$isPrint" ]; then
+    exec 3>&1 1>/dev/tty	# Reconnect stdout to terminal, to avoid that Vim complains that output is not to a terminal
+    [ "${DEBUG:-}" ] || trap 'cleanup' EXIT
+
+    tmpModTime=$(stat -c %Y "$TMPFILE")
+    "$EDITOR" "$TMPFILE" || { status=$?; echo >&2 'Unclean exit of editor; aborting!'; exit $status; }
+    newModTime=$(stat -c %Y "$TMPFILE") || { echo >&2 'The tempfile disappeared; aborting!'; exit 4; }
+
+    exec 1>&3	# Restore original stdout.
+
+    [ $newModTime -eq $tmpModTime ] && exit 99
+    cat -- "$TMPFILE"
+else
+    $EXEC "$EDITOR" "$TMPFILE"
+    exit $?
+fi
