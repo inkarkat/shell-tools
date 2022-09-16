@@ -1,0 +1,184 @@
+#!/bin/bash
+set -o pipefail
+shopt -qs extglob
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" 'NAME=ALIAS-COMMAND|-n|--name NAME --alias ALIAS-COMMAND [...] ;|-n|--name NAME --alias-command ALIAS-COMMANDLINE [...] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    echo
+    printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" '[...] [--bare|[--trailing-prompt|--no-trailing-prompt] [--emulate-prompt] [--worst-status]]'
+    echo
+    printf 'Usage: %q %s <<EOF\n  COMMANDLINE\n...\nEOF\n' "$(basename "$1")" '[...]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Execute COMMAND while NAME(s) are aliased (via wrapper commands) to
+ALIAS-COMMAND.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    NAME=ALIAS-COMMAND	Execute ALIAS-COMMAND; arguments passed to the NAME
+			wrapper are appended.
+    --name NAME --alias-command ALIAS-COMMANDLINE
+			Execute ALIAS-COMMANDLINE; arguments passed to the NAME
+			wrapper have to be explicitly referenced.
+    --name NAME --alias ALIAS-COMMAND [...] ;
+			Execute ALIAS-COMMAND; all following arguments are taken
+			to be arguments to the ALIAS-COMMAND until an argument
+			consisting of ';' is encountered. You can refer to
+			arguments passed to the NAME wrapper as {1}, {2}, etc.
+			and {*}, {@} if you don't want them just appended to
+			ALIAS-COMMAND.
+    --bare		Do not print a status line before and after launching
+			the COMMAND.
+    --trailing-prompt	Customizations of the prompt emulation around COMMAND;
+    --no-trailing-prompt cp. runWithPrompt
+    --emulate-prompt
+    --worst-status
+
+EXIT STATUS:
+    0	Complete success.
+    2	Bad invocation, wrong or missing command-line arguments.
+    *   any exit status from COMMAND(s)
+
+Example:
+HELPTEXT
+    printf '%q %s\n' "$(basename "$1")" 'python3=python3.10 -- python3 --version'
+}
+
+TMPDIR="$(mktemp --directory --tmpdir "${XDG_RUNTIME_DIR:?}" "$(basename -- "$0")-XXXXXX" 2>/dev/null || { dirspec="${XDG_RUNTIME_DIR:?}/$(basename -- "$0")$$$RANDOM"; mkdir -p -- "$dirspec" && printf %s "$dirspec"; })" || \
+    { printf >&2 'ERROR: Could not initialize runtime store at %s!\n' "$RUNTIME_DIRSPEC"; exit 3; }
+[ "${DEBUG:-}" ] || trap 'rm -rf -- "$TMPDIR" 2>/dev/null' EXIT
+
+isHaveAliases=
+writeAlias()
+{
+    local aliasName="${1:?}"; shift
+    local aliasCommand="${1?}"; shift
+    local aliasFilespec="${TMPDIR}/${aliasName}"
+
+    if [ -x "$aliasFilespec" ]; then
+	printf >&2 "ERROR: Duplicate alias '%s'.\\n" "$aliasName"
+	return 1
+    fi
+
+    printf '%s\n' "$aliasCommand" | \
+	makeScript --bash -- "$aliasFilespec" || return $?
+    isHaveAliases=t
+}
+
+isBare=
+isNeedEval=
+typeset -a commands=()
+typeset -a runWithPromptArgs=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+
+	[a-zA-Z0-9_]*([a-zA-Z0-9_-])=*)
+			aliasName="${1%%=*}"; aliasCommand="${1#*=}"; shift
+			writeAlias "$aliasName" "${aliasCommand} \"\$@\"" || exit 2
+			aliasName=''
+			;;
+	--name|-n)	shift; aliasName="$1"; shift;;
+	--alias-command)
+			if [ -z "$aliasName" ]; then
+			    printf 'ERROR: Missing -n|--name NAME before %s.\n' "$1"
+			    echo
+			    printUsage "$0"
+			    exit 2
+			fi >&2
+			shift; writeAlias "$aliasName" "$1" || exit 2; shift
+			aliasName=''
+			;;
+	--alias)	if [ -z "$aliasName" ]; then
+			    printf 'ERROR: Missing -n|--name NAME before %s.\n' "$1"
+			    echo
+			    printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+
+			aliasCommand=
+			isAppendArguments=t
+			while [ $# -gt 0 -a "$1" != ';' ]
+			do
+			    quotedArg=
+			    remainder="$1"
+			    while [[ "$remainder" =~ ^(.*)'{'([0-9]+|[*@])'}'(.*)$ ]]	# Note: This will be parsed back-to-front because of the greedy matching.
+			    do
+				printf -v quotedArg '"$%s"%q%s' "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" "$quotedArg"
+				remainder="${BASH_REMATCH[1]}"
+				isAppendArguments=
+			    done
+			    if [ -n "$remainder" ]; then
+				printf -v quotedArg %s%q "$quotedArg" "$remainder"
+			    fi
+
+			    aliasCommand="${aliasCommand}${aliasCommand:+ }${quotedArg}"
+			    shift
+			done
+
+			if [ $# -eq 0 ]; then
+			    echo 'ERROR: --alias command must be concluded with ;!'; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+
+			writeAlias "$aliasName" "${aliasCommand}${isAppendArguments:+ \"\$@\"}" || exit 2
+			aliasName=''
+			;;
+
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--bare)		shift; isBare=t;;
+	--no-trailing-prompt|--trailing-prompt|--emulate-prompt|--worst-status)  runWithPromptArgs+=("$1"); shift;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ ! "$isHaveAliases" ]; then
+    echo 'ERROR: No aliases defined.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+if [ $# -ne 0 ]; then
+    if [ "$isNeedEval" ]; then
+	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+	# undo the effects of eval.
+	printf -v quotedSimpleCommand '%q ' "$@"
+	commands+=(${commands:+;} "${quotedSimpleCommand% }")
+    else
+	commands=("$@")
+    fi
+fi
+
+export PATH="${TMPDIR}${PATH:+:}${PATH}"    # Activate the wrapper commands by placing them first in the PATH.
+
+if [ ${#commands[@]} -eq 0 ]; then
+    if [ "$isBare" ]; then
+	bash -
+    else
+	runWithPrompt "${runWithPromptArgs[@]}"
+    fi
+elif [ "$isNeedEval" ]; then
+    eval "${commands[@]}"
+else
+    "${commands[@]}"
+fi
