@@ -1,0 +1,89 @@
+#!/bin/bash
+shopt -qs extglob
+
+printUsage()
+{
+    cat <<HELPDESCRIPTION
+Only print lines where the [+-]SECONDS timespan in the first column is longer /
+shorter than [+-]TIMESPAN.
+SUFFIX may be 's' for seconds (the default), 'm' for minutes, 'h' for hours, 'd'
+for days, 'w' for weeks, 'mo' for months, 'y' for years, 'g' for generations.
+HELPDESCRIPTION
+    echo
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-k|--keep-timespan] -s|--shorter|-l|--longer|-lt|-le|-eq|-ne|-ge|-gt [+-]TIMESPAN[SUFFIX]'
+    cat <<HELPTEXT
+    --field-separator|-F FS
+			Use FS for splitting the data into columns (instead of
+			the default whitespace). Unlike AWK, does not support a
+			regular expression.
+    --keep-timespan|-k	Keep the timespan column. By default, the column is
+			dropped.
+EXIT STATUS:
+    0	At least one timespan passed the comparison.
+    1	No timespan passed the comparison.
+    2	Bad invocation, wrong or missing command-line arguments.
+    4	Some line(s) did not contain a valid timespan.
+HELPTEXT
+}
+
+timeToSeconds()
+{
+    [[ "$1" =~ ^([+-])?(.*)$ ]]
+    local sign="${BASH_REMATCH[1]}"
+    local time="${BASH_REMATCH[2]}"
+
+    case "$time" in
+	+([0-9])?(s))   age="${time%s}";;
+	+([0-9])m)	age=$((${time%m} * 60));;
+	+([0-9])h)	age=$((${time%h} * 3600));;
+	+([0-9])d)	age=$((${time%d} * 86400));;
+	+([0-9])w)	age=$((${time%w} * 86400 * 7));;
+	+([0-9])mo)	age=$((${time%mo} * 86400 * 30));;
+	+([0-9])y)	age=$((${time%y} * 86400 * 365));;
+	+([0-9])g)	age=$((${time%g} * 86400 * 9131));;
+	*)		printf >&2 'ERROR: Illegal age: %s\n' "$1"; exit 2;;
+    esac
+    printf %s%s "$sign" "$age"
+}
+
+isKeepTimespan=
+compareOp=
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+	--field-separator|-F)
+			shift; IFS="$1"; shift;;
+	--keep-timespan|-k)
+			shift; isKeepTimespan=t;;
+	--shorter|-s)	shift; age="$(timeToSeconds "$1")" || exit $?; shift; compareOp=-lt;;
+	--longer|-l)	shift; age="$(timeToSeconds "$1")" || exit $?; shift; compareOp=-gt;;
+	-lt|-le|-eq|-ne|-ge|-gt)
+			compareOp="$1"; shift; age="$(timeToSeconds "$1")" || exit $?; shift;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 -o -z "$compareOp" ]; then
+    printUsage "$0" >&2
+    exit 2
+fi
+
+status=
+isEOL=t
+while read -r timespanField remainder || { isEOL=; [ -n "$line" ]; }
+do
+    if [[ "$timespanField" =~ ^[+-]?([0-9]+)$ ]]; then
+	timespan="${BASH_REMATCH[1]}"
+    else
+	printf >&2 "ERROR: Not a timespan: '%s'.\\n" "$timespanField"
+	status=4
+	continue
+    fi
+
+    [ $timespan $compareOp $age ] || continue
+    printf "%s${isEOL:+\\n}" "${isKeepTimespan:+${timespanField}${IFS:0:1}}$remainder"
+    : ${status:=0}
+done
+exit ${status:-1}
