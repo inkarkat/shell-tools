@@ -1,0 +1,65 @@
+#!/bin/bash
+shopt -qs extglob
+
+printUsage()
+{
+    cat <<HELPDESCRIPTION
+Only print lines where the [+-]NUMBER in the first column is greater / smaller
+than [+-]NUMBER.
+HELPDESCRIPTION
+    echo
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-k|--keep-number] -lt|-le|-eq|-ne|-ge|-gt [+-]NUMBER'
+    cat <<HELPTEXT
+    --field-separator|-F FS
+			Use FS for splitting the data into columns (instead of
+			the default whitespace). Unlike AWK, does not support a
+			regular expression.
+    --keep-number|-k	Keep the number column. By default, the column is
+			dropped.
+EXIT STATUS:
+    0	At least one number passed the comparison.
+    1	No number passed the comparison.
+    2	Bad invocation, wrong or missing command-line arguments.
+    4	Some line(s) did not contain a valid number.
+HELPTEXT
+}
+
+isKeepNumber=
+compareOp=
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+	--field-separator|-F)
+			shift; IFS="$1"; shift;;
+	--keep-number|-k)
+			shift; isKeepNumber=t;;
+	-lt|-le|-eq|-ne|-ge|-gt)
+			compareOp="$1"; shift; reference="$1"; shift;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 -o -z "$compareOp" ]; then
+    printUsage "$0" >&2
+    exit 2
+fi
+
+status=
+isEOL=t
+while read -r numberField remainder || { isEOL=; [ -n "$line" ]; }
+do
+    if [[ "$numberField" =~ ^[+-]?([0-9]+)$ ]]; then
+	number="${BASH_REMATCH[1]}"
+    else
+	printf >&2 "ERROR: Not a number: '%s'.\\n" "$numberField"
+	status=4
+	continue
+    fi
+
+    [ $number $compareOp $reference ] || continue
+    printf "%s${isEOL:+\\n}" "${isKeepNumber:+${numberField}${IFS:0:1}}$remainder"
+    : ${status:=0}
+done
+exit ${status:-1}
