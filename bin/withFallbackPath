@@ -4,7 +4,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" '[-D|--drop] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[-D|--drop] [--for COMMANDNAME] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
 }
 printUsage()
 {
@@ -31,6 +31,8 @@ SIMPLECOMMAND takes precedence over any COMMANDLINE.
     --drop|-D		Drop the default PATH location altogether
 			/etc/environment, so all user-specific additions are
 			dropped.
+    --for COMMANDNAME	Manipulate PATH for COMMANDNAME instead of for COMMAND /
+			COMMANDLINE.
 HELPTEXT
 }
 
@@ -38,6 +40,7 @@ case "$1" in
     --help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 esac
 
+commandName=
 typeset -a pathManipulation=(pathmunge move after)
 isNeedEval=
 typeset -a commands=()
@@ -46,6 +49,7 @@ do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 	--drop|-D)	shift; pathManipulation=(pathdrop strict);;
+	--for)		shift; commandName="${1:?}"; shift;;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
@@ -53,9 +57,9 @@ do
     esac
 done
 if [ $# -eq 0 ]; then
-    commandName="$(commandName --eval "${commands[@]}")"
+    [ -n "$commandName" ] || commandName="$(commandName --eval "${commands[@]}")"
 else
-    commandName="$1"
+    [ -n "$commandName" ] || commandName="$1"
 
     if [ "$isNeedEval" ]; then
 	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
