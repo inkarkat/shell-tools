@@ -1,0 +1,98 @@
+#!/bin/bash
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[-D|--drop] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Execute COMMAND while its default PATH location has been moved to the back of
+\$PATH, so the first fallback location is used instead.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+This can be used by local wrappers that augment the PATH to invoke the original
+wrapped command. In COMMANDLINE, only the first command is taken, and a
+SIMPLECOMMAND takes precedence over any COMMANDLINE.
+    --drop|-D		Drop the default PATH location altogether
+			/etc/environment, so all user-specific additions are
+			dropped.
+HELPTEXT
+}
+
+case "$1" in
+    --help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+esac
+
+typeset -a pathManipulation=(pathmunge move after)
+isNeedEval=
+typeset -a commands=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--drop|-D)	shift; pathManipulation=(pathdrop strict);;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -eq 0 ]; then
+    commandName="$(commandName --eval "${commands[@]}")"
+else
+    commandName="$1"
+
+    if [ "$isNeedEval" ]; then
+	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+	# undo the effects of eval.
+	printf -v quotedSimpleCommand '%q ' "$@"
+	commands+=(${commands:+;} "${quotedSimpleCommand% }")
+    else
+	commands=("$@")
+    fi
+fi
+if [ ${#commands[@]} -eq 0 ]; then
+    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
+    echo
+    printUsage "$0"
+    exit 2
+elif [ -z "$commandName" ]; then
+    printf 'ERROR: Cannot identify the command.'
+    exit 2
+elif ! commandFilespec="$(which "$commandName" 2>/dev/null)"; then
+    printf "ERROR: Cannot locate command '%s'.\\n" "$commandName"
+    exit 2
+fi >&2
+
+commandDirspec="$(dirname -- "$commandFilespec")"
+"${pathManipulation[@]}" -- "$commandDirspec"
+case $? in
+    0|99)
+	;;
+    *)	printf 'ERROR: The command location is not inside PATH: %s\n' "$commandDirspec"
+	exit 2
+	;;
+esac
+
+export PATH PATH_OVERRIDE=true
+
+if [ "$isNeedEval" ]; then
+    eval "${commands[@]}"
+else
+    "${commands[@]}"
+fi
