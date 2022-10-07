@@ -3,24 +3,36 @@ shopt -qs extglob
 
 printUsage()
 {
-    cat <<HELPTEXT
+    cat <<HELPDESCRIPTION
 Show the age in seconds since the Epoch (or seconds passed with -d|--diff) of
 all passed DATE(s). With --grep or --sed, all following arguments are passed to
 the corresponding command and date(s) are expected (one per line) in their
 output.
-HELPTEXT
+HELPDESCRIPTION
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '[-d|--diff] [-f|--with-filename] (--grep GREP-ARGS ...|--sed SED-ARGS ...|[--] DATE [...]) [-?|-h|--help]'
     printf 'Usage: reldate --epoch "$(%q %s)"\n' "$(basename "$1")" '(--grep GREP-ARGS ...|--sed SED-ARGS ...|[--] DATE)'
     printf 'Usage: %q %s | reldate --epoch-lines\n' "$(basename "$1")" '(--grep GREP-ARGS ...|--sed SED-ARGS ...|[--] DATE [...])'
     echo
-    cat <<HELPTEXT
+    cat <<HELPDESCRIPTION
 Test whether the age of [all] DATE[s] is greater / smaller than AGE.
 SUFFIX may be 's' for seconds (the default), 'm' for minutes, 'h' for hours, 'd'
 for days, 'w' for weeks, 'mo' for months, 'y' for years, 'g' for generations.
-HELPTEXT
+HELPDESCRIPTION
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '-n|--newer|-o|--older|-lt|-le|-eq|-ne|-ge|-gt AGE[SUFFIX] (--grep GREP-ARGS ...|--sed SED-ARGS ...|[--] DATE [...])'
+    echo
+    cat <<HELPDESCRIPTION
+Test whether the age of [all] DATE[s] falls inside / outside TIMESLOT.
+TIMESLOT can be one of second|minute|hour|day|week|month|year, or
+every N seconds|minutes|hours|days|weeks|months|years|generations, which doesn't
+translate to a fixed age, but instead ensures that this falls into / outside the
+slot.
+For example, 'day' could mean an age difference of only seconds, if the one is
+before midnight and the other shortly after midnight.
+HELPDESCRIPTION
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-w|--within|-W|--without second|minute|hour|day|week|month|year|every N (seconds|minutes|hours|days|weeks|months|years|generations) (--grep GREP-ARGS ...|--sed SED-ARGS ...|[--] DATE [...])'
     echo
     cat <<HELPTEXT
 SEE ALSO:
@@ -35,23 +47,45 @@ EXIT STATUS:
 HELPTEXT
 }
 
-timeToSeconds()
+getSpan()
+{
+    local divider="$1"; shift
+    divider="${divider#every }"
+    divider="${divider% +([a-z])}"
+    printf '%d' "$divider"
+}
+parseTime()
 {
     case "$1" in
-	+([0-9])?(s))   age="${1%s}";;
-	+([0-9])m)	age=$((${1%m} * 60));;
-	+([0-9])h)	age=$((${1%h} * 3600));;
-	+([0-9])d)	age=$((${1%d} * 86400));;
-	+([0-9])w)	age=$((${1%w} * 86400 * 7));;
-	+([0-9])mo)	age=$((${1%mo} * 86400 * 30));;
-	+([0-9])y)	age=$((${1%y} * 86400 * 365));;
-	+([0-9])g)	age=$((${1%g} * 86400 * 9131));;
-	*)		printf >&2 'ERROR: Illegal age: %s\n' "$1"; exit 2;;
+	+([0-9])?(s))			age="${1%s}";;
+	+([0-9])m)			age=$((${1%m} * 60));;
+	+([0-9])h)			age=$((${1%h} * 3600));;
+	+([0-9])d)			age=$((${1%d} * 86400));;
+	+([0-9])w)			age=$((${1%w} * 86400 * 7));;
+	+([0-9])mo)			age=$((${1%mo} * 86400 * 30));;
+	+([0-9])y)			age=$((${1%y} * 86400 * 365));;
+	+([0-9])g)			age=$((${1%g} * 86400 * 9131));;
+	second)				timeformat='%s';;
+	minute)				timeformat='%F_%H:%M';;
+	hour)				timeformat='%F_%H';;
+	day)				timeformat='%F';;
+	week)				timeformat='%G_%V';;
+	month)				timeformat='%Y_%m';;
+	year)				timeformat='%Y';;
+	every\ +([0-9])\ seconds)	age="$(getSpan "$1")"; timedivider=1;;
+	every\ +([0-9])\ minutes)	age="$(getSpan "$1")"; timedivider=60;;
+	every\ +([0-9])\ hours)		age="$(getSpan "$1")"; timedivider=3600;;
+	every\ +([0-9])\ days)		age="$(getSpan "$1")"; timedivider=86400;;
+	every\ +([0-9])\ weeks)		age="$(getSpan "$1")"; timedivider=$((86400 * 7));;
+	every\ +([0-9])\ months)	age="$(getSpan "$1")"; timedivider=$((86400 * 30));;
+	every\ +([0-9])\ years)		age="$(getSpan "$1")"; timedivider=$((86400 * 365));;
+	every\ +([0-9])\ generations)	age="$(getSpan "$1")"; timedivider=$((86400 * 9131));;
+	*)				printf >&2 'ERROR: Invalid age/TIMESLOT: "%s".\n' "$1"; printUsage "$0" >&2; exit 2;;
     esac
-    printf %s "$age"
 }
 
-compareOp=
+spanCompareOp=
+formatCompareOp=
 isDiff=
 typeset -a sourceCommand=()
 while [ $# -ne 0 ]
@@ -59,17 +93,19 @@ do
     case "$1" in
 	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
 	--diff|-d)	shift; isDiff=t;;
-	--newer|-n)	shift; age="$(timeToSeconds "$1")" || exit $?; shift; compareOp=-lt;;
-	--older|-o)	shift; age="$(timeToSeconds "$1")" || exit $?; shift; compareOp=-gt;;
+	--newer|-n)	shift; parseTime "$1"; shift; spanCompareOp=-lt;;
+	--older|-o)	shift; parseTime "$1"; shift; spanCompareOp=-gt;;
 	-lt|-le|-eq|-ne|-ge|-gt)
-			compareOp="$1"; shift; age="$(timeToSeconds "$1")" || exit $?; shift;;
+			spanCompareOp="$1"; shift; parseTime "$1"; shift;;
+	--within|-w)	shift; parseTime "$1"; spanCompareOp='-ge'; formatCompareOp='='; shift;;
+	--without|-W)	shift; parseTime "$1"; spanCompareOp='-le'; formatCompareOp='!='; shift;;
 	--@(grep|sed))	sourceCommand=("${1#--}"); shift; sourceCommand+=("$@"); set --;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
     esac
 done
-typeset -a requiredArgs=(-ge 1); [ -n "$compareOp" ] && requiredArgs=(-eq 1)
+typeset -a requiredArgs=(-ge 1); [ -n "$spanCompareOp" ] && requiredArgs=(-eq 1)
 if [ $# -eq 0 -a ${#sourceCommand[@]} -eq 0 ]; then
     printUsage "$0" >&2
     exit 2
@@ -84,14 +120,32 @@ getEpoch()
     fi | \
 	date --file=- +%s || return 4
 }
+calculateTimeRange()
+{
+    local epoch="${1:?}"; shift
+    local now="$(date +%s)"
 
-if [ -n "$compareOp" ]; then
-    now="$(date +%s)"
+    if [ -n "$timeformat" ]; then
+	local nowTime fileTime
+	nowTime="$(date --date "@$now" "+$timeformat")" || exit 3
+	fileTime="$(date --date "@$epoch" "+$timeformat")" || exit 3
+	[ "$fileTime" $formatCompareOp "$nowTime" ]
+    elif [ -n "$timedivider" ]; then
+	local nowDivision fileDivision
+	nowDivision="$((now / timedivider))"
+	fileDivision="$((epoch / timedivider))"
+	[ $age $spanCompareOp $((nowDivision - fileDivision)) ]
+    else
+	[ $((now - epoch)) $spanCompareOp $age ]
+    fi
+}
+
+if [ -n "$spanCompareOp" ]; then
     exitStatus=3
     compareStatus=0
     while IFS=$'\n' read -r epoch || { exitStatus="$epoch"; break; }	# Exit status from the process substitution (<(getEpoch)) is lost; return the actual exit status via an incomplete (i.e. missing the newline) last line.
     do
-	[ $((now - epoch)) $compareOp $age ] || compareStatus=1
+	calculateTimeRange "$epoch" || compareStatus=1
     done < <(getEpoch "$@"; printf %d "$?")
     exit $((exitStatus > 0 ? exitStatus : compareStatus))
 elif [ "$isDiff" ]; then
