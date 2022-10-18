@@ -32,32 +32,27 @@ a higher precedence.
 HELPTEXT
 }
 
-case "$1" in
-    --help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
-esac
-
-if [ $# -eq 0 ]; then
-    echo 'ERROR: No ADD-PATH passed.'
-    echo
-    printUsage "$0"
-    exit 2
-fi >&2
-pathAdd="${1?}"
-export PATH_OVERRIDE=true
-export PATH="${pathAdd}:$PATH"; shift
-
+isFirst=t
+pathAdd=''
+isClean=
 isNeedEval=
 typeset -a commands=()
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
-	--clean|-C)	shift; PATH="${pathAdd}:$(pam_getenv PATH)" || exit $?;;
+	--clean|-C)	shift; isClean=t;;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
-	*)		break;;
+	*)		if [ "$isFirst" ]; then
+			    pathAdd="${1:?}"; shift
+			else
+			    break
+			fi
+			;;
     esac
+    isFirst=
 done
 if [ $# -ne 0 ]; then
     if [ "$isNeedEval" ]; then
@@ -69,12 +64,25 @@ if [ $# -ne 0 ]; then
 	commands=("$@")
     fi
 fi
-if [ ${#commands[@]} -eq 0 ]; then
+if [ -z "$pathAdd" ]; then
+    echo 'ERROR: No ADD-PATH passed.'
+    echo
+    printUsage "$0"
+    exit 2
+elif [ ${#commands[@]} -eq 0 ]; then
     echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
     echo
     printUsage "$0"
     exit 2
 fi >&2
+
+if [ "$isClean" ]; then
+    PATH="${pathAdd}:$(pam_getenv PATH)" || exit $?
+else
+    PATH="${pathAdd}:$PATH"
+fi
+export PATH PATH_OVERRIDE=true
+
 if [ "$isNeedEval" ]; then
     eval "${commands[@]}"
 else
