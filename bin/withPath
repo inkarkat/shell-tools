@@ -34,8 +34,13 @@ a higher precedence.
 HELPTEXT
 }
 
-isFirst=t
 pathAdd=''
+addPath()
+{
+    [ -z "$1" ] || pathAdd+="${pathAdd:+:}${1:?}"
+}
+
+isFirst=t
 isClean=
 isNeedEval=
 typeset -a commands=()
@@ -43,13 +48,13 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
-	--path|-p)	shift; [ -z "$1" ] || pathAdd="${pathAdd}${pathAdd:+:}${1:?}"; shift;;
+	--path|-p)	shift; addPath "$1"; shift;;
 	--clean|-C)	shift; isClean=t;;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		if [ "$isFirst" ]; then
-			    [ -z "$1" ] || pathAdd="${1:?}"; shift
+			    addPath "$1"; shift
 			else
 			    break
 			fi
