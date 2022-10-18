@@ -5,6 +5,8 @@ printShortUsage()
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
     printf 'Usage: %q %s\n' "$(basename "$1")" 'ADD-PATH [-C|--clean] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-p|--path ADD-PATH [-p ...] [-C|--clean] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
 }
 printUsage()
 {
@@ -41,12 +43,13 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--path|-p)	shift; [ -z "$1" ] || pathAdd="${pathAdd}${pathAdd:+:}${1:?}"; shift;;
 	--clean|-C)	shift; isClean=t;;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		if [ "$isFirst" ]; then
-			    pathAdd="${1:?}"; shift
+			    [ -z "$1" ] || pathAdd="${1:?}"; shift
 			else
 			    break
 			fi
