@@ -29,6 +29,7 @@ printLongUsage()
     cat <<HELPDESCRIPTION
 Execute COMMAND on each DIR (which ${dirMarker:+either }is appended${dirMarker:+ or replaces any $dirMarker marker}
 inside COMMANDLINE) individually. So one invocation of COMMAND per DIR.
+Non-existing directories or file arguments are silently ignored.
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
@@ -60,8 +61,9 @@ HELPDESCRIPTION
     --summarize-failed-separator SEP
     --between-command BETWEEN-COMMAND
 		    Execute BETWEEN-COMMAND in between each COMMAND execution.
-    --find|-f	    Execute find with the following FIND-ARGS to obtain the list
-		    of dirspecs instead of directly taking DIRs. This allows
+    --find|-f	    Execute find with the following FIND-ARGS (use of -type d
+		    recommended for performance reasons) to obtain the list of
+		    dirspecs instead of directly taking DIRs. This allows
 		    recursing into and filtering of subdirectories.
 		    (But you could alternatively directly use find -exec {} ;
 		    to do the same.)
@@ -219,6 +221,8 @@ case "$with" in
 	quoter='%q'; [ "$isNeedEval" ] && quoter='%s'
 	eval '$dirSource "$@"' "${dirProcessor:+|}" "$dirProcessor" | while IFS=$'\n' read -r dirspec || [ -n "$dirspec" ]
 	do
+	    [ -d "$dirspec" ] || continue
+
 	    if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
 		if [ "${betweenCommand:$((${#betweenCommand} - 1))}" = ';' ]; then
 		    printf '%s ' "$betweenCommand"  # Prepend the BETWEEN-COMMAND to the next DIR's execution (so there's no separate prompt) if it ends with a semicolon. Its exit status is then ignored.
@@ -250,6 +254,8 @@ case "$with" in
 	exec 3<&0
 	while IFS=$'\n' read -r dirspec || [ -n "$dirspec" ]
 	do
+	    [ -d "$dirspec" ] || continue
+
 	    if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
 		eval "$betweenCommand" <&3 || { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
 	    fi
