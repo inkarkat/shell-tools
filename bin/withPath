@@ -6,7 +6,7 @@ printShortUsage()
     # skim the long one.
     printf 'Usage: %q %s\n' "$(basename "$1")" 'ADD-PATH [-C|--clean] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" '-p|--path ADD-PATH [-p ...]|-P|--path-file PATH-FILE [-P ...] [-C|--clean] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-p|--path ADD-PATH [-p ...]|-P|--path-file PATH-FILE|- [-P ...] [-C|--clean] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
 }
 printUsage()
 {
@@ -29,9 +29,9 @@ HELPDESCRIPTION
 This can be used to temporarily augment the PATH, or to give later PATH entries
 a higher precedence.
     --path|-p ADD-PATH	ADD-PATH is put at the front of \$PATH.
-    --path-file|-P PATH-FILE
-			Each line from PATH-FILE is taken as a PATH entry to be
-			added.
+    --path-file|-P PATH-FILE|-
+			Each line from PATH-FILE (with -: standard input) is
+			taken as a PATH entry to be added.
     --clean|-C		Start with just the PATH definition from
 			/etc/environment, so all user-specific additions are
 			dropped.
@@ -54,10 +54,11 @@ do
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 	--path|-p)	shift; addPath "$1"; shift;;
 	--path-file|-P)	shift
+			filespec="$1"; [ "$filespec" = - ] && filespec=/dev/stdin
 			while IFS=$'\n' read -r line || [ -n "$line" ]
 			do
 			    addPath "$line"
-			done < "$1"
+			done < "$filespec"
 			shift
 			;;
 	--clean|-C)	shift; isClean=t;;
