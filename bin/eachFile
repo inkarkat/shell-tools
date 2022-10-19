@@ -276,10 +276,11 @@ case "$with" in
 
 	    reportProgress "$filespec"
 	    if [ "$isNeedEval" ]; then
-		eval "${interpolatedCommands[@]}" '"${f[@]}"'
+		typeset -a c=("${interpolatedCommands[@]}" "${f[@]}")
 	    else
-		"${interpolatedCommands[@]}" "${f[@]}"
-	    fi <&3 || { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
+		typeset -a c=('"${interpolatedCommands[@]}" "${f[@]}"')
+	    fi
+	    eval "${c[@]}" <&3 || { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
 	    isFirst=
 	done < <(eval '$fileSource "$@"' "${fileProcessor:+|}" "$fileProcessor")
 	exit $status

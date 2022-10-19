@@ -282,10 +282,11 @@ case "$with" in
 
 	    reportProgress "$dirspec"
 	    if [ "$isNeedEval" ]; then
-		eval "${interpolatedCommands[@]}" '"${f[@]}"'
+		typeset -a c=("${interpolatedCommands[@]}" "${f[@]}")
 	    else
-		"${interpolatedCommands[@]}" "${f[@]}"
-	    fi <&3 || { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
+		typeset -a c=('"${interpolatedCommands[@]}" "${f[@]}"')
+	    fi
+	    eval "${c[@]}" <&3 || { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
 	    isFirst=
 	done < <(eval '$dirSource "$@"' "${dirProcessor:+|}" "$dirProcessor")
 	exit $status
