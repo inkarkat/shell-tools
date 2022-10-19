@@ -11,7 +11,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" '[--with-header|--with-prompt [--initial-status NUM] [--trailing-prompt|--no-trailing-prompt] [--no-output-no-prompt] [--no-output-no-error] [--emulate-prompt]] [--no-success-no-count|--no-count-on N] [--exit-on-success|--exit-on-failure|--exit-on NUM] [--worst-status] [--comment COMMENT] [--summarize-failed ERROR-TEXT [--summarize-failed-separator SEP]] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command "COMMANDLINE" [...] | SIMPLECOMMAND [...] [--] FILE [...] [-?|-h|--help]'
+    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" '[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt [--initial-status NUM] [--trailing-prompt|--no-trailing-prompt] [--no-output-no-prompt] [--no-output-no-error] [--emulate-prompt]] [--no-success-no-count|--no-count-on N] [--exit-on-success|--exit-on-failure|--exit-on NUM] [--worst-status] [--comment COMMENT] [--summarize-failed ERROR-TEXT [--summarize-failed-separator SEP]] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command "COMMANDLINE" [...] | SIMPLECOMMAND [...] [--] FILE [...] [-?|-h|--help]'
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '[...] -c|--command "COMMANDLINE" [...] | SIMPLECOMMAND [...] -f|--find FIND-ARGS ...'
 }
@@ -40,6 +40,15 @@ HELPDESCRIPTION
 		    progressNotification command.}
     --with-header   Print a header (containing the current FILE) before each
 		    execution.
+    --with-basename-header
+		    Print a header (containing just the current FILE's name
+		    without any path) before each execution.
+    --separate-errors	Do not combine command output and command errors into
+			one (paged) stream. Commands that just cause error
+			output won't have a header then. Error output will
+			remain on its separate file descriptor and will not be
+			paged. Useful if you want to suppress errors or handle
+			them separately.
     --with-prompt   Emulate a full prompt (as if invoking COMMAND) before each
 		    execution.
     --emulate-prompt	    Customizations of the prompt emulation around
@@ -113,6 +122,9 @@ makeAbsolute()
 }
 typeset -a findArgs=()
 with=
+isHeaderBasename=
+errorRedir='2>&1'
+typeset -a colorArg=()
 typeset -a commands=()
 betweenCommand=
 usageRedirectCommand=
@@ -127,6 +139,12 @@ do
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
 	--progress)	shift; progressSink="$1"; shift;;
 	--with-header)	shift; with=header;;
+	--with-basename-header)
+			shift; with=header; isHeaderBasename=t;;
+	--separate-errors)
+			shift; errorRedir='';;
+	--no-color|--color=*)	colorArg=("$1"); shift;;
+	--color)		colorArg=("$1" "$2"); shift; shift;;
 	--with-prompt)	shift; with=prompt; runWithCommand=runWithPrompt;;
 
 	--trailing-prompt|--no-trailing-prompt|--no-output-no-prompt|--no-output-no-error|--no-success-no-count|--exit-on-success|--exit-on-failure|--emulate-prompt|--worst-status)
@@ -247,6 +265,8 @@ case "$with" in
 	;;
     *)
 	status=0
+	: ${EACHFILE_HEADER_ID:="eachFile-$$-$RANDOM"}
+	isHeader=; [ "$with" = 'header' ] && isHeader=t
 	exec 3<&0
 	while IFS=$'\n' read -r filespec || [ -n "$filespec" ]
 	do
@@ -254,9 +274,8 @@ case "$with" in
 		eval "$betweenCommand" <&3 || { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
 	    fi
 
-	    if [ "$with" = 'header' ]; then
-		header ${isFirst:+--first} "$filespec"
-	    fi
+	    header="$filespec"
+	    [ "$isHeaderBasename" ] && header="$(basename -- "$header")"
 
 	    if [ "$isLocalDir" ]; then
 		dirspec="$(dirname -- "$filespec")"
@@ -274,12 +293,14 @@ case "$with" in
 	    typeset -a interpolatedCommands=("${commands[@]//"$fileMarker"/$filespec}")
 	    [ "${interpolatedCommands[*]}" = "${commands[*]}" ] || f=()
 
-	    reportProgress "$filespec"
+	    reportProgress "$header"
 	    if [ "$isNeedEval" ]; then
-		eval "${interpolatedCommands[@]}" '"${f[@]}"'
+		typeset -a c=("${interpolatedCommands[@]}" "${f[@]}")
 	    else
-		"${interpolatedCommands[@]}" "${f[@]}"
-	    fi <&3 || { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
+		typeset -a c=('"${interpolatedCommands[@]}" "${f[@]}"')
+	    fi
+	    (eval "${isHeader:+{}" "${c[@]}" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHFILE_HEADER_ID' -- '$header'}") <&3 || \
+		{ exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
 	    isFirst=
 	done < <(eval '$fileSource "$@"' "${fileProcessor:+|}" "$fileProcessor")
 	exit $status
