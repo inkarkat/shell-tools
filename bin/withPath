@@ -6,7 +6,9 @@ printShortUsage()
     # skim the long one.
     printf 'Usage: %q %s\n' "$(basename "$1")" 'ADD-PATH [-C|--clean] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" '-p|--path ADD-PATH [-p ...]|-P|--path-file PATH-FILE|- [-P ...] [-C|--clean] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-p|--path ADD-PATH [-p ...]|-P|--path-file PATH-FILE|- [-P ...] [-C|--clean] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...]'
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-C|--clean -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...]'
 }
 printUsage()
 {
@@ -84,8 +86,8 @@ if [ $# -ne 0 ]; then
 	commands=("$@")
     fi
 fi
-if [ -z "$pathAdd" ]; then
-    echo 'ERROR: No ADD-PATH passed.'
+if [ -z "$pathAdd" ] && [ ! "$isClean" ]; then
+    echo 'ERROR: No ADD-PATH or -C|--clean passed.'
     echo
     printUsage "$0"
     exit 2
@@ -97,7 +99,7 @@ elif [ ${#commands[@]} -eq 0 ]; then
 fi >&2
 
 if [ "$isClean" ]; then
-    PATH="${pathAdd}:$(pam_getenv PATH)" || exit $?
+    PATH="${pathAdd}${pathAdd:+:}$(pam_getenv PATH)" || exit $?
 else
     PATH="${pathAdd}:$PATH"
 fi
