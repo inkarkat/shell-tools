@@ -1,0 +1,233 @@
+#!/bin/bash
+set -o pipefail
+shopt -qs extglob
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" '--success-command SINK-COMMANDLINE | --success-exec SIMPLE-SINK-COMMAND [...] ; | --fail-command SINK-COMMANDLINE | --fail-exec SIMPLE-SINK-COMMAND [...] ; | -s|--status-command STATUS|-S|[!]S|S+|S-T|S%T SINK-COMMANDLINE | -S|--status-exec STATUS|-S|[!]S|S+|S-T|S%T SIMPLE-SINK-COMMAND [...] ; [...] [-t|--tee] [-1|--stdout|-2|--stderr] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Execute COMMAND with all of its output captured and then piped into
+SINK-COMMAND(s) which are chosen based on COMMAND's exit status.
+(Only the first matching SINK-COMMAND from the order of given arguments is
+executed.)
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --success-command SINK-COMMAND
+			Execute SINK-COMMAND with the output piped into it if
+			COMMAND succeeded.
+			Multiple SINK-COMMANDs are joined with | as pipeline
+			steps.
+    --success-exec SINK-COMMAND [...] ;
+			Execute SINK-COMMAND with the output piped into it if
+			COMMAND succeeded; all following arguments are taken to
+			be arguments to the SINK-COMMAND until an argument
+			consisting of ';' is encountered. Multiple SINK-COMMANDs
+			are joined with | as pipeline steps.
+    --fail-command SINK-COMMAND
+			Execute SINK-COMMAND with the output piped into it if
+			COMMAND failed.
+			Multiple SINK-COMMANDs are joined with | as pipeline
+			steps.
+    --fail-exec SINK-COMMAND [...] ;
+			Execute SINK-COMMAND with the output piped into it if
+			COMMAND failed; all following arguments are taken to be
+			arguments to the SINK-COMMAND until an argument
+			consisting of ';' is encountered. Multiple SINK-COMMANDs
+			are joined with | as pipeline steps.
+    -s|--status-command STATUS|-S|[!]S|S+|S-T|S%T SINK-COMMAND
+			Execute SINK-COMMAND with the output piped into it if
+			COMMAND's status matches.
+			Multiple SINK-COMMANDs are joined with | as pipeline
+			steps.
+    -S|--status-exec STATUS|-S|[!]S|S+|S-T|S%T SINK-COMMAND [...] ;
+			Execute SINK-COMMAND with the output piped into it if
+			COMMAND's status matches; all following arguments are
+			taken to be arguments to the SINK-COMMAND until an
+			argument consisting of ';' is encountered. Multiple
+			SINK-COMMANDs are joined with | as pipeline steps.
+    --tee|-t		Also print the output in addition to piping it.
+    --stdout|-1		Only pipe output to standard output; error output is
+			output normally.
+    --stderr|-2		Only pipe error output; other output is output normally.
+    --command|-c CMD	The command line to be captured. When this is a simple
+			command, it can also be passed as such.
+SEE ALSO:
+- withOutputToSink is a simpler variant that does direct piping into a single
+  sink and returns the source command's exit status.
+
+EXIT STATUS:
+    2	Bad invocation, wrong or missing command-line arguments.
+    3	Internal error or failed assertion.
+    99	No matching STATUS; no SINK-COMMAND executed; output has been discarded.
+    *   any exit status from SINK-COMMAND(s)
+HELPTEXT
+}
+
+teePipe='>'
+teePrefix='2>&1'
+teeSuffix=
+isNeedEval=
+typeset -a sinkRanges=()
+typeset -A statusSinkCommands=()
+typeset -a commands=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--tee|-t)	shift; teePipe='| tee';;
+	--stdout|-1)	shift; teePrefix='';;
+	--stderr|-2)	shift; teePrefix='3>&1 1>&2 2>&3 3>&-'; teeSuffix='3>&1 1>&2 2>&3 3>&-';;
+	--success-command)
+			shift
+			sinkRanges+=('0')
+			statusSinkCommands['0']+="${statusSinkCommands['0']:+|}$1"; shift;;
+	--fail-command) shift
+			sinkRanges+=('!0')
+			statusSinkCommands['!0']+="${statusSinkCommands['!0']:+|}$1"; shift;;
+	--status-command|-s)
+			shift
+			status="$1"; shift
+			sinkRanges+=("$status")
+			statusSinkCommands["$status"]+="${statusSinkCommands["$status"]:+|}$1"; shift;;
+	--success-exec)
+			shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != ';' ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd="${cmd}${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo 'ERROR: --success-exec command must be concluded with ;!'; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			sinkRanges+=('0')
+			statusSinkCommands['0']+="${statusSinkCommands['0']:+|}$cmd"
+			;;
+	--fail-exec)
+			shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != ';' ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd="${cmd}${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo 'ERROR: --fail-exec command must be concluded with ;!'; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			sinkRanges+=('!0')
+			statusSinkCommands['!0']+="${statusSinkCommands['!0']:+|}$cmd"
+			;;
+	--status-exec|-S)	shift
+			status="$1"; shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != ';' ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd="${cmd}${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo 'ERROR: -S|--status-exec command must be concluded with ;!'; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			sinkRanges+=("$status")
+			statusSinkCommands["$status"]+="${statusSinkCommands["$status"]:+|}$cmd"
+			;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    if [ "$isNeedEval" ]; then
+	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+	# undo the effects of eval.
+	printf -v quotedSimpleCommand '%q ' "$@"
+	commands+=(${commands:+;} "${quotedSimpleCommand% }")
+    else
+	commands=("$@")
+    fi
+fi
+if [ ${#commands[@]} -eq 0 ]; then
+    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
+    echo
+    printUsage "$0"
+    exit 2
+elif [ ${#statusSinkCommands[@]} -eq 0 ]; then
+    echo 'ERROR: No SINK-COMMAND(s) specified; need to pass --success-command|--fail-command|-s|--status-command, or --success-exec|--fail-exec|-S|--status-exec'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+execute()
+{
+    if [ "$isNeedEval" ]; then
+	eval "${commands[@]}"
+    else
+	"${commands[@]}"
+    fi
+}
+
+sinkExecute()
+{
+    local sinkCommand="${statusSinkCommands["$range"]}"
+    cat -- "$TMPFILE" \
+	| eval "$sinkCommand"
+    exit $?
+}
+
+TMPFILE="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TEMP:-/tmp}/$(basename -- "$0").$$$RANDOM")"
+[ "${DEBUG:-}" ] || trap 'rm -f -- "$TMPFILE" 2>/dev/null' EXIT
+
+eval "{ { execute $teePrefix; } $teePipe \"\$TMPFILE\"; } ${teeSuffix}"
+typeset -a states=("${PIPESTATUS[@]}")
+[ ${states[1]:-0} -eq 0 ] || exit 3 # Bail on tee failure.
+status=${states[0]}
+
+for range in "${sinkRanges[@]}"
+do
+    case "$range" in
+	-+([0-9]))	    [ $status -le ${range#-} ] && sinkExecute;;
+	+([0-9])+)	    [ $status -ge ${range%+} ] && sinkExecute;;
+	+([0-9])-+([0-9]))  minStatus=${range%-*}
+			    maxStatus=${range#*-}
+			    [ $status -ge $minStatus -a $status -le $maxStatus ] && sinkExecute
+			    ;;
+	+([0-9])%+([0-9]))  minStatus=${range%\%*}
+			    maxStatus=${range#*%}
+			    [ $status -lt $minStatus -o $status -gt $maxStatus ] && sinkExecute
+			    ;;
+	!+([0-9]))	    [ $status -ne ${range#!} ] && sinkExecute;;
+	+([0-9]))	    [ $status -eq $range ] && sinkExecute;;
+	*)		    printf >&2 'ERROR: Invalid status range argument: %s\n' "$range"
+			    exit 2
+			    ;;
+    esac
+done
+exit 99
