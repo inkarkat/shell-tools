@@ -42,6 +42,15 @@ HELPDESCRIPTION
     --stderr|-2		Only pipe error output; other output is output normally.
     --command|-c CMD	The command line to be captured. When this is a simple
 			command, it can also be passed as such.
+SEE ALSO:
+- withOutputToSinkBasedOnStatus captures all output and then pipes it to
+  different sink commands based on the command's exit status.
+
+EXIT STATUS:
+    2	Bad invocation, wrong or missing command-line arguments.
+    3	Internal error or failed assertion.
+    *   any exit status from COMMAND(s); the exit status from SINK-COMMAND is
+	lost
 HELPTEXT
 }
 
