@@ -1,0 +1,195 @@
+#!/bin/bash
+set -o pipefail
+shopt -qs extglob
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-m|--match-command PATTERN SINK-COMMANDLINE | -M|--match-exec PATTERN SIMPLE-SINK-COMMAND [...] ; -v|--no-match-command PATTERN SINK-COMMANDLINE | -V|--no-match-exec PATTERN SIMPLE-SINK-COMMAND [...] ; [...] [-t|--tee] [-1|--stdout|-2|--stderr] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Execute COMMAND with all of its output captured and then piped into
+SINK-COMMAND(s) which are chosen based on whether PATTERN matches (or not).
+(All (non-)matching SINK-COMMANDs from the order of given arguments are
+executed.)
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --match-command|-m PATTERN SINK-COMMANDLINE
+			Execute SINK-COMMAND with the output piped into it if
+			PATTERN matches the output.
+			Multiple SINK-COMMANDs are joined with | as pipeline
+			steps.
+    --match-exec|-M PATTERN SIMPLE-SINK-COMMAND [...] ;
+			Execute SINK-COMMAND with the output piped into it if
+			PATTERN matches the output; all following arguments are
+			taken to be arguments to the SINK-COMMAND until an
+			argument consisting of ';' is encountered. Multiple
+			SINK-COMMANDs are joined with | as pipeline steps.
+    --no-match-command|-v PATTERN SINK-COMMANDLINE
+			Execute SINK-COMMAND with the output piped into it if
+			PATTERN does not match in output.
+			Multiple SINK-COMMANDs are joined with | as pipeline
+			steps.
+    --no-match-exec|-V PATTERN SIMPLE-SINK-COMMAND [...] ;
+			Execute SINK-COMMAND with the output piped into it if
+			PATTERN does not match in output; all following
+			arguments are taken to be arguments to the SINK-COMMAND
+			until an argument consisting of ';' is encountered.
+			Multiple SINK-COMMANDs are joined with | as pipeline
+			steps.
+			PATTERN is a grep-style unanchored basic regular
+			expresion.
+    --tee|-t		Also print the output in addition to piping it.
+    --stdout|-1		Only pipe output to standard output; error output is
+			output normally.
+    --stderr|-2		Only pipe error output; other output is output normally.
+    --command|-c CMD	The command line to be captured. When this is a simple
+			command, it can also be passed as such.
+SEE ALSO:
+- withOutputToSink is a simpler variant that does direct piping into a single
+  sink and returns the source command's exit status.
+- withOutputToSinkBasedOnStatus captures all output and then pipes it to
+  different sink commands based on the command's exit status.
+
+EXIT STATUS:
+    2	Bad invocation, wrong or missing command-line arguments.
+    3	Internal error or failed assertion.
+    *   any exit status from COMMAND(s); the exit status from SINK-COMMAND is
+	lost
+HELPTEXT
+}
+
+teePipe='>'
+teePrefix='2>&1'
+teeSuffix=
+isNeedEval=
+typeset -A matchSinkCommands=()
+typeset -A nonMatchSinkCommands=()
+typeset -a commands=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--tee|-t)	shift; teePipe='| tee';;
+	--stdout|-1)	shift; teePrefix='';;
+	--stderr|-2)	shift; teePrefix='3>&1 1>&2 2>&3 3>&-'; teeSuffix='3>&1 1>&2 2>&3 3>&-';;
+	--match-command|-m)
+			shift
+			pattern="$1"; shift
+			matchSinkCommands["$pattern"]+="${matchSinkCommands["$pattern"]:+|}$1"; shift;;
+	--no-match-command|-v)
+			shift
+			pattern="$1"; shift
+			nonMatchSinkCommands["$pattern"]+="${nonMatchSinkCommands["$pattern"]:+|}$1"; shift;;
+	--match-exec|-M)
+			shift
+			pattern="$1"; shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != ';' ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd="${cmd}${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo 'ERROR: -M|--match-exec command must be concluded with ;!'; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			matchSinkCommands["$pattern"]+="${matchSinkCommands["$pattern"]:+|}$cmd"
+			;;
+	--no-match-exec|-V)
+			shift
+			pattern="$1"; shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != ';' ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd="${cmd}${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo 'ERROR: -V|--no-match-exec command must be concluded with ;!'; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			nonMatchSinkCommands["$pattern"]+="${nonMatchSinkCommands["$pattern"]:+|}$cmd"
+			;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    if [ "$isNeedEval" ]; then
+	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+	# undo the effects of eval.
+	printf -v quotedSimpleCommand '%q ' "$@"
+	commands+=(${commands:+;} "${quotedSimpleCommand% }")
+    else
+	commands=("$@")
+    fi
+fi
+if [ ${#commands[@]} -eq 0 ]; then
+    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
+    echo
+    printUsage "$0"
+    exit 2
+elif [ ${#matchSinkCommands[@]} -eq 0 -a ${#nonMatchSinkCommands[@]} -eq 0 ]; then
+    echo 'ERROR: No SINK-COMMAND(s) specified; need to pass -m|--match-command|-v|--no-match-command, or -M|--match-exec|-V|--no-match-exec'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+execute()
+{
+    if [ "$isNeedEval" ]; then
+	eval "${commands[@]}"
+    else
+	"${commands[@]}"
+    fi
+}
+
+sinkExecute()
+{
+    local sinkCommand="${1?}"; shift
+    cat -- "$TMPFILE" \
+	| eval "$sinkCommand"
+}
+
+TMPFILE="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TEMP:-/tmp}/$(basename -- "$0").$$$RANDOM")"
+[ "${DEBUG:-}" ] || trap 'rm -f -- "$TMPFILE" 2>/dev/null' EXIT
+
+eval "{ { execute $teePrefix; } $teePipe \"\$TMPFILE\"; } ${teeSuffix}"
+typeset -a states=("${PIPESTATUS[@]}")
+[ ${states[1]:-0} -eq 0 ] || exit 3 # Bail on tee failure.
+status=${states[0]}
+
+for pattern in "${!matchSinkCommands[@]}"
+do
+    grep --quiet -e "$pattern" -- "$TMPFILE" \
+	&& sinkExecute "${matchSinkCommands["$pattern"]}"
+done
+for pattern in "${!nonMatchSinkCommands[@]}"
+do
+    grep --quiet -e "$pattern" -- "$TMPFILE" \
+	|| sinkExecute "${nonMatchSinkCommands["$pattern"]}"
+done
+exit $status

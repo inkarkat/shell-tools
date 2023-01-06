@@ -71,6 +71,8 @@ HELPDESCRIPTION
 SEE ALSO:
 - withOutputToSink is a simpler variant that does direct piping into a single
   sink and returns the source command's exit status.
+- withOutputToSinkBasedOnMatch captures all output and then pipes it to
+  different sink commands based on the output matching a pattern (or not)
 
 EXIT STATUS:
     2	Bad invocation, wrong or missing command-line arguments.
