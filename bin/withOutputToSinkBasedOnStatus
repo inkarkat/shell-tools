@@ -51,12 +51,12 @@ HELPDESCRIPTION
 			arguments to the SINK-COMMAND until an argument
 			consisting of ';' is encountered. Multiple SINK-COMMANDs
 			are joined with | as pipeline steps.
-    -s|--status-command STATUS|-S|[!]S|S+|S-T|S%T SINK-COMMAND
+    --status-command|-s STATUS|-S|[!]S|S+|S-T|S%T SINK-COMMAND
 			Execute SINK-COMMAND with the output piped into it if
 			COMMAND's status matches.
 			Multiple SINK-COMMANDs are joined with | as pipeline
 			steps.
-    -S|--status-exec STATUS|-S|[!]S|S+|S-T|S%T SINK-COMMAND [...] ;
+    --status-exec|-S STATUS|-S|[!]S|S+|S-T|S%T SINK-COMMAND [...] ;
 			Execute SINK-COMMAND with the output piped into it if
 			COMMAND's status matches; all following arguments are
 			taken to be arguments to the SINK-COMMAND until an
