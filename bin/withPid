@@ -8,6 +8,10 @@ printShortUsage()
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
     printf 'Usage: %q %s\n' "$(basename "$1")" '-s|--source-command SOURCE-COMMANDLINE -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    echo
+    printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" '[...] [--bare|[--trailing-prompt|--no-trailing-prompt] [--emulate-prompt] [--worst-status]]'
+    echo
+    printf 'Usage: %q %s <<EOF\n  COMMANDLINE\n...\nEOF\n' "$(basename "$1")" '[...]'
 }
 printUsage()
 {
@@ -30,6 +34,14 @@ HELPDESCRIPTION
     cat <<HELPTEXT
     --source-command|-s SOURCE-COMMANDLINE
 			Execute SOURCE-COMMAND as a command-line asynchronously.
+    --command|-c CMD	The command line to be executed. When this is a simple
+			command, it can also be passed as such.
+    --bare		Do not print a status line before and after launching
+			the COMMAND.
+    --trailing-prompt	Customizations of the prompt emulation around COMMAND;
+    --no-trailing-prompt cp. runWithPrompt
+    --emulate-prompt
+    --worst-status
 EXIT STATUS:
     0	Complete success.
     2	Bad invocation, wrong or missing command-line arguments.
@@ -38,8 +50,10 @@ EXIT STATUS:
 HELPTEXT
 }
 
+isBare=
 isNeedEval=
 typeset -a commands=()
+typeset -a runWithPromptArgs=()
 sourceCommand=
 while [ $# -ne 0 ]
 do
@@ -48,6 +62,8 @@ do
 	--source-command|-s)
 			shift; sourceCommand="$1"; shift;;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--bare)		shift; isBare=t;;
+	--no-trailing-prompt|--trailing-prompt|--emulate-prompt|--worst-status)  runWithPromptArgs+=("$1"); shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
@@ -69,22 +85,27 @@ if [ -z "$sourceCommand" ]; then
     echo
     printUsage "$0"
     exit 2
-elif [ ${#commands[@]} -eq 0 ]; then
-    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
-    echo
-    printUsage "$0"
-    exit 2
 fi >&2
 
 eval "$sourceCommand &" || exit 126
 pid=$!
 
-typeset -a p=("$pid")
-[ "$isNeedEval" ] && printf -v pid '%q' "$pid"
-typeset -a interpolatedCommands=("${commands[@]//"$pidMarker"/$pid}")
-[ "${interpolatedCommands[*]}" = "${commands[*]}" ] || p=()
-if [ "$isNeedEval" ]; then
-    eval "${interpolatedCommands[@]}" '"${p[@]}"'
+if [ ${#commands[@]} -eq 0 ]; then
+    literalPidMarker="$(printf %s "$pidMarker" | sed -e 's/[][\$*.^#]/\\&/g')"
+    sed --unbuffered -e "s#${literalPidMarker}#${pid}#g" \
+	| if [ "$isBare" ]; then
+	    bash -
+	else
+	    runWithPrompt "${runWithPromptArgs[@]}"
+	fi
 else
-    "${interpolatedCommands[@]}" "${p[@]}"
+    typeset -a p=("$pid")
+    [ "$isNeedEval" ] && printf -v pid '%q' "$pid"
+    typeset -a interpolatedCommands=("${commands[@]//"$pidMarker"/$pid}")
+    [ "${interpolatedCommands[*]}" = "${commands[*]}" ] || p=()
+    if [ "$isNeedEval" ]; then
+	eval "${interpolatedCommands[@]}" '"${p[@]}"'
+    else
+	"${interpolatedCommands[@]}" "${p[@]}"
+    fi
 fi

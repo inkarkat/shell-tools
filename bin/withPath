@@ -9,6 +9,10 @@ printShortUsage()
     printf 'Usage: %q %s\n' "$(basename "$1")" '-p|--path ADD-PATH [-p ...]|-P|--path-file PATH-FILE|- [-P ...] [-C|--clean] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...]'
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '-C|--clean -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...]'
+    echo
+    printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" '[...] [--bare|[--trailing-prompt|--no-trailing-prompt] [--emulate-prompt] [--worst-status]]'
+    echo
+    printf 'Usage: %q %s <<EOF\n  COMMANDLINE\n...\nEOF\n' "$(basename "$1")" '[...]'
 }
 printUsage()
 {
@@ -37,6 +41,14 @@ a higher precedence.
     --clean|-C		Start with just the PATH definition from
 			/etc/environment, so all user-specific additions are
 			dropped.
+    --command|-c CMD	The command line to be executed. When this is a simple
+			command, it can also be passed as such.
+    --bare		Do not print a status line before and after launching
+			the COMMAND.
+    --trailing-prompt	Customizations of the prompt emulation around COMMAND;
+    --no-trailing-prompt cp. runWithPrompt
+    --emulate-prompt
+    --worst-status
 HELPTEXT
 }
 
@@ -48,8 +60,10 @@ addPath()
 
 isFirst=t
 isClean=
+isBare=
 isNeedEval=
 typeset -a commands=()
+typeset -a runWithPromptArgs=()
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -65,6 +79,8 @@ do
 			;;
 	--clean|-C)	shift; isClean=t;;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--bare)		shift; isBare=t;;
+	--no-trailing-prompt|--trailing-prompt|--emulate-prompt|--worst-status)  runWithPromptArgs+=("$1"); shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		if [ "$isFirst" ]; then
@@ -91,11 +107,6 @@ if [ -z "$pathAdd" ] && [ ! "$isClean" ]; then
     echo
     printUsage "$0"
     exit 2
-elif [ ${#commands[@]} -eq 0 ]; then
-    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
-    echo
-    printUsage "$0"
-    exit 2
 fi >&2
 
 if [ "$isClean" ]; then
@@ -105,7 +116,13 @@ else
 fi
 export PATH PATH_OVERRIDE=true
 
-if [ "$isNeedEval" ]; then
+if [ ${#commands[@]} -eq 0 ]; then
+    if [ "$isBare" ]; then
+	exec bash -
+    else
+	exec runWithPrompt "${runWithPromptArgs[@]}"
+    fi
+elif [ "$isNeedEval" ]; then
     eval "${commands[@]}"
 else
     "${commands[@]}"

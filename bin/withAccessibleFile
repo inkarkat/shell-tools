@@ -8,6 +8,10 @@ printShortUsage()
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
     printf 'Usage: %q %s\n' "$(basename "$1")" 'TARGET [...] [-r|--read] [-g|--group GROUP] [-m|--mode MODE] [-o|--owner OWNER] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    echo
+    printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" '[...] [--bare|[--trailing-prompt|--no-trailing-prompt] [--emulate-prompt] [--worst-status]]'
+    echo
+    printf 'Usage: %q %s <<EOF\n  COMMANDLINE\n...\nEOF\n' "$(basename "$1")" '[...]'
 }
 printUsage()
 {
@@ -39,6 +43,14 @@ current user, but the updating command has to be executed by the current user
 			set permission mode (as in chmod) to MODE.
     --owner|-o OWNER	For each newly created dir / file in a TARGET directory,
 			set ownership to OWNER.
+    --command|-c CMD	The command line to be executed. When this is a simple
+			command, it can also be passed as such.
+    --bare		Do not print a status line before and after launching
+			the COMMAND.
+    --trailing-prompt	Customizations of the prompt emulation around COMMAND;
+    --no-trailing-prompt cp. runWithPrompt
+    --emulate-prompt
+    --worst-status
 HELPTEXT
 }
 
@@ -69,8 +81,10 @@ isChangeNew=
 group=
 mode=
 owner=
+isBare=
 isNeedEval=
 typeset -a commands=()
+typeset -a runWithPromptArgs=()
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -80,6 +94,8 @@ do
 	--group|-g)	shift; group="$1"; shift; isChangeNew=t;;
 	--mode|-m)	shift; mode="$1"; shift; isChangeNew=t;;
 	--owner|-o)	shift; owner="$1"; shift; isChangeNew=t;;
+	--bare)		shift; isBare=t;;
+	--no-trailing-prompt|--trailing-prompt|--emulate-prompt|--worst-status)  runWithPromptArgs+=("$1"); shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
@@ -96,12 +112,6 @@ if [ $# -ne 0 ]; then
 	commands=("$@")
     fi
 fi
-if [ ${#commands[@]} -eq 0 ]; then
-    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
-    echo
-    printUsage "$0"
-    exit 2
-fi >&2
 
 SUDO=sudo; [ $EUID -eq 0 ] && SUDO=''
 
@@ -156,7 +166,13 @@ restorePermissions()
 trap 'restorePermissions' EXIT
 
 typeset -a interpolatedCommands=("${commands[@]//"$targetMarker"/$firstTarget}")
-if [ "$isNeedEval" ]; then
+if [ ${#commands[@]} -eq 0 ]; then
+    if [ "$isBare" ]; then
+	bash -
+    else
+	runWithPrompt "${runWithPromptArgs[@]}"
+    fi
+elif [ "$isNeedEval" ]; then
     eval "${interpolatedCommands[@]}"
 else
     "${interpolatedCommands[@]}"

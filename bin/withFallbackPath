@@ -5,6 +5,10 @@ printShortUsage()
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
     printf 'Usage: %q %s\n' "$(basename "$1")" '[-D|--drop] [--for COMMANDNAME] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    echo
+    printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" '[...] [--bare|[--trailing-prompt|--no-trailing-prompt] [--emulate-prompt] [--worst-status]]'
+    echo
+    printf 'Usage: %q %s <<EOF\n  COMMANDLINE\n...\nEOF\n' "$(basename "$1")" '[...]'
 }
 printUsage()
 {
@@ -33,6 +37,14 @@ SIMPLECOMMAND takes precedence over any COMMANDLINE.
 			dropped.
     --for COMMANDNAME	Manipulate PATH for COMMANDNAME instead of for COMMAND /
 			COMMANDLINE.
+    --command|-c CMD	The command line to be executed. When this is a simple
+			command, it can also be passed as such.
+    --bare		Do not print a status line before and after launching
+			the COMMAND.
+    --trailing-prompt	Customizations of the prompt emulation around COMMAND;
+    --no-trailing-prompt cp. runWithPrompt
+    --emulate-prompt
+    --worst-status
 HELPTEXT
 }
 
@@ -42,8 +54,10 @@ esac
 
 commandName=
 typeset -a pathManipulation=(pathmunge move after)
+isBare=
 isNeedEval=
 typeset -a commands=()
+typeset -a runWithPromptArgs=()
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -51,6 +65,8 @@ do
 	--drop|-D)	shift; pathManipulation=(pathdrop strict);;
 	--for)		shift; commandName="${1:?}"; shift;;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--bare)		shift; isBare=t;;
+	--no-trailing-prompt|--trailing-prompt|--emulate-prompt|--worst-status)  runWithPromptArgs+=("$1"); shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
@@ -70,12 +86,7 @@ else
 	commands=("$@")
     fi
 fi
-if [ ${#commands[@]} -eq 0 ]; then
-    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
-    echo
-    printUsage "$0"
-    exit 2
-elif [ -z "$commandName" ]; then
+if [ -z "$commandName" ]; then
     printf 'ERROR: Cannot identify the command.'
     exit 2
 elif ! commandFilespec="$(which "$commandName" 2>/dev/null)"; then
@@ -95,7 +106,13 @@ esac
 
 export PATH PATH_OVERRIDE=true
 
-if [ "$isNeedEval" ]; then
+if [ ${#commands[@]} -eq 0 ]; then
+    if [ "$isBare" ]; then
+	exec bash -
+    else
+	exec runWithPrompt "${runWithPromptArgs[@]}"
+    fi
+elif [ "$isNeedEval" ]; then
     eval "${commands[@]}"
 else
     "${commands[@]}"

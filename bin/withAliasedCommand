@@ -43,6 +43,8 @@ HELPDESCRIPTION
 			arguments passed to the NAME wrapper as {1}, {2}, etc.
 			and {*}, {@} if you don't want them just appended to
 			ALIAS-COMMAND.
+    --command|-c CMD	The command line to be executed. When this is a simple
+			command, it can also be passed as such.
     --bare		Do not print a status line before and after launching
 			the COMMAND.
     --trailing-prompt	Customizations of the prompt emulation around COMMAND;

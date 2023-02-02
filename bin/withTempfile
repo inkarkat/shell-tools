@@ -8,6 +8,10 @@ printShortUsage()
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
     printf 'Usage: %q %s\n' "$(basename "$1")" '[-p|--tmpdir DIRSPEC] [-n|--name NAME] [--move|-m|--move-on-success|-M|--move-on-failure|--rename|-r|--rename-on-success|-R|--rename-on-failure] [--keep|-k|--keep-on-success|-K|--keep-on-failure] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    echo
+    printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" '[...] [--bare|[--trailing-prompt|--no-trailing-prompt] [--emulate-prompt] [--worst-status]]'
+    echo
+    printf 'Usage: %q %s <<EOF\n  COMMANDLINE\n...\nEOF\n' "$(basename "$1")" '[...]'
 }
 printUsage()
 {
@@ -28,29 +32,37 @@ HELPDESCRIPTION
     printShortUsage "$1"
     echo
     cat <<HELPTEXT
-    --tmpdir|-p DIRSPEC	    Create the tempfile inside DIRSPEC instead of the
-			    default temp directory.
-    --name|-n NAME	    Use NAME as the tempfile prefix.
-    --move FILESPEC	    Move the tempfile after COMMAND(s) have executed.
+    --tmpdir|-p DIRSPEC	Create the tempfile inside DIRSPEC instead of the
+			default temp directory.
+    --name|-n NAME	Use NAME as the tempfile prefix.
+    --move FILESPEC	Move the tempfile after COMMAND(s) have executed.
     --move-on-success|-m FILESPEC
-			    Move the tempfile to FILESPEC if COMMAND(s)
-			    succeed.
+			Move the tempfile to FILESPEC if COMMAND(s) succeed.
     --move-on-failure|-M FILESPEC
-			    Move the tempfile to FILESPEC if COMMAND(s)
-			    failed.
-    --rename FILENAME	    Rename the tempfile inside the temp dir after
-			    COMMAND(s) have executed.
+			Move the tempfile to FILESPEC if COMMAND(s) failed.
+    --rename FILENAME	Rename the tempfile inside the temp dir after COMMAND(s)
+			have executed.
     --rename-on-success|-r FILENAME
-			    Rename the tempfile to FILENAME inside the temp dir
-			    if COMMAND(s) succeed.
+			Rename the tempfile to FILENAME inside the temp dir if
+			COMMAND(s) succeed.
     --rename-on-failure|-R FILENAME
-			    Rename the tempfile to FILENAME inside the temp dir
-			    if COMMAND(s) failed.
-    --keep		    Do not clean up the tempfile. --move and --rename
-			    have precedence over --keep, but if both are given,
-			    the tempfile will be kept should the move fail.
-    --keep-on-success|-k    Do not clean up the tempfile if COMMAND(s) succeed.
-    --keep-on-failure|-K    Do not clean up the tempfile if COMMAND(s) fail.
+			Rename the tempfile to FILENAME inside the temp dir if
+			COMMAND(s) failed.
+    --keep		Do not clean up the tempfile. --move and --rename have
+			precedence over --keep, but if both are given, the
+			tempfile will be kept should the move fail.
+    --keep-on-success|-k
+			Do not clean up the tempfile if COMMAND(s) succeed.
+    --keep-on-failure|-K
+			Do not clean up the tempfile if COMMAND(s) fail.
+    --command|-c CMD	The command line to be executed. When this is a simple
+			command, it can also be passed as such.
+    --bare		Do not print a status line before and after launching
+			the COMMAND.
+    --trailing-prompt	Customizations of the prompt emulation around COMMAND;
+    --no-trailing-prompt cp. runWithPrompt
+    --emulate-prompt
+    --worst-status
 EXIT STATUS:
     0	Complete success.
     *   any exit status from COMMAND(s)
@@ -79,8 +91,10 @@ isMove=
 renameOp=
 targetFilespec=
 keepOp=
+isBare=
 isNeedEval=
 typeset -a commands=()
+typeset -a runWithPromptArgs=()
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -103,6 +117,8 @@ do
 	--keep-on-failure|-K)
 			shift; keepOp=-ne;;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--bare)		shift; isBare=t;;
+	--no-trailing-prompt|--trailing-prompt|--emulate-prompt|--worst-status)  runWithPromptArgs+=("$1"); shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
@@ -119,12 +135,6 @@ if [ $# -ne 0 ]; then
 	commands=("$@")
     fi
 fi
-if [ ${#commands[@]} -eq 0 ]; then
-    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
-    echo
-    printUsage "$0"
-    exit 2
-fi >&2
 
 getOctalFilePermissions()
 {
@@ -137,11 +147,6 @@ tempFilespec="$(mktemp ${tempDirspec:+--tmpdir="$tempDirspec"} "${prefix}-XXXXXX
 [ -f "$tempFilespec" ] || exit 125
 unset tempFilePermissions; [ -n "$renameOp" ] && [ -n "$tempDirspec" ] && tempFilePermissions="$(getOctalFilePermissions "$tempFilespec")"
 [ -z "$targetFilespec" ] || [ "$isMove" ] || targetFilespec="$(dirname -- "$tempFilespec")/${targetFilespec}"
-
-typeset -a f=("$tempFilespec")
-[ "$isNeedEval" ] && printf -v tempFilespec '%q' "$tempFilespec"
-typeset -a interpolatedCommands=("${commands[@]//"$fileMarker"/$tempFilespec}")
-[ "${interpolatedCommands[*]}" = "${commands[*]}" ] || f=()
 
 status=255
 finally()
@@ -168,8 +173,27 @@ finally()
 }
 trap 'finally' EXIT
 
-if [ "$isNeedEval" ]; then
-    eval "${interpolatedCommands[@]}" '"${f[@]}"'
+if [ ${#commands[@]} -eq 0 ]; then
+    literalFileMarker="$(printf %s "$fileMarker" | sed -e 's/[][\$*.^#]/\\&/g')"
+    literalTempFilespec="$tempFilespec"
+    literalTempFilespec="${literalTempFilespec//\\/\\\\}"
+    literalTempFilespec="${literalTempFilespec//&/\\&}"
+
+    sed --unbuffered -e "s#${literalFileMarker}#${literalTempFilespec//#/\\#}#g" \
+	| if [ "$isBare" ]; then
+	    bash -
+	else
+	    runWithPrompt "${runWithPromptArgs[@]}"
+	fi
 else
-    "${interpolatedCommands[@]}" "${f[@]}"
+    typeset -a f=("$tempFilespec")
+    [ "$isNeedEval" ] && printf -v tempFilespec '%q' "$tempFilespec"
+    typeset -a interpolatedCommands=("${commands[@]//"$fileMarker"/$tempFilespec}")
+    [ "${interpolatedCommands[*]}" = "${commands[*]}" ] || f=()
+
+    if [ "$isNeedEval" ]; then
+	eval "${interpolatedCommands[@]}" '"${f[@]}"'
+    else
+	"${interpolatedCommands[@]}" "${f[@]}"
+    fi
 fi; status=$?

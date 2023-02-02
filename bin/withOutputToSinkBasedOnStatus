@@ -7,6 +7,10 @@ printShortUsage()
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
     printf 'Usage: %q %s\n' "$(basename "$1")" '--success-command SINK-COMMANDLINE | --success-exec SIMPLE-SINK-COMMAND [...] ; | --fail-command SINK-COMMANDLINE | --fail-exec SIMPLE-SINK-COMMAND [...] ; | -s|--status-command STATUS|-S|[!]S|S+|S-T|S%T SINK-COMMANDLINE | -S|--status-exec STATUS|-S|[!]S|S+|S-T|S%T SIMPLE-SINK-COMMAND [...] ; [...] [-t|--tee] [-1|--stdout|-2|--stderr] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    echo
+    printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" '[...] [--bare|[--trailing-prompt|--no-trailing-prompt] [--emulate-prompt] [--worst-status]]'
+    echo
+    printf 'Usage: %q %s <<EOF\n  COMMANDLINE\n...\nEOF\n' "$(basename "$1")" '[...]'
 }
 printUsage()
 {
@@ -68,6 +72,12 @@ HELPDESCRIPTION
     --stderr|-2		Only pipe error output; other output is output normally.
     --command|-c CMD	The command line to be captured. When this is a simple
 			command, it can also be passed as such.
+    --bare		Do not print a status line before and after launching
+			the COMMAND.
+    --trailing-prompt	Customizations of the prompt emulation around COMMAND;
+    --no-trailing-prompt cp. runWithPrompt
+    --emulate-prompt
+    --worst-status
 SEE ALSO:
 - withOutputToSink is a simpler variant that does direct piping into a single
   sink and returns the source command's exit status.
@@ -85,10 +95,12 @@ HELPTEXT
 teePipe='>'
 teePrefix='2>&1'
 teeSuffix=
+isBare=
 isNeedEval=
 typeset -a sinkRanges=()
 typeset -A statusSinkCommands=()
 typeset -a commands=()
+typeset -a runWithPromptArgs=()
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -160,6 +172,8 @@ do
 			statusSinkCommands["$status"]+="${statusSinkCommands["$status"]:+|}$cmd"
 			;;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--bare)		shift; isBare=t;;
+	--no-trailing-prompt|--trailing-prompt|--emulate-prompt|--worst-status)  runWithPromptArgs+=("$1"); shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
@@ -175,12 +189,7 @@ if [ $# -ne 0 ]; then
 	commands=("$@")
     fi
 fi
-if [ ${#commands[@]} -eq 0 ]; then
-    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
-    echo
-    printUsage "$0"
-    exit 2
-elif [ ${#statusSinkCommands[@]} -eq 0 ]; then
+if [ ${#statusSinkCommands[@]} -eq 0 ]; then
     echo 'ERROR: No SINK-COMMAND(s) specified; need to pass --success-command|--fail-command|-s|--status-command, or --success-exec|--fail-exec|-S|--status-exec'
     echo
     printUsage "$0"
@@ -189,7 +198,13 @@ fi >&2
 
 execute()
 {
-    if [ "$isNeedEval" ]; then
+    if [ ${#commands[@]} -eq 0 ]; then
+	if [ "$isBare" ]; then
+	    bash -
+	else
+	    runWithPrompt "${runWithPromptArgs[@]}"
+	fi
+    elif [ "$isNeedEval" ]; then
 	eval "${commands[@]}"
     else
 	"${commands[@]}"
