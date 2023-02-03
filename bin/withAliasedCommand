@@ -6,7 +6,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" 'NAME=ALIAS-COMMAND|-n|--name NAME --alias ALIAS-COMMAND [...] ;|-n|--name NAME --alias-command ALIAS-COMMANDLINE [...] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" 'NAME=ALIAS-COMMAND|-n|--name NAME --as ALIAS-COMMAND|-n|--name NAME --alias ALIAS-COMMAND [...] ;|-n|--name NAME --alias-command ALIAS-COMMANDLINE [...] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
     echo
     printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" '[...] [--bare|[--trailing-prompt|--no-trailing-prompt] [--emulate-prompt] [--worst-status]]'
     echo
@@ -33,9 +33,12 @@ HELPDESCRIPTION
     cat <<HELPTEXT
     NAME=ALIAS-COMMAND	Execute ALIAS-COMMAND; arguments passed to the NAME
 			wrapper are appended.
+    --name NAME --as ALIAS-COMMAND
+			Execute ALIAS-COMMAND; arguments passed to the NAME
+			wrapper are appended. (long form of NAME=ALIAS-COMMAND)
     --name NAME --alias-command ALIAS-COMMANDLINE
 			Execute ALIAS-COMMANDLINE; arguments passed to the NAME
-			wrapper have to be explicitly referenced.
+			wrapper have to be explicitly referenced (as \$1 or \$@).
     --name NAME --alias ALIAS-COMMAND [...] ;
 			Execute ALIAS-COMMAND; all following arguments are taken
 			to be arguments to the ALIAS-COMMAND until an argument
@@ -98,6 +101,15 @@ do
 			aliasName=''
 			;;
 	--name|-n)	shift; aliasName="$1"; shift;;
+	--as)		if [ -z "$aliasName" ]; then
+			    printf 'ERROR: Missing -n|--name NAME before %s.\n' "$1"
+			    echo
+			    printUsage "$0"
+			    exit 2
+			fi >&2
+			shift; writeAlias "$aliasName" "$1 \"\$@\"" || exit 2; shift
+			aliasName=''
+			;;
 	--alias-command)
 			if [ -z "$aliasName" ]; then
 			    printf 'ERROR: Missing -n|--name NAME before %s.\n' "$1"
