@@ -41,7 +41,7 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
-	--sudo)		shift; sudoArg=sudo;;
+	--sudo)		shift; sudoArg="${SUDO:-sudo}";;
 
 	--verbose|-v)	mkdirArgs+=("$1"); shift;;
 	--mode|-m)	mkdirArgs+=("$1" "$2"); shift; shift;;
