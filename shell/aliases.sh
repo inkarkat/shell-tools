@@ -22,3 +22,15 @@ INITIAL_ARGUMENT_COUNT=1 addAliasSupport withAliasedCommand \
 INITIAL_ARGUMENT_COUNT=1 addAliasSupport withPath \
     'C' \
     'clean'
+
+addAliasSupport tempdir \
+    'k' \
+    'keep|keep-on-success|keep-on-failure|stdin' \
+    'dCn' \
+    'or-existing|create-subdir|name'
+
+addAliasSupport tempfile \
+    '' \
+    '' \
+    'dbe' \
+    'directory|basename|extension'
