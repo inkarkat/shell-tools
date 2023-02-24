@@ -3,23 +3,51 @@
 : ${TEMPFILE_FILE_MARKER='{}'}
 fileMarker="$TEMPFILE_FILE_MARKER"; unset TEMPFILE_FILE_MARKER
 
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-c|--command "COMMANDLINE" [-c ...] [--] SIMPLECOMMAND [...]] [-?|-h|--help]'
+}
 printUsage()
 {
-    cat <<HELPTEXT
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
 Capture output from stdin into a temp file whose name is then printed / passed
 to COMMAND (${fileMarker:+either }appended${fileMarker:+ or replacing any $fileMarker marker }inside COMMANDLINE).
 Additionally, statistics about the amount of captured text is printed to stderr.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --directory|-d DIR	Use (and create) a subdirectory DIR inside the temp
+			directory to store the temp file in.
+    --basename|-b BASE	Use BASE as the prefix of the temp file name.
+    --extension|-e EXT	Use EXT as the temp file extension.
+    --command|-c CMD	Execute CMD as a command-line, ${fileMarker:+either }appending${fileMarker:+ or
+			replacing any $fileMarker marker} inside COMMANDLINE the temp
+			filespec.
 HELPTEXT
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-b|--basename BASE] [-e|--extension EXT] [-c|--command "COMMANDLINE" [-c ...] [--] SIMPLECOMMAND [...]] [-?|-h|--help]'
 }
 
+subdir=
 basename=
 extension=
 typeset -a commands=()
 while [ $# -ne 0 ]
 do
     case "$1" in
-	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--directory|-d)	shift; subdir="${1:?}"; shift;;
 	--basename|-b)	shift; basename="$1"; shift;;
 	--extension|-e)	shift; extension="$1"; shift;;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
@@ -39,9 +67,15 @@ if [ $# -ne 0 ]; then
 	commands=("$@")
     fi
 fi
-[ "$basename" ] || basename="$(basename -- "$0")"
+[ -n "$basename" ] || basename="$(basename -- "$0")"
 
-readonly tempFilespec=$(mktemp --tmpdir "${basename}-XXXXXX${extension:+.}${extension}" 2>/dev/null || echo "${TEMP:-/tmp}/${basename}.$$${RANDOM}${extension:+.}${extension}")
+if [ -n "$subdir" ]; then
+    tempDirspec="${TMPDIR:-/tmp}/${subdir}"
+    mkdir --parents -- "$tempDirspec" || exit 3
+    readonly tempFilespec="$(TMPDIR="$tempDirspec" mktemp --tmpdir "${basename}-XXXXXX${extension:+.}${extension}" 2>/dev/null || echo "${tempDirspec}/${basename}.$$${RANDOM}${extension:+.}${extension}")"
+else
+    readonly tempFilespec="$(mktemp --tmpdir "${basename}-XXXXXX${extension:+.}${extension}" 2>/dev/null || echo "${TEMP:-/tmp}/${basename}.$$${RANDOM}${extension:+.}${extension}")"
+fi
 
 cat > "$tempFilespec"
 read lineCnt wordCnt byteCnt _ < <(wc -- "$tempFilespec")

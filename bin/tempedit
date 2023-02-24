@@ -6,9 +6,9 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-b|--basename BASE] [-e|--extension EXT] -P|--no-print [-C|--cleanup] [--edit-empty] [-?|-h|--help]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] -P|--no-print [-C|--cleanup] [--edit-empty] [-?|-h|--help]'
     echo
-    printf 'Usage: cat FILE [...] | result=$(%q %s)\n' "$(basename "$1")" '[-b|--basename BASE] [-e|--extension EXT] [-P|--no-print [-C|--cleanup]] [--edit-empty]'
+    printf 'Usage: cat FILE [...] | result=$(%q %s)\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-P|--no-print [-C|--cleanup]] [--edit-empty]'
 }
 printUsage()
 {
@@ -29,6 +29,8 @@ HELPDESCRIPTION
     printShortUsage "$1"
     echo
     cat <<HELPTEXT
+    --directory|-d DIR	Use (and create) a subdirectory DIR inside the temp
+			directory to store the temp file in.
     --basename|-b BASE	Use BASE as the prefix of the temp file name.
     --extension|-e EXT	Use EXT as the temp file extension.
     --no-print|-P	Just edit, but don't check or print the results.
@@ -40,6 +42,7 @@ HELPTEXT
 }
 
 EXEC=exec
+subdir=
 basename=
 extension=
 isEditEmpty=
@@ -48,6 +51,7 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--directory|-d)	shift; subdir="${1:?}"; shift;;
 	--basename|-b)	shift; basename="$1"; shift;;
 	--extension|-e)	shift; extension="$1"; shift;;
 	--cleanup|-C)	shift; EXEC=''; [ "${DEBUG:-}" ] || trap 'cleanup' EXIT;;
@@ -58,30 +62,36 @@ do
 done
 [ "$basename" ] || basename="$(basename -- "$0")"
 
-readonly TMPFILE="$(mktemp --tmpdir "${basename}-XXXXXX${extension:+.}${extension}" 2>/dev/null || echo "${TEMP:-/tmp}/${basename}.$$${RANDOM}${extension:+.}${extension}")"
+if [ -n "$subdir" ]; then
+    tempDirspec="${TMPDIR:-/tmp}/${subdir}"
+    mkdir --parents -- "$tempDirspec" || exit 3
+    readonly tempFilespec="$(TMPDIR="$tempDirspec" mktemp --tmpdir "${basename}-XXXXXX${extension:+.}${extension}" 2>/dev/null || echo "${tempDirspec}/${basename}.$$${RANDOM}${extension:+.}${extension}")"
+else
+    readonly tempFilespec="$(mktemp --tmpdir "${basename}-XXXXXX${extension:+.}${extension}" 2>/dev/null || echo "${TEMP:-/tmp}/${basename}.$$${RANDOM}${extension:+.}${extension}")"
+fi
 cleanup()
 {
-    [ ! -e "$TMPFILE" ] || rm --force "$TMPFILE" 2>/dev/null
+    [ ! -e "$tempFilespec" ] || rm --force "$tempFilespec" 2>/dev/null
 }
 
-cat > "$TMPFILE"
+cat > "$tempFilespec"
 
-[ "$isEditEmpty" ] || [ -s "$TMPFILE" ] || { cleanup; exit 1; }
+[ "$isEditEmpty" ] || [ -s "$tempFilespec" ] || { cleanup; exit 1; }
 
 exec </dev/tty	# Reconnect stdin to terminal, to avoid that Vim complains that input is not from a terminal.
 if [ "$isPrint" ]; then
     exec 3>&1 1>/dev/tty	# Reconnect stdout to terminal, to avoid that Vim complains that output is not to a terminal
     [ "${DEBUG:-}" ] || trap 'cleanup' EXIT
 
-    tmpModTime=$(stat -c %Y "$TMPFILE")
-    "$EDITOR" "$TMPFILE" || { status=$?; echo >&2 'Unclean exit of editor; aborting!'; exit $status; }
-    newModTime=$(stat -c %Y "$TMPFILE") || { echo >&2 'The tempfile disappeared; aborting!'; exit 4; }
+    tmpModTime=$(stat -c %Y "$tempFilespec")
+    "$EDITOR" "$tempFilespec" || { status=$?; echo >&2 'Unclean exit of editor; aborting!'; exit $status; }
+    newModTime=$(stat -c %Y "$tempFilespec") || { echo >&2 'The tempfile disappeared; aborting!'; exit 4; }
 
     exec 1>&3	# Restore original stdout.
 
     [ $newModTime -eq $tmpModTime ] && exit 99
-    cat -- "$TMPFILE"
+    cat -- "$tempFilespec"
 else
-    $EXEC "$EDITOR" "$TMPFILE"
+    $EXEC "$EDITOR" "$tempFilespec"
     exit $?
 fi
