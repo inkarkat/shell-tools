@@ -6,9 +6,9 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] -P|--no-print [-C|--cleanup] [--edit-empty] [-?|-h|--help]'
+    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] -P|--no-print [-C|--cleanup] [--edit-empty] [-?|-h|--help]'
     echo
-    printf 'Usage: cat FILE [...] | result=$(%q %s)\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-P|--no-print [-C|--cleanup]] [--edit-empty]'
+    printf 'Usage: cat FILE [...] | result=$([TMPDIR=DIR] %q %s)\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-P|--no-print [-C|--cleanup]] [--edit-empty]'
 }
 printUsage()
 {
@@ -67,7 +67,7 @@ if [ -n "$subdir" ]; then
     mkdir --parents -- "$tempDirspec" || exit 3
     readonly tempFilespec="$(TMPDIR="$tempDirspec" mktemp --tmpdir "${basename}-XXXXXX${extension:+.}${extension}" 2>/dev/null || echo "${tempDirspec}/${basename}.$$${RANDOM}${extension:+.}${extension}")"
 else
-    readonly tempFilespec="$(mktemp --tmpdir "${basename}-XXXXXX${extension:+.}${extension}" 2>/dev/null || echo "${TEMP:-/tmp}/${basename}.$$${RANDOM}${extension:+.}${extension}")"
+    readonly tempFilespec="$(mktemp --tmpdir "${basename}-XXXXXX${extension:+.}${extension}" 2>/dev/null || echo "${TMPDIR:-/tmp}/${basename}.$$${RANDOM}${extension:+.}${extension}")"
 fi
 cleanup()
 {

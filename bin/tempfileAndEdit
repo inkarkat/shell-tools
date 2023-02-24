@@ -8,7 +8,7 @@ printUsage()
 Capture output from stdin into a temp file that is then opened in ${EDITOR}
 for editing.
 HELPTEXT
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-C|--cleanup] [--edit-empty] [-?|-h|--help]'
+    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-C|--cleanup] [--edit-empty] [-?|-h|--help]'
 }
 
 exec tempedit --no-print "$@"

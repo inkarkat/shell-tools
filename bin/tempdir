@@ -4,7 +4,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" '[-d|--or-existing DIRSPEC [...] [-C|--create-subdir SUBDIR]] [-n|--name NAME] [-k|--keep|--keep-on-success|--keep-on-failure] [-c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...]] [-?|-h|--help]'
+    printf 'Usage: [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--or-existing DIRSPEC [...] [-C|--create-subdir SUBDIR]] [-n|--name NAME] [-k|--keep|--keep-on-success|--keep-on-failure] [-c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...]] [-?|-h|--help]'
     echo
     printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" '[-d|--or-existing DIRSPEC [...] [-C|--create-subdir SUBDIR]] [-n|--name NAME] [-k|--keep|-K|--keep-on-failure] -|--stdin'
     echo
@@ -145,7 +145,7 @@ if hasTempDir; then
     fi
 fi
 if [ -z "$tmpDirspec" ]; then
-    tmpDirspec="$(mktemp --directory --tmpdir "${prefix}-XXXXXX" 2>/dev/null || { dirspec="${TEMP:-/tmp}/${prefix}.$$$RANDOM"; mkdir -p -- "$dirspec" && printf %s "$dirspec"; })" || exit $?
+    tmpDirspec="$(mktemp --directory --tmpdir "${prefix}-XXXXXX" 2>/dev/null || { dirspec="${TMPDIR:-/tmp}/${prefix}.$$$RANDOM"; mkdir -p -- "$dirspec" && printf %s "$dirspec"; })" || exit $?
 
     [ ! "$isPrint" ] && [ -z "${DEBUG:-}" ] && trap 'cleanup' EXIT
 fi
