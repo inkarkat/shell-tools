@@ -34,3 +34,11 @@ addAliasSupport tempfile \
     '' \
     'dbe' \
     'directory|basename|extension'
+
+
+# Use my own ~/tmp instead of the system default temp directory.
+if [ -d ~/tmp ]; then
+    alias tempedit='TMPDIR=~/tmp tempedit'
+    alias tempfile='TMPDIR=~/tmp tempfile'
+    alias tempfileAndEdit='TMPDIR=~/tmp tempfileAndEdit'
+fi
