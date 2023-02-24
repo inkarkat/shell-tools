@@ -129,7 +129,7 @@ do
 			shift; formats+=(commandline);;
 	--output|-o)	shift
 			formats+=(output)
-			TMPFILE="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TEMP:-/tmp}/$(basename -- "$0").$$$RANDOM")"
+			TMPFILE="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM")"
 			[ "${DEBUG:-}" ] || trap 'rm -f -- "$TMPFILE" 2>/dev/null' EXIT
 			redir='> "$TMPFILE" 2>&1'
 			;;

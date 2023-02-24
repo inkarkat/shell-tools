@@ -267,8 +267,8 @@ elif [ ! "$isPrint" ] && [ ! "$count" ] && [ ${#commands[@]} -eq 0 ]; then
 fi >&2
 if [ -n "$exitOn" -a -n "$isParallel" ]; then
     # Need a marker file to signal stopping; a variable won't do.
-    keepRunningMarkerFile=$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TEMP:-/tmp}/$(basename -- "$0").$$$RANDOM")
-    touch "$keepRunningMarkerFile"
+    keepRunningMarkerFile="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM")"
+    touch -- "$keepRunningMarkerFile"
 fi
 
 # Don't show a prompt if nothing was printed; this would just waste screen

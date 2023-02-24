@@ -219,7 +219,7 @@ sinkExecute()
     exit $?
 }
 
-TMPFILE="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TEMP:-/tmp}/$(basename -- "$0").$$$RANDOM")"
+TMPFILE="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM")"
 [ "${DEBUG:-}" ] || trap 'rm -f -- "$TMPFILE" 2>/dev/null' EXIT
 
 eval "{ { execute $teePrefix; } $teePipe \"\$TMPFILE\"; } ${teeSuffix}"

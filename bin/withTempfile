@@ -143,7 +143,7 @@ getOctalFilePermissions()
     stat --format %#a -- "$@" 2>/dev/null
 }
 
-tempFilespec="$(mktemp ${tempDirspec:+--tmpdir="$tempDirspec"} "${prefix}-XXXXXX" 2>/dev/null || { tempfile="${tempDirspec:-${TEMP:-/tmp}}/${prefix}.$$$RANDOM"; touch -- "$tempfile" && printf %s "$tempfile"; })" || exit 125
+tempFilespec="$(mktemp ${tempDirspec:+--tmpdir="$tempDirspec"} "${prefix}-XXXXXX" 2>/dev/null || { tempfile="${tempDirspec:-${TMPDIR:-/tmp}}/${prefix}.$$$RANDOM"; touch -- "$tempfile" && printf %s "$tempfile"; })" || exit 125
 [ -f "$tempFilespec" ] || exit 125
 unset tempFilePermissions; [ -n "$renameOp" ] && [ -n "$tempDirspec" ] && tempFilePermissions="$(getOctalFilePermissions "$tempFilespec")"
 [ -z "$targetFilespec" ] || [ "$isMove" ] || targetFilespec="$(dirname -- "$tempFilespec")/${targetFilespec}"

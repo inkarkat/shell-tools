@@ -128,7 +128,7 @@ if [ "$isChangeNew" -a ${#targetDirspecs[@]} -gt 0 ]; then
     done
 fi
 
-savedPermissionsFilespec="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TEMP:-/tmp}/$(basename -- "$0").$$$RANDOM")"
+savedPermissionsFilespec="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM")"
 
 # Use sudo already for the retrieval; first, some directories may not be
 # accessible at all to the current user, second, to ensure that the current user
