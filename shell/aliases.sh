@@ -29,11 +29,23 @@ addAliasSupport tempdir \
     'dCn' \
     'or-existing|create-subdir|name'
 
+addAliasSupport tempedit \
+    'PC' \
+    'no-print|cleanup|edit-empty' \
+    'dbe' \
+    'directory|basename|extension'
+
+addAliasSupport tempfileAndEdit \
+    'C' \
+    'cleanup|edit-empty' \
+    'dbe' \
+    'directory|basename|extension'
+
 addAliasSupport tempfile \
     '' \
     '' \
-    'dbe' \
-    'directory|basename|extension'
+    'dbesS' \
+    'directory|basename|extension|sink-command|sink-exec'
 
 
 # Use my own ~/tmp instead of the system default temp directory.

@@ -5,10 +5,12 @@
 printUsage()
 {
     cat <<HELPTEXT
-Capture output from stdin into a temp file that is then opened in ${EDITOR}
-for editing.
+Capture output from stdin / emitted by COMMAND into a temp file that is then
+opened in $(basename -- "${EDITOR}") for editing.
 HELPTEXT
-    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-C|--cleanup] [--edit-empty] [-?|-h|--help]'
+    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-C|--cleanup] [--edit-empty] -c|--command "COMMANDLINE" [-c ...] [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    echo
+    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-C|--cleanup] [--edit-empty]'
 }
 
 exec tempedit --no-print "$@"
