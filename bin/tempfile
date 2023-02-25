@@ -7,7 +7,9 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-c|--command "COMMANDLINE" [-c ...] [--] SIMPLECOMMAND [...]] [-?|-h|--help]'
+    printf 'Usage: [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-s|--sink-command "COMMANDLINE" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] ; [...] -c|--command "COMMANDLINE" [-c ...] [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    echo
+    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-s|--sink-command "COMMANDLINE" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] ; [...]'
 }
 printUsage()
 {
@@ -21,8 +23,9 @@ printLongUsage()
     # This is the long "man page" when launched with the help argument.
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
-Capture output from stdin into a temp file whose name is then printed / passed
-to COMMAND (${fileMarker:+either }appended${fileMarker:+ or replacing any $fileMarker marker }inside COMMANDLINE).
+Capture output from stdin / emitted by COMMAND into a temp file whose name is
+then printed / passed to SINK-COMMAND (${fileMarker:+either }appended${fileMarker:+ or replacing any
+$fileMarker marker }inside COMMANDLINE).
 Additionally, statistics about the amount of captured text is printed to stderr.
 HELPDESCRIPTION
     echo
@@ -33,9 +36,20 @@ HELPDESCRIPTION
 			directory to store the temp file in.
     --basename|-b BASE	Use BASE as the prefix of the temp file name.
     --extension|-e EXT	Use EXT as the temp file extension.
-    --command|-c CMD	Execute CMD as a command-line, ${fileMarker:+either }appending${fileMarker:+ or
-			replacing any $fileMarker marker} inside COMMANDLINE the temp
-			filespec.
+    --sink-command|-s SINK-COMMAND
+			Execute SINK-COMMAND as a command-line, ${fileMarker:+either }appending
+			${fileMarker:+or replacing any $fileMarker marker }inside COMMANDLINE the temp
+			filespec. Multiple SINK-COMMANDs are joined with | as
+			pipeline steps.
+    -S|--sink-exec SINK-COMMAND [...] ;
+			Execute SINK-COMMAND as a command-line, ${fileMarker:+either }appending
+			${fileMarker:+or replacing any $fileMarker marker }inside COMMANDLINE the temp
+			filespec.; all following arguments are taken to be
+			arguments to the SINK-COMMAND until an argument
+			consisting of ';' is encountered. Multiple SINK-COMMANDs
+			are joined with | as pipeline steps.
+    --command|-c CMD	The command whose output is captured. When this is a
+			simple command, it can also be passed as such.
 HELPTEXT
 }
 
@@ -43,6 +57,7 @@ subdir=
 basename=
 extension=
 typeset -a commands=()
+typeset -a sinkCommands=()
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -50,6 +65,24 @@ do
 	--directory|-d)	shift; subdir="${1:?}"; shift;;
 	--basename|-b)	shift; basename="$1"; shift;;
 	--extension|-e)	shift; extension="$1"; shift;;
+	--sink-command|-s)
+			shift; sinkCommands+=(${sinkCommands:+|} "$1"); shift;;
+	--sink-exec|-S)	shift
+			cmd=
+			printf -v escapedFileMarker %q "$fileMarker"
+			while [ $# -gt 0 -a "$1" != ';' ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd="${cmd}${cmd:+ }${quotedArg//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo 'ERROR: -S|--sink-exec command must be concluded with ;!'; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			sinkCommands+=(${sinkCommands:+|} "$cmd")
+			;;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
@@ -58,16 +91,19 @@ do
 done
 if [ $# -ne 0 ]; then
     if [ "$isNeedEval" ]; then
-	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-	# undo the effects of eval.
 	printf -v quotedSimpleCommand '%q ' "$@"
-	printf -v escapedFileMarker %q "$fileMarker"
-	commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
+	commands+=(${commands:+;} "${quotedSimpleCommand% }")
     else
 	commands=("$@")
     fi
 fi
-[ -n "$basename" ] || basename="$(basename -- "$0")"
+if [ -z "$basename" ]; then
+    if [ ${#commands[@]} -eq 0 ]; then
+	basename="$(basename -- "$0")"
+    else
+	basename="$(commandName ${isNeedEval:+--eval} "${commands[@]}")"
+    fi
+fi
 
 if [ -n "$subdir" ]; then
     tempDirspec="${TMPDIR:-/tmp}/${subdir}"
@@ -77,7 +113,13 @@ else
     readonly tempFilespec="$(mktemp --tmpdir "${basename}-XXXXXX${extension:+.}${extension}" 2>/dev/null || echo "${TMPDIR:-/tmp}/${basename}.$$${RANDOM}${extension:+.}${extension}")"
 fi
 
-cat > "$tempFilespec"
+if [ ${#commands[@]} -eq 0 ]; then
+    cat
+elif [ "$isNeedEval" ]; then
+    eval "${commands[@]}"
+else
+    "${commands[@]}"
+fi > "$tempFilespec"
 read lineCnt wordCnt byteCnt _ < <(wc -- "$tempFilespec")
 lineCntPlural=s; [ $lineCnt -eq 1 ] && lineCntPlural=
 wordCntPlural=s; [ $wordCnt -eq 1 ] && wordCntPlural=
@@ -85,16 +127,12 @@ byteCntPlural=s; [ $byteCnt -eq 1 ] && byteCntPlural=
 
 printf >&2 '%d line%s, %d word%s, %d byte%s read\n' "$lineCnt" "$lineCntPlural" "$wordCnt" "$wordCntPlural" "$byteCnt" "$byteCntPlural"
 
-if [ ${#commands[@]} -eq 0 ]; then
+if [ ${#sinkCommands[@]} -eq 0 ]; then
     printf '%s\n' "$tempFilespec"
 else
     typeset -a f=("$tempFilespec")
-    [ "$isNeedEval" ] && printf -v tempFilespec '%q' "$tempFilespec"
-    typeset -a interpolatedCommands=("${commands[@]//"$fileMarker"/$tempFilespec}")
-    [ "${interpolatedCommands[*]}" = "${commands[*]}" ] || f=()
-    if [ "$isNeedEval" ]; then
-	eval "${interpolatedCommands[@]}" '"${f[@]}"'
-    else
-	"${interpolatedCommands[@]}" "${f[@]}"
-    fi
+    printf -v quotedTempFilespec '%q' "$tempFilespec"
+    typeset -a interpolatedCommands=("${sinkCommands[@]//"$fileMarker"/$quotedTempFilespec}")
+    [ "${interpolatedCommands[*]}" = "${sinkCommands[*]}" ] || f=()
+    eval "${interpolatedCommands[@]}" '"${f[@]}"'
 fi

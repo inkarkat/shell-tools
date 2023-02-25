@@ -32,8 +32,8 @@ addAliasSupport tempdir \
 addAliasSupport tempfile \
     '' \
     '' \
-    'dbe' \
-    'directory|basename|extension'
+    'dbesS' \
+    'directory|basename|extension|sink-command|sink-exec'
 
 
 # Use my own ~/tmp instead of the system default temp directory.
