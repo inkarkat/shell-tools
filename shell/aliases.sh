@@ -29,6 +29,18 @@ addAliasSupport tempdir \
     'dCn' \
     'or-existing|create-subdir|name'
 
+addAliasSupport tempedit \
+    'PC' \
+    'no-print|cleanup|edit-empty' \
+    'dbe' \
+    'directory|basename|extension'
+
+addAliasSupport tempfileAndEdit \
+    'C' \
+    'cleanup|edit-empty' \
+    'dbe' \
+    'directory|basename|extension'
+
 addAliasSupport tempfile \
     '' \
     '' \

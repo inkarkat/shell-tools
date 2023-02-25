@@ -4,5 +4,5 @@ completeAsCommand commandlineToShellCommand \
     eachArg eachDir eachFile \
     exitsWith onfile \
     processAddedFiles replify reverseFileArgs slowcommand sortedFileArgs \
-    tempdir tempfile \
+    tempdir tempedit tempfileAndEdit tempfile \
     withAccessibleFile withAliasedCommand withDir withHome withLoggingTo withOutputToSink withPath withPid withTempfile withVisualizedStatus

@@ -6,7 +6,9 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] -P|--no-print [-C|--cleanup] [--edit-empty] [-?|-h|--help]'
+    printf 'Usage: [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] -P|--no-print [-C|--cleanup] [--edit-empty] -c|--command "COMMANDLINE" [-c ...] [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    echo
+    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] -P|--no-print [-C|--cleanup] [--edit-empty]'
     echo
     printf 'Usage: cat FILE [...] | result=$([TMPDIR=DIR] %q %s)\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-P|--no-print [-C|--cleanup]] [--edit-empty]'
 }
@@ -22,8 +24,9 @@ printLongUsage()
     # This is the long "man page" when launched with the help argument.
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
-Capture output from stdin into a temp file that is then opened in ${EDITOR}
-for editing, and if successful, the edited contents are printed.
+Capture output from stdin / emitted by COMMAND into a temp file that is then
+opened in $(basename -- "${EDITOR}") for editing, and if successful, the edited contents
+are printed.
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
@@ -38,6 +41,8 @@ HELPDESCRIPTION
 			editor exits; the contents will be gone.
     --edit-empty	Also launch the (empty) editor if nothing got read from
 			stdin.
+    --command|-c CMD	The command whose output is captured. When this is a
+			simple command, it can also be passed as such.
 HELPTEXT
 }
 
@@ -47,6 +52,7 @@ basename=
 extension=
 isEditEmpty=
 isPrint=t
+typeset -a commands=()
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -57,10 +63,27 @@ do
 	--cleanup|-C)	shift; EXEC=''; [ "${DEBUG:-}" ] || trap 'cleanup' EXIT;;
 	--edit-empty)	shift; isEditEmpty=t;;
 	--no-print|-P)	shift; isPrint=;;
-	*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
     esac
 done
-[ "$basename" ] || basename="$(basename -- "$0")"
+if [ $# -ne 0 ]; then
+    if [ "$isNeedEval" ]; then
+	printf -v quotedSimpleCommand '%q ' "$@"
+	commands+=(${commands:+;} "${quotedSimpleCommand% }")
+    else
+	commands=("$@")
+    fi
+fi
+if [ -z "$basename" ]; then
+    if [ ${#commands[@]} -eq 0 ]; then
+	basename="$(basename -- "$0")"
+    else
+	basename="$(commandName ${isNeedEval:+--eval} "${commands[@]}")"
+    fi
+fi
 
 if [ -n "$subdir" ]; then
     tempDirspec="${TMPDIR:-/tmp}/${subdir}"
@@ -74,7 +97,13 @@ cleanup()
     [ ! -e "$tempFilespec" ] || rm --force "$tempFilespec" 2>/dev/null
 }
 
-cat > "$tempFilespec"
+if [ ${#commands[@]} -eq 0 ]; then
+    cat
+elif [ "$isNeedEval" ]; then
+    eval "${commands[@]}"
+else
+    "${commands[@]}"
+fi > "$tempFilespec"
 
 [ "$isEditEmpty" ] || [ -s "$tempFilespec" ] || { cleanup; exit 1; }
 
