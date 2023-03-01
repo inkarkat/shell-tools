@@ -1,16 +1,18 @@
 #!/bin/bash
 
 : ${EDITOR:=vi}
+: ${TEMPEDIT_FILE_MARKER='{}'}
+fileMarker="$TEMPEDIT_FILE_MARKER"; unset TEMPEDIT_FILE_MARKER
 
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] -P|--no-print [-C|--cleanup] [--edit-empty] -c|--command "COMMANDLINE" [-c ...] [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printf 'Usage: [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] -P|--no-print [-C|--cleanup] [--edit-empty] [-s|--sink-command "COMMANDLINE" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] ; [...] [-p|--print]] -c|--command "COMMANDLINE" [-c ...] [--] SIMPLECOMMAND [...] [-?|-h|--help]'
     echo
-    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] -P|--no-print [-C|--cleanup] [--edit-empty]'
+    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] -P|--no-print [-C|--cleanup] [--edit-empty] [-s|--sink-command "COMMANDLINE" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] ; [...] [-p|--print]]'
     echo
-    printf 'Usage: cat FILE [...] | result=$([TMPDIR=DIR] %q %s)\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-P|--no-print [-C|--cleanup]] [--edit-empty]'
+    printf 'Usage: cat FILE [...] | result=$([TMPDIR=DIR] %q %s)\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-P|--no-print [-C|--cleanup]] [--edit-empty] [-s|--sink-command "COMMANDLINE" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] ; [...] [-p|--print]]'
 }
 printUsage()
 {
@@ -26,7 +28,8 @@ printLongUsage()
     cat <<HELPDESCRIPTION
 Capture output from stdin / emitted by COMMAND into a temp file that is then
 opened in $(basename -- "${EDITOR}") for editing, and if successful, the edited contents
-are printed.
+are printed / passed to SINK-COMMAND (${fileMarker:+either }appended${fileMarker:+ or replacing any
+$fileMarker marker }inside COMMANDLINE).
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
@@ -41,6 +44,18 @@ HELPDESCRIPTION
 			editor exits; the contents will be gone.
     --edit-empty	Also launch the (empty) editor if nothing got read from
 			stdin.
+    --sink-command|-s SINK-COMMAND
+			Execute SINK-COMMAND as a command-line, ${fileMarker:+either }appending
+			${fileMarker:+or replacing any $fileMarker marker }inside COMMANDLINE the temp
+			filespec. Multiple SINK-COMMANDs are joined with | as
+			pipeline steps.
+    -S|--sink-exec SINK-COMMAND [...] ;
+			Execute SINK-COMMAND as a command-line, ${fileMarker:+either }appending
+			${fileMarker:+or replacing any $fileMarker marker }inside COMMANDLINE the temp
+			filespec.; all following arguments are taken to be
+			arguments to the SINK-COMMAND until an argument
+			consisting of ';' is encountered. Multiple SINK-COMMANDs
+			are joined with | as pipeline steps.
     --command|-c CMD	The command whose output is captured. When this is a
 			simple command, it can also be passed as such.
 HELPTEXT
@@ -52,6 +67,7 @@ basename=
 extension=
 isEditEmpty=
 isPrint=t
+typeset -a sinkCommands=()
 typeset -a commands=()
 while [ $# -ne 0 ]
 do
@@ -63,6 +79,26 @@ do
 	--cleanup|-C)	shift; EXEC=''; [ "${DEBUG:-}" ] || trap 'cleanup' EXIT;;
 	--edit-empty)	shift; isEditEmpty=t;;
 	--no-print|-P)	shift; isPrint=;;
+	--print|-p)	shift; isPrint=t;;
+	--sink-command|-s)
+			shift; sinkCommands+=(${sinkCommands:+|} "$1"); shift; isPrint=;;
+	--sink-exec|-S)	shift
+			cmd=
+			printf -v escapedFileMarker %q "$fileMarker"
+			while [ $# -gt 0 -a "$1" != ';' ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd="${cmd}${cmd:+ }${quotedArg//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo 'ERROR: -S|--sink-exec command must be concluded with ;!'; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			sinkCommands+=(${sinkCommands:+|} "$cmd")
+			isPrint=
+			;;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
@@ -108,7 +144,7 @@ fi > "$tempFilespec"
 [ "$isEditEmpty" ] || [ -s "$tempFilespec" ] || { cleanup; exit 1; }
 
 exec </dev/tty	# Reconnect stdin to terminal, to avoid that Vim complains that input is not from a terminal.
-if [ "$isPrint" ]; then
+if [ "$isPrint" ] || [ ${#sinkCommands[@]} -gt 0 ]; then
     exec 3>&1 1>/dev/tty	# Reconnect stdout to terminal, to avoid that Vim complains that output is not to a terminal
     [ "${DEBUG:-}" ] || trap 'cleanup' EXIT
 
@@ -119,7 +155,14 @@ if [ "$isPrint" ]; then
     exec 1>&3	# Restore original stdout.
 
     [ $newModTime -eq $tmpModTime ] && exit 99
-    cat -- "$tempFilespec"
+    [ ! "$isPrint" ] || cat -- "$tempFilespec"
+    if [ ${#sinkCommands[@]} -gt 0 ]; then
+	typeset -a f=("$tempFilespec")
+	printf -v quotedTempFilespec '%q' "$tempFilespec"
+	typeset -a interpolatedCommands=("${sinkCommands[@]//"$fileMarker"/$quotedTempFilespec}")
+	[ "${interpolatedCommands[*]}" = "${sinkCommands[*]}" ] || f=()
+	eval "${interpolatedCommands[@]}" '"${f[@]}"'
+    fi
 else
     $EXEC "$EDITOR" "$tempFilespec"
     exit $?
