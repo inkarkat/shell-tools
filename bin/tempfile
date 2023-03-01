@@ -7,9 +7,9 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-s|--sink-command "COMMANDLINE" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] ; [...] -c|--command "COMMANDLINE" [-c ...] [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printf 'Usage: [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-s|--sink-command "COMMANDLINE" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] ; [...]] -c|--command "COMMANDLINE" [-c ...] [--] SIMPLECOMMAND [...] [-?|-h|--help]'
     echo
-    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-s|--sink-command "COMMANDLINE" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] ; [...]'
+    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-s|--sink-command "COMMANDLINE" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] ; [...]]'
 }
 printUsage()
 {
@@ -56,8 +56,8 @@ HELPTEXT
 subdir=
 basename=
 extension=
-typeset -a commands=()
 typeset -a sinkCommands=()
+typeset -a commands=()
 while [ $# -ne 0 ]
 do
     case "$1" in
