@@ -44,6 +44,10 @@ HELPDESCRIPTION
     --keep|-k			Do not remove the temp dir.
     --keep-on-success		Do not remove the temp dir if COMMANDs succeed.
     --keep-on-failure		Do not remove the temp dir if COMMANDs fail.
+
+SEE ALSO:
+- withTempdir appends / replaces the tempdir to the passed COMMAND instead of
+  chdir'ing into it.
 HELPTEXT
 }
 

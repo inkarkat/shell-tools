@@ -63,6 +63,7 @@ HELPDESCRIPTION
     --no-trailing-prompt cp. runWithPrompt
     --emulate-prompt
     --worst-status
+
 EXIT STATUS:
     0	Complete success.
     *   any exit status from COMMAND(s)
@@ -85,6 +86,7 @@ assertSingleTargetFilespec()
     fi >&2
 }
 
+isDirectory=
 tempDirspec=
 prefix="$(basename -- "$0")"
 isMove=
@@ -99,6 +101,8 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--directory)	shift; isDirectory=t;;	# Note: Internal flag for withTempdir, not exposed here.
+
 	--tmpdir|-p)	shift; tempDirspec="${1:?}"; shift;;
 	--name|-n)	shift; prefix="${1:?}"; shift;;
 	--move)		shift; isMove=t; renameOp=-ge; assertSingleTargetFilespec "$0"; targetFilespec="${1:?}"; shift;;
@@ -143,8 +147,13 @@ getOctalFilePermissions()
     stat --format %#a -- "$@" 2>/dev/null
 }
 
-tempFilespec="$(mktemp ${tempDirspec:+--tmpdir="$tempDirspec"} "${prefix}-XXXXXX" 2>/dev/null || { tempfile="${tempDirspec:-${TMPDIR:-/tmp}}/${prefix}.$$$RANDOM"; touch -- "$tempfile" && printf %s "$tempfile"; })" || exit 125
-[ -f "$tempFilespec" ] || exit 125
+if [ "$isDirectory" ]; then
+    tempFilespec="$(mktemp --directory --tmpdir${tempDirspec:+="$tempDirspec"} "${prefix}-XXXXXX" 2>/dev/null || { dirspec="${tempDirspec:-${TMPDIR:-/tmp}}/${prefix}.$$$RANDOM"; mkdir --parents -- "$dirspec" && printf %s "$dirspec"; })" \
+	&& [ -d "$tempFilespec" ]
+else
+    tempFilespec="$(mktemp ${tempDirspec:+--tmpdir="$tempDirspec"} "${prefix}-XXXXXX" 2>/dev/null || { tempfile="${tempDirspec:-${TMPDIR:-/tmp}}/${prefix}.$$$RANDOM"; touch -- "$tempfile" && printf %s "$tempfile"; })" \
+	&& [ -f "$tempFilespec" ]
+fi || exit 125
 unset tempFilePermissions; [ -n "$renameOp" ] && [ -n "$tempDirspec" ] && tempFilePermissions="$(getOctalFilePermissions "$tempFilespec")"
 [ -z "$targetFilespec" ] || [ "$isMove" ] || targetFilespec="$(dirname -- "$tempFilespec")/${targetFilespec}"
 
@@ -166,7 +175,7 @@ finally()
 	mv --force -- "$tempFilespec" "$targetFilespec" && exit $status || status=124
     fi
     if [ -z "$keepOp" ] || ! [ $originalStatus $keepOp 0 ]; then
-	rm --force -- "$tempFilespec" || exit 124
+	rm --force ${isDirectory:+--recursive} -- "$tempFilespec" || exit 124
     fi
 
     exit $status

@@ -1,0 +1,87 @@
+#!/bin/bash
+
+: ${WITHTEMPDIR_DIR_MARKER='{}'}
+dirMarker="$WITHTEMPDIR_DIR_MARKER"; unset WITHTEMPDIR_DIR_MARKER
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[-p|--tmpdir DIRSPEC] [-n|--name NAME] [--move|-m|--move-on-success|-M|--move-on-failure|--rename|-r|--rename-on-success|-R|--rename-on-failure] [--keep|-k|--keep-on-success|-K|--keep-on-failure] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    echo
+    printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" '[...] [--bare|[--trailing-prompt|--no-trailing-prompt] [--emulate-prompt] [--worst-status]]'
+    echo
+    printf 'Usage: %q %s <<EOF\n  COMMANDLINE\n...\nEOF\n' "$(basename "$1")" '[...]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Execute COMMAND with a tempdir argument (which ${dirMarker:+either }is appended${dirMarker:+ or replaces
+any $dirMarker marker }inside COMMANDLINE).
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --tmpdir|-p DIRSPEC	Create the tempdir inside DIRSPEC instead of the
+			default temp directory.
+    --name|-n NAME	Use NAME as the tempdir prefix.
+    --move DIRSPEC	Move the tempdir after COMMAND(s) have executed.
+    --move-on-success|-m DIRSPEC
+			Move the tempdir to DIRSPEC if COMMAND(s) succeed.
+    --move-on-failure|-M DIRSPEC
+			Move the tempdir to DIRSPEC if COMMAND(s) failed.
+    --rename DIRNAME	Rename the tempdir inside the temp dir after COMMAND(s)
+			have executed.
+    --rename-on-success|-r DIRNAME
+			Rename the tempdir to DIRNAME inside the temp dir if
+			COMMAND(s) succeed.
+    --rename-on-failure|-R DIRNAME
+			Rename the tempdir to DIRNAME inside the temp dir if
+			COMMAND(s) failed.
+    --keep		Do not clean up the tempdir. --move and --rename have
+			precedence over --keep, but if both are given, the
+			tempdir will be kept should the move fail.
+    --keep-on-success|-k
+			Do not clean up the tempdir if COMMAND(s) succeed.
+    --keep-on-failure|-K
+			Do not clean up the tempdir if COMMAND(s) fail.
+    --command|-c CMD	The command line to be executed. When this is a simple
+			command, it can also be passed as such.
+    --bare		Do not print a status line before and after launching
+			the COMMAND.
+    --trailing-prompt	Customizations of the prompt emulation around COMMAND;
+    --no-trailing-prompt cp. runWithPrompt
+    --emulate-prompt
+    --worst-status
+
+SEE ALSO:
+- tempdir executes a passed command inside the tempdir instead of passing it,
+  and can open an interactive shell.
+
+EXIT STATUS:
+    0	Complete success.
+    *   any exit status from COMMAND(s)
+    2	Bad invocation, wrong or missing command-line arguments.
+    3	Internal error or failed assertion.
+    124	Failed to clean up / move / rename tempdir.
+    125	Failed to create tempdir.
+
+Example:
+HELPTEXT
+    printf '%q %s\n' "$(basename "$1")" "-m desktop.tar -- tar cvf ${dirMarker:-'{}'} ~/Desktop"
+}
+case "$1" in
+    --help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+esac
+
+WITHTEMPFILE_FILE_MARKER="$dirMarker" exec withTempfile --directory "$@"
