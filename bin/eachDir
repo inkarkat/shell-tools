@@ -1,4 +1,5 @@
 #!/bin/bash
+set -o pipefail
 shopt -qs extglob
 
 : ${EACHDIR_DIR_WHAT=dir}

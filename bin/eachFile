@@ -1,4 +1,5 @@
 #!/bin/bash
+set -o pipefail
 shopt -qs extglob
 
 : ${EACHFILE_FILE_WHAT=file}
