@@ -92,17 +92,6 @@ HELPTEXT
     printf '%q %s\n' "$(basename "$1")" '--local-dir ping -c1 -q -- /var/htdocs/*.com'
 }
 
-# In order to maintain the order of commands, we need to investigate beforehand
-# whether eval is needed.
-isNeedEval=
-for arg
-do
-    case "$arg" in
-	--command|-c)	isNeedEval=t;;
-	--)		break;;
-    esac
-done
-
 isLocalDir=
 progressSink=
 isFixedNumberOfDirs=t
@@ -126,6 +115,7 @@ with=
 isHeaderBasename=
 errorRedir='2>&1'
 typeset -a colorArg=()
+isNeedEval=
 typeset -a commands=()
 betweenCommand=
 usageRedirectCommand=

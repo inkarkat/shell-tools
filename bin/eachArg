@@ -69,19 +69,9 @@ HELPTEXT
     printf '%q %s\n' "$(basename "$1")" 'ping -c1 -q -- google.com yahoo.com bing.com'
 }
 
-# In order to maintain the order of commands, we need to investigate beforehand
-# whether eval is needed.
-isNeedEval=
-for arg
-do
-    case "$arg" in
-	--command|-c)	isNeedEval=t;;
-	--)		break;;
-    esac
-done
-
 progressSink=
 with=
+isNeedEval=
 typeset -a commands=()
 betweenCommand=
 usageRedirectCommand=
