@@ -61,6 +61,7 @@ HELPDESCRIPTION
 HELPTEXT
 }
 
+cleanup() { :; }
 EXEC=exec
 subdir=
 basename=
