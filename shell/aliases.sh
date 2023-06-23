@@ -19,6 +19,10 @@ INITIAL_ARGUMENT_COUNT=1 addAliasSupport withAliasedCommand \
     'n' \
     'name|alias|alias-command'
 
+INITIAL_ARGUMENT_COUNT=1 addAliasSupport withDir \
+    '' \
+    'bare|trailing-prompt|no-trailing-prompt|emulate-prompt|worst-status'
+
 INITIAL_ARGUMENT_COUNT=1 addAliasSupport withPath \
     'C' \
     'clean'
