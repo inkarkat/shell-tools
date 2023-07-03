@@ -166,8 +166,8 @@ readDatabase()
     local queryResult; queryResult="$(database --query "${id:?}" --columns 'YEAR MONTH' --as-shell-variables)"
     case $? in
 	0)	eval "$queryResult";;
-	1)	updateDatabase "${startAtYear:-"$THIS_YEAR"}" "${startAtMonth:-"$THIS_MONTH"}";&
-	4)	YEAR="${startAtYear:-"$THIS_YEAR"}"
+	1|4)	updateDatabase "${startAtYear:-"$THIS_YEAR"}" "${startAtMonth:-"$THIS_MONTH"}"
+		YEAR="${startAtYear:-"$THIS_YEAR"}"
 		MONTH="${startAtMonth:-"$THIS_MONTH"}"
 		return 1
 		;;

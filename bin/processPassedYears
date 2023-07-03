@@ -163,8 +163,8 @@ readDatabase()
     YEAR="$(database --query "${id:?}" --columns 'YEAR')"
     case $? in
 	0)	;;
-	1)	updateDatabase "${startAtYear:-"$THIS_YEAR"}";&
-	4)	YEAR="${startAtYear:-"$THIS_YEAR"}"
+	1|4)	updateDatabase "${startAtYear:-"$THIS_YEAR"}"
+		YEAR="${startAtYear:-"$THIS_YEAR"}"
 		return 1
 		;;
 	*)	exit 3;;
