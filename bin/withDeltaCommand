@@ -1,0 +1,130 @@
+#!/bin/bash
+set -o pipefail
+shopt -qs extglob
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-d|--delta-command DELTA-COMMANDLINE | -D|--delta-exec SIMPLE-DELTA-COMMAND [...] ; [...] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    echo
+    printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" '[...] [--bare|[--trailing-prompt|--no-trailing-prompt] [--emulate-prompt] [--worst-status]]'
+    echo
+    printf 'Usage: %q %s <<EOF\n  COMMANDLINE\n...\nEOF\n' "$(basename "$1")" '[...]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Execute COMMAND surrounded by two invocations of DELTA-COMMAND.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    -d|--delta-command DELTA-COMMAND
+			Execute DELTA-COMMAND before and after COMMAND.
+    -D|--delta-exec DELTA-COMMAND [...] ;
+			Execute DELTA-COMMAND before and after COMMAND.; all
+			following arguments are taken to be arguments to the
+			DELTA-COMMAND until an argument consisting of ';' is
+			encountered.
+    --command|-c CMD	The command line to be executed. When this is a simple
+			command, it can also be passed as such.
+    --bare		Do not print a status line before and after launching
+			the COMMAND.
+    --trailing-prompt	Customizations of the prompt emulation around COMMAND;
+    --no-trailing-prompt cp. runWithPrompt
+    --emulate-prompt
+    --worst-status
+
+EXIT STATUS:
+    2	Bad invocation, wrong or missing command-line arguments.
+    3	Internal error or failed assertion.
+    *   any exit status from COMMAND(s); the exit status from DELTA-COMMAND is
+	lost
+HELPTEXT
+}
+
+isBare=
+isNeedEval=
+typeset -a deltaCommands=()
+typeset -a commands=()
+typeset -a runWithPromptArgs=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--delta-command|-d)
+			shift; deltaCommands+=(${deltaCommands:+;} "$1"); shift;;
+	--delta-exec|-D)	shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != ';' ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd="${cmd}${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo 'ERROR: -D|--delta-exec command must be concluded with ;!'; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			deltaCommands+=(${deltaCommands:+;} "$cmd")
+			;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--bare)		shift; isBare=t;;
+	--no-trailing-prompt|--trailing-prompt|--emulate-prompt|--worst-status)  runWithPromptArgs+=("$1"); shift;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    if [ "$isNeedEval" ]; then
+	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+	# undo the effects of eval.
+	printf -v quotedSimpleCommand '%q ' "$@"
+	commands+=(${commands:+;} "${quotedSimpleCommand% }")
+    else
+	commands=("$@")
+    fi
+fi
+if [ ${#deltaCommands[@]} -eq 0 ]; then
+    echo 'ERROR: No DELTA-COMMAND(s) specified; need to pass -d|--delta-command "COMMANDLINE", or -D|--delta-exec SIMPLE-DELTA-COMMAND [...] ;'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+execute()
+{
+    if [ ${#commands[@]} -eq 0 ]; then
+	if [ "$isBare" ]; then
+	    bash -
+	else
+	    runWithPrompt "${runWithPromptArgs[@]}"
+	fi
+    elif [ "$isNeedEval" ]; then
+	eval "${commands[@]}"
+    else
+	"${commands[@]}"
+    fi
+}
+
+executeDelta()
+{
+    eval "${deltaCommands[@]}"
+}
+
+executeDelta
+trap 'executeDelta' EXIT
+execute
