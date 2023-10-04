@@ -52,7 +52,7 @@ HELPDESCRIPTION
     -S|--sink-exec SINK-COMMAND [...] ;
 			Execute SINK-COMMAND as a command-line, ${fileMarker:+either }appending
 			${fileMarker:+or replacing any $fileMarker marker }inside COMMANDLINE the temp
-			filespec.; all following arguments are taken to be
+			filespec; all following arguments are taken to be
 			arguments to the SINK-COMMAND until an argument
 			consisting of ';' is encountered. Multiple SINK-COMMANDs
 			are joined with | as pipeline steps.
