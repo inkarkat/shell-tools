@@ -12,9 +12,9 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" '[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt [--initial-status NUM] [--trailing-prompt|--no-trailing-prompt] [--no-output-no-prompt] [--no-output-no-error] [--emulate-prompt]] [--no-success-no-count|--no-count-on N] [--exit-on-success|--exit-on-failure|--exit-on NUM] [--worst-status] [--comment COMMENT] [--summarize-failed ERROR-TEXT [--summarize-failed-separator SEP]] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command "COMMANDLINE" [...] | [--] SIMPLECOMMAND [...] [--] FILE [...] [-?|-h|--help]'
+    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" '[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt [--initial-status NUM] [--trailing-prompt|--no-trailing-prompt] [--no-output-no-prompt] [--no-output-no-error] [--emulate-prompt]] [--no-success-no-count|--no-count-on N] [--exit-on-success|--exit-on-failure|--exit-on NUM] [--worst-status] [--comment COMMENT] [--summarize-failed ERROR-TEXT [--summarize-failed-separator SEP]] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command "COMMANDLINE" [...] | SIMPLECOMMAND [...] [--] FILE [...] [-?|-h|--help]'
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" '[...] -c|--command "COMMANDLINE" [...] | [--] SIMPLECOMMAND [...] -f|--find FIND-ARGS ...'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[...] -c|--command "COMMANDLINE" [...] | SIMPLECOMMAND [...] -f|--find FIND-ARGS ...'
 }
 printUsage()
 {
@@ -121,7 +121,6 @@ betweenCommand=
 usageRedirectCommand=
 runWithCommand=runWith
 typeset -a runWithPromptArgs=()
-hasSimpleCommand=
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -148,13 +147,9 @@ do
 			shift; betweenCommand="$1"; shift;;
 	--usage-redirect)
 			shift; usageRedirectCommand="$1"; shift;;
-	-|-[^-]*)	{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
-	*)		if [ "$1" = '--' ]; then
-			    shift
-			    [ "$hasSimpleCommand" ] && break    # This comes after SIMPLECOMMAND.
-			    hasSimpleCommand=t
-			fi
-			typeset -a files=()
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		typeset -a files=()
 			if ! containsGlob '@(--|--find|-f)' "$@"; then
 			    # Consume existing FILEs from behind.
 			    while [ $# -gt 0 ]
