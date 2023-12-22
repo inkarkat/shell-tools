@@ -1,5 +1,6 @@
 #!/bin/bash
 
+: ${TEMPFILE_EXEC_END=;}
 : ${TEMPFILE_FILE_MARKER='{}'}
 fileMarker="$TEMPFILE_FILE_MARKER"; unset TEMPFILE_FILE_MARKER
 
@@ -7,9 +8,9 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-s|--sink-command "COMMANDLINE" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] ; [...]] -c|--command "COMMANDLINE" [-c ...] [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printf 'Usage: [TMPDIR=DIR] %q %s\n' "$(basename "$1")" "[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-s|--sink-command \"COMMANDLINE\" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $TEMPFILE_EXEC_END [...]] -c|--command \"COMMANDLINE\" [-c ...] [--] SIMPLECOMMAND [...] [-?|-h|--help]"
     echo
-    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-s|--sink-command "COMMANDLINE" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] ; [...]]'
+    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" "[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-s|--sink-command \"COMMANDLINE\" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $TEMPFILE_EXEC_END [...]]"
 }
 printUsage()
 {
@@ -41,12 +42,12 @@ HELPDESCRIPTION
 			${fileMarker:+or replacing any $fileMarker marker }inside COMMANDLINE the temp
 			filespec. Multiple SINK-COMMANDs are joined with | as
 			pipeline steps.
-    -S|--sink-exec SINK-COMMAND [...] ;
+    -S|--sink-exec SINK-COMMAND [...] $TEMPFILE_EXEC_END
 			Execute SINK-COMMAND as a command-line, ${fileMarker:+either }appending
 			${fileMarker:+or replacing any $fileMarker marker }inside COMMANDLINE the temp
 			filespec.; all following arguments are taken to be
 			arguments to the SINK-COMMAND until an argument
-			consisting of ';' is encountered. Multiple SINK-COMMANDs
+			consisting of '${TEMPFILE_EXEC_END}' is encountered. Multiple SINK-COMMANDs
 			are joined with | as pipeline steps.
     --command|-c CMD	The command whose output is captured. When this is a
 			simple command, it can also be passed as such.
@@ -70,14 +71,14 @@ do
 	--sink-exec|-S)	shift
 			cmd=
 			printf -v escapedFileMarker %q "$fileMarker"
-			while [ $# -gt 0 -a "$1" != ';' ]
+			while [ $# -gt 0 -a "$1" != "$TEMPFILE_EXEC_END" ]
 			do
 			    printf -v quotedArg '%q' "$1"
 			    cmd="${cmd}${cmd:+ }${quotedArg//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 			    shift
 			done
 			if [ $# -eq 0 ]; then
-			    echo 'ERROR: -S|--sink-exec command must be concluded with ;!'; echo; printUsage "$0"
+			    echo "ERROR: -S|--sink-exec command must be concluded with '${TEMPFILE_EXEC_END}'"; echo; printUsage "$0"
 			    exit 2
 			fi >&2
 			shift

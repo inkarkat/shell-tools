@@ -2,11 +2,13 @@
 set -o pipefail
 shopt -qs extglob
 
+: ${WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END=;}
+
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" '--success-command SINK-COMMANDLINE | --success-exec SIMPLE-SINK-COMMAND [...] ; | --fail-command SINK-COMMANDLINE | --fail-exec SIMPLE-SINK-COMMAND [...] ; | -s|--status-command STATUS|-S|[!]S|S+|S-T|S%T SINK-COMMANDLINE | -S|--status-exec STATUS|-S|[!]S|S+|S-T|S%T SIMPLE-SINK-COMMAND [...] ; [...] [-t|--tee] [-1|--stdout|-2|--stderr] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" "--success-command SINK-COMMANDLINE | --success-exec SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END | --fail-command SINK-COMMANDLINE | --fail-exec SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END | -s|--status-command STATUS|-S|[!]S|S+|S-T|S%T SINK-COMMANDLINE | -S|--status-exec STATUS|-S|[!]S|S+|S-T|S%T SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END [...] [-t|--tee] [-1|--stdout|-2|--stderr] -c|--command \"COMMANDLINE\" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
     echo
     printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" '[...] [--bare|[--trailing-prompt|--no-trailing-prompt] [--emulate-prompt] [--worst-status]]'
     echo
@@ -38,33 +40,33 @@ HELPDESCRIPTION
 			COMMAND succeeded.
 			Multiple SINK-COMMANDs are joined with | as pipeline
 			steps.
-    --success-exec SINK-COMMAND [...] ;
+    --success-exec SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END
 			Execute SINK-COMMAND with the output piped into it if
 			COMMAND succeeded; all following arguments are taken to
 			be arguments to the SINK-COMMAND until an argument
-			consisting of ';' is encountered. Multiple SINK-COMMANDs
+			consisting of '${WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END}' is encountered. Multiple SINK-COMMANDs
 			are joined with | as pipeline steps.
     --fail-command SINK-COMMAND
 			Execute SINK-COMMAND with the output piped into it if
 			COMMAND failed.
 			Multiple SINK-COMMANDs are joined with | as pipeline
 			steps.
-    --fail-exec SINK-COMMAND [...] ;
+    --fail-exec SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END
 			Execute SINK-COMMAND with the output piped into it if
 			COMMAND failed; all following arguments are taken to be
 			arguments to the SINK-COMMAND until an argument
-			consisting of ';' is encountered. Multiple SINK-COMMANDs
+			consisting of '${WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END}' is encountered. Multiple SINK-COMMANDs
 			are joined with | as pipeline steps.
     --status-command|-s STATUS|-S|[!]S|S+|S-T|S%T SINK-COMMAND
 			Execute SINK-COMMAND with the output piped into it if
 			COMMAND's status matches.
 			Multiple SINK-COMMANDs are joined with | as pipeline
 			steps.
-    --status-exec|-S STATUS|-S|[!]S|S+|S-T|S%T SINK-COMMAND [...] ;
+    --status-exec|-S STATUS|-S|[!]S|S+|S-T|S%T SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END
 			Execute SINK-COMMAND with the output piped into it if
 			COMMAND's status matches; all following arguments are
 			taken to be arguments to the SINK-COMMAND until an
-			argument consisting of ';' is encountered. Multiple
+			argument consisting of '${WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END}' is encountered. Multiple
 			SINK-COMMANDs are joined with | as pipeline steps.
     --tee|-t		Also print the output in addition to piping it.
     --stdout|-1		Only pipe output to standard output; error output is
@@ -120,51 +122,50 @@ do
 			status="$1"; shift
 			sinkRanges+=("$status")
 			statusSinkCommands["$status"]+="${statusSinkCommands["$status"]:+|}$1"; shift;;
-	--success-exec)
-			shift
+	--success-exec) shift
 			cmd=
-			while [ $# -gt 0 -a "$1" != ';' ]
+			while [ $# -gt 0 -a "$1" != "$WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END" ]
 			do
 			    printf -v quotedArg '%q' "$1"
 			    cmd="${cmd}${cmd:+ }${quotedArg}"
 			    shift
 			done
 			if [ $# -eq 0 ]; then
-			    echo 'ERROR: --success-exec command must be concluded with ;!'; echo; printUsage "$0"
+			    echo "ERROR: --success-exec command must be concluded with '${WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END}'"; echo; printUsage "$0"
 			    exit 2
 			fi >&2
 			shift
 			sinkRanges+=('0')
 			statusSinkCommands['0']+="${statusSinkCommands['0']:+|}$cmd"
 			;;
-	--fail-exec)
-			shift
+	--fail-exec)	shift
 			cmd=
-			while [ $# -gt 0 -a "$1" != ';' ]
+			while [ $# -gt 0 -a "$1" != "$WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END" ]
 			do
 			    printf -v quotedArg '%q' "$1"
 			    cmd="${cmd}${cmd:+ }${quotedArg}"
 			    shift
 			done
 			if [ $# -eq 0 ]; then
-			    echo 'ERROR: --fail-exec command must be concluded with ;!'; echo; printUsage "$0"
+			    echo "ERROR: --fail-exec command must be concluded with '${WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END}'"; echo; printUsage "$0"
 			    exit 2
 			fi >&2
 			shift
 			sinkRanges+=('!0')
 			statusSinkCommands['!0']+="${statusSinkCommands['!0']:+|}$cmd"
 			;;
-	--status-exec|-S)	shift
+	--status-exec|-S)
+			shift
 			status="$1"; shift
 			cmd=
-			while [ $# -gt 0 -a "$1" != ';' ]
+			while [ $# -gt 0 -a "$1" != "$WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END" ]
 			do
 			    printf -v quotedArg '%q' "$1"
 			    cmd="${cmd}${cmd:+ }${quotedArg}"
 			    shift
 			done
 			if [ $# -eq 0 ]; then
-			    echo 'ERROR: -S|--status-exec command must be concluded with ;!'; echo; printUsage "$0"
+			    echo "ERROR: -S|--status-exec command must be concluded with '${WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END}'"; echo; printUsage "$0"
 			    exit 2
 			fi >&2
 			shift

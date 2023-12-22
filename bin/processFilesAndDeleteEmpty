@@ -1,5 +1,6 @@
 #!/bin/bash
 
+: ${PROCESSFILESANDDELETEEMPTY_EXEC_END=;}
 : ${PROCESSFILESANDDELETEEMPTY_FILE_MARKER='{}'}
 fileMarker="$PROCESSFILESANDDELETEEMPTY_FILE_MARKER"; unset PROCESSFILESANDDELETEEMPTY_FILE_MARKER
 
@@ -12,7 +13,7 @@ FILEs (i.e. performs an in-place update). If COMMAND(s) succeed and a resulting
 FILE becomes completely empty, it is removed.
 HELPTEXT
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "-c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND ... ${fileMarker:+[}${fileMarker}${fileMarker:+]} ; [...] [--] FILE [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "-c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND ... ${fileMarker:+[}${fileMarker}${fileMarker:+]} $PROCESSFILESANDDELETEEMPTY_EXEC_END [...] [--] FILE [...] [-?|-h|--help]"
 }
 
 typeset -a commands=()
@@ -24,14 +25,14 @@ do
 	--exec)		shift
 			cmd=
 			printf -v escapedFileMarker %q "$fileMarker"
-			while [ $# -gt 0 -a "$1" != ';' ]
+			while [ $# -gt 0 -a "$1" != "$PROCESSFILESANDDELETEEMPTY_EXEC_END" ]
 			do
 			    printf -v quotedArg '%q' "$1"
 			    cmd+="${cmd:+ }${quotedArg//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 			    shift
 			done
 			if [ $# -eq 0 ]; then
-			    echo 'ERROR: --exec command must be concluded with ;!'; echo; printUsage "$0"
+			    echo "ERROR: --exec command must be concluded with '${PROCESSFILESANDDELETEEMPTY_EXEC_END}'"; echo; printUsage "$0"
 			    exit 2
 			fi >&2
 			shift
@@ -43,7 +44,7 @@ do
     esac
 done
 if [ ${#commands[@]} -eq 0 ]; then
-    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or --exec SIMPLECOMMAND ... ;.'
+    echo "ERROR: No COMMAND(s) specified; need to pass -c|--command \"COMMANDLINE\", or --exec SIMPLECOMMAND ... $PROCESSFILESANDDELETEEMPTY_EXEC_END"
     echo
     printUsage "$0"
     exit 2

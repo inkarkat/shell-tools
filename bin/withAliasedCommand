@@ -2,11 +2,13 @@
 set -o pipefail
 shopt -qs extglob
 
+: ${WITHALIASEDCOMMAND_ALIAS_END=;}
+
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" 'NAME=ALIAS-COMMAND|-n|--name NAME --as ALIAS-COMMAND|-n|--name NAME --alias ALIAS-COMMAND [...] ;|-n|--name NAME --alias-command ALIAS-COMMANDLINE [...] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" "NAME=ALIAS-COMMAND|-n|--name NAME --as ALIAS-COMMAND|-n|--name NAME --alias ALIAS-COMMAND [...] ${WITHALIASEDCOMMAND_ALIAS_END}|-n|--name NAME --alias-command ALIAS-COMMANDLINE [...] -c|--command \"COMMANDLINE\" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
     echo
     printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" '[...] [--bare|[--trailing-prompt|--no-trailing-prompt] [--emulate-prompt] [--worst-status]]'
     echo
@@ -39,10 +41,10 @@ HELPDESCRIPTION
     --name NAME --alias-command ALIAS-COMMANDLINE
 			Execute ALIAS-COMMANDLINE; arguments passed to the NAME
 			wrapper have to be explicitly referenced (as \$1 or \$@).
-    --name NAME --alias ALIAS-COMMAND [...] ;
+    --name NAME --alias ALIAS-COMMAND [...] $WITHALIASEDCOMMAND_ALIAS_END
 			Execute ALIAS-COMMAND; all following arguments are taken
 			to be arguments to the ALIAS-COMMAND until an argument
-			consisting of ';' is encountered. You can refer to
+			consisting of '${WITHALIASEDCOMMAND_ALIAS_END}' is encountered. You can refer to
 			arguments passed to the NAME wrapper as {1}, {2}, etc.
 			and {*}, {@} if you don't want them just appended to
 			ALIAS-COMMAND.
@@ -130,7 +132,7 @@ do
 
 			aliasCommand=
 			isAppendArguments=t
-			while [ $# -gt 0 -a "$1" != ';' ]
+			while [ $# -gt 0 -a "$1" != "$WITHALIASEDCOMMAND_ALIAS_END" ]
 			do
 			    quotedArg=
 			    remainder="$1"
@@ -149,7 +151,7 @@ do
 			done
 
 			if [ $# -eq 0 ]; then
-			    echo 'ERROR: --alias command must be concluded with ;!'; echo; printUsage "$0"
+			    echo "ERROR: --alias command must be concluded with '${WITHALIASEDCOMMAND_ALIAS_END}'"; echo; printUsage "$0"
 			    exit 2
 			fi >&2
 			shift

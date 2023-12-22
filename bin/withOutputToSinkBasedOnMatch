@@ -2,11 +2,13 @@
 set -o pipefail
 shopt -qs extglob
 
+: ${WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END=;}
+
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" '-m|--match-command PATTERN SINK-COMMANDLINE | -M|--match-exec PATTERN SIMPLE-SINK-COMMAND [...] ; -v|--no-match-command PATTERN SINK-COMMANDLINE | -V|--no-match-exec PATTERN SIMPLE-SINK-COMMAND [...] ; [...] [-t|--tee] [-1|--stdout|-2|--stderr] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" "-m|--match-command PATTERN SINK-COMMANDLINE | -M|--match-exec PATTERN SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END -v|--no-match-command PATTERN SINK-COMMANDLINE | -V|--no-match-exec PATTERN SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END [...] [-t|--tee] [-1|--stdout|-2|--stderr] -c|--command \"COMMANDLINE\" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
     echo
     printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" '[...] [--bare|[--trailing-prompt|--no-trailing-prompt] [--emulate-prompt] [--worst-status]]'
     echo
@@ -38,22 +40,22 @@ HELPDESCRIPTION
 			PATTERN matches the output.
 			Multiple SINK-COMMANDs are joined with | as pipeline
 			steps.
-    --match-exec|-M PATTERN SIMPLE-SINK-COMMAND [...] ;
+    --match-exec|-M PATTERN SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END
 			Execute SINK-COMMAND with the output piped into it if
 			PATTERN matches the output; all following arguments are
 			taken to be arguments to the SINK-COMMAND until an
-			argument consisting of ';' is encountered. Multiple
+			argument consisting of '${WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END}' is encountered. Multiple
 			SINK-COMMANDs are joined with | as pipeline steps.
     --no-match-command|-v PATTERN SINK-COMMANDLINE
 			Execute SINK-COMMAND with the output piped into it if
 			PATTERN does not match in output.
 			Multiple SINK-COMMANDs are joined with | as pipeline
 			steps.
-    --no-match-exec|-V PATTERN SIMPLE-SINK-COMMAND [...] ;
+    --no-match-exec|-V PATTERN SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END
 			Execute SINK-COMMAND with the output piped into it if
 			PATTERN does not match in output; all following
 			arguments are taken to be arguments to the SINK-COMMAND
-			until an argument consisting of ';' is encountered.
+			until an argument consisting of '${WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END}' is encountered.
 			Multiple SINK-COMMANDs are joined with | as pipeline
 			steps.
 			PATTERN is a grep-style unanchored basic regular
@@ -112,14 +114,14 @@ do
 			shift
 			pattern="$1"; shift
 			cmd=
-			while [ $# -gt 0 -a "$1" != ';' ]
+			while [ $# -gt 0 -a "$1" != "$WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END" ]
 			do
 			    printf -v quotedArg '%q' "$1"
 			    cmd="${cmd}${cmd:+ }${quotedArg}"
 			    shift
 			done
 			if [ $# -eq 0 ]; then
-			    echo 'ERROR: -M|--match-exec command must be concluded with ;!'; echo; printUsage "$0"
+			    echo "ERROR: -M|--match-exec command must be concluded with '${WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END}'"; echo; printUsage "$0"
 			    exit 2
 			fi >&2
 			shift
@@ -129,14 +131,14 @@ do
 			shift
 			pattern="$1"; shift
 			cmd=
-			while [ $# -gt 0 -a "$1" != ';' ]
+			while [ $# -gt 0 -a "$1" != "$WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END" ]
 			do
 			    printf -v quotedArg '%q' "$1"
 			    cmd="${cmd}${cmd:+ }${quotedArg}"
 			    shift
 			done
 			if [ $# -eq 0 ]; then
-			    echo 'ERROR: -V|--no-match-exec command must be concluded with ;!'; echo; printUsage "$0"
+			    echo "ERROR: -V|--no-match-exec command must be concluded with '${WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END}'"; echo; printUsage "$0"
 			    exit 2
 			fi >&2
 			shift

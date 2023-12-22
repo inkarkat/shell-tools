@@ -2,11 +2,13 @@
 set -o pipefail
 shopt -qs extglob
 
+: ${WITHOUTPUTTOSINK_EXEC_END=;}
+
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" '-s|--sink-command SINK-COMMANDLINE | -S|--sink-exec SIMPLE-SINK-COMMAND [...] ; [...] [-t|--tee] [-1|--stdout|-2|--stderr] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" "-s|--sink-command SINK-COMMANDLINE | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINK_EXEC_END [...] [-t|--tee] [-1|--stdout|-2|--stderr] -c|--command \"COMMANDLINE\" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
     echo
     printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" '[...] [--bare|[--trailing-prompt|--no-trailing-prompt] [--emulate-prompt] [--worst-status]]'
     echo
@@ -34,10 +36,10 @@ HELPDESCRIPTION
 			Execute SINK-COMMAND with the output piped into it.
 			Multiple SINK-COMMANDs are joined with | as pipeline
 			steps.
-    -S|--sink-exec SINK-COMMAND [...] ;
+    -S|--sink-exec SINK-COMMAND [...] $WITHOUTPUTTOSINK_EXEC_END
 			Execute SINK-COMMAND with the output piped into it; all
 			following arguments are taken to be arguments to the
-			SINK-COMMAND until an argument consisting of ';' is
+			SINK-COMMAND until an argument consisting of '${WITHOUTPUTTOSINK_EXEC_END}' is
 			encountered. Multiple SINK-COMMANDs are joined with | as
 			pipeline steps.
     --tee|-t		Also print the output in addition to piping it.
@@ -85,14 +87,14 @@ do
 			shift; sinkCommands+=(${sinkCommands:+|} "$1"); shift;;
 	--sink-exec|-S)	shift
 			cmd=
-			while [ $# -gt 0 -a "$1" != ';' ]
+			while [ $# -gt 0 -a "$1" != "$WITHOUTPUTTOSINK_EXEC_END" ]
 			do
 			    printf -v quotedArg '%q' "$1"
 			    cmd="${cmd}${cmd:+ }${quotedArg}"
 			    shift
 			done
 			if [ $# -eq 0 ]; then
-			    echo 'ERROR: -S|--sink-exec command must be concluded with ;!'; echo; printUsage "$0"
+			    echo "ERROR: -S|--sink-exec command must be concluded with '${WITHOUTPUTTOSINK_EXEC_END}'"; echo; printUsage "$0"
 			    exit 2
 			fi >&2
 			shift
@@ -117,7 +119,7 @@ if [ $# -ne 0 ]; then
     fi
 fi
 if [ ${#sinkCommands[@]} -eq 0 ]; then
-    echo 'ERROR: No SINK-COMMAND(s) specified; need to pass -s|--sink-command "COMMANDLINE", or -S|--sink-exec SIMPLE-SINK-COMMAND [...] ;'
+    echo "ERROR: No SINK-COMMAND(s) specified; need to pass -s|--sink-command \"COMMANDLINE\", or -S|--sink-exec SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINK_EXEC_END"
     echo
     printUsage "$0"
     exit 2
