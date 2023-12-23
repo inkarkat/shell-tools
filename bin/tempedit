@@ -9,11 +9,11 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: [TMPDIR=DIR] %q %s\n' "$(basename "$1")" "[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] -P|--no-print [-C|--cleanup] [--edit-empty] [-s|--sink-command \"COMMANDLINE\" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $TEMPEDIT_EXEC_END [...] [-p|--print]] -c|--command \"COMMANDLINE\" [-c ...] [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    printf 'Usage: [TMPDIR=DIR] %q %s\n' "$(basename "$1")" "[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] -P|--no-print [-C|--cleanup] [--edit-empty] [-s|--sink-command \"COMMANDLINE\" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $TEMPEDIT_EXEC_END [-S ...] [-p|--print]] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${TEMPEDIT_EXEC_END} [--exec ...] [--] SIMPLECOMMAND [...] [-?|-h|--help]"
     echo
-    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" "[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] -P|--no-print [-C|--cleanup] [--edit-empty] [-s|--sink-command \"COMMANDLINE\" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $TEMPEDIT_EXEC_END [...] [-p|--print]]"
+    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" "[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] -P|--no-print [-C|--cleanup] [--edit-empty] [-s|--sink-command \"COMMANDLINE\" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $TEMPEDIT_EXEC_END [-S ...] [-p|--print]]"
     echo
-    printf 'Usage: cat FILE [...] | result=$([TMPDIR=DIR] %q %s)\n' "$(basename "$1")" "[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-P|--no-print [-C|--cleanup]] [--edit-empty] [-s|--sink-command \"COMMANDLINE\" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $TEMPEDIT_EXEC_END [...] [-p|--print]]"
+    printf 'Usage: cat FILE [...] | result=$([TMPDIR=DIR] %q %s)\n' "$(basename "$1")" "[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-P|--no-print [-C|--cleanup]] [--edit-empty] [-s|--sink-command \"COMMANDLINE\" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $TEMPEDIT_EXEC_END [-S ...] [-p|--print]]"
 }
 printUsage()
 {
@@ -59,6 +59,9 @@ HELPDESCRIPTION
 			are joined with | as pipeline steps.
     --command|-c CMD	The command whose output is captured. When this is a
 			simple command, it can also be passed as such.
+    --exec CMD [...] ${TEMPEDIT_EXEC_END}	The command whose output is captured; all following
+			arguments are taken to be arguments to the CMD until an
+			argument consisting of '${TEMPEDIT_EXEC_END}' is encountered.
 HELPTEXT
 }
 
@@ -102,6 +105,22 @@ do
 			isPrint=
 			;;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--exec)		shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != "$TEMPEDIT_EXEC_END" ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd="${cmd}${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${TEMPEDIT_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			commands+=(${commands:+;} "$cmd")
+			isNeedEval=t
+			;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;

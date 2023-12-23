@@ -8,7 +8,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "-s|--sink-command SINK-COMMANDLINE | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINK_EXEC_END [...] [-t|--tee] [-1|--stdout|-2|--stderr] -c|--command \"COMMANDLINE\" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "-s|--sink-command SINK-COMMANDLINE | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINK_EXEC_END [...] [-t|--tee] [-1|--stdout|-2|--stderr] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHOUTPUTTOSINK_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
     echo
     printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" '[...] [--bare|[--trailing-prompt|--no-trailing-prompt] [--emulate-prompt] [--worst-status]]'
     echo
@@ -48,6 +48,9 @@ HELPDESCRIPTION
     --stderr|-2		Only pipe error output; other output is output normally.
     --command|-c CMD	The command line to be captured. When this is a simple
 			command, it can also be passed as such.
+    --exec CMD [...] ${WITHOUTPUTTOSINK_EXEC_END}	Execute CMD; all following arguments are taken to be
+			arguments to the CMD until an argument consisting of
+			'${WITHOUTPUTTOSINK_EXEC_END}' is encountered.
     --bare		Do not print a status line before and after launching
 			the COMMAND.
     --trailing-prompt	Customizations of the prompt emulation around COMMAND;
@@ -101,6 +104,22 @@ do
 			sinkCommands+=(${sinkCommands:+|} "$cmd")
 			;;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--exec)		shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != "$WITHOUTPUTTOSINK_EXEC_END" ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd="${cmd}${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${WITHOUTPUTTOSINK_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			commands+=(${commands:+;} "$cmd")
+			isNeedEval=t
+			;;
 	--bare)		shift; isBare=t;;
 	--no-trailing-prompt|--trailing-prompt|--emulate-prompt|--worst-status)  runWithPromptArgs+=("$1"); shift;;
 	--)		shift; break;;
