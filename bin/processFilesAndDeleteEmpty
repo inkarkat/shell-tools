@@ -13,7 +13,7 @@ FILEs (i.e. performs an in-place update). If COMMAND(s) succeed and a resulting
 FILE becomes completely empty, it is removed.
 HELPTEXT
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "-c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND ... ${fileMarker:+[}${fileMarker}${fileMarker:+]} $PROCESSFILESANDDELETEEMPTY_EXEC_END [--exec ...] [--] FILE [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND ... ${fileMarker:+[}${fileMarker}${fileMarker:+]} $PROCESSFILESANDDELETEEMPTY_EXEC_END [--exec ...] [--] FILE [...] [-?|-h|--help]"
 }
 
 typeset -a commands=()
