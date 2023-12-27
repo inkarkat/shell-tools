@@ -134,10 +134,11 @@ do
 	--find|-f)	shift; findArgs=("$@"); set --; dirSource='finder'; isFixedNumberOfDirs=; break;;
 	--exec)		shift
 			cmd=
+			printf -v escapedDirMarker %q "$dirMarker"
 			while [ $# -gt 0 -a "$1" != "$EACHDIR_EXEC_END" ]
 			do
 			    printf -v quotedArg '%q' "$1"
-			    cmd="${cmd}${cmd:+ }${quotedArg}"
+			    cmd="${cmd}${cmd:+ }${quotedArg//"$escapedDirMarker"/$dirMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 			    shift
 			done
 			if [ $# -eq 0 ]; then
