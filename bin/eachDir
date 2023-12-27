@@ -13,7 +13,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" "[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt [--initial-status NUM] [--trailing-prompt|--no-trailing-prompt] [--no-output-no-prompt] [--no-output-no-error] [--emulate-prompt]] [--no-success-no-count|--no-count-on N] [--exit-on-success|--exit-on-failure|--exit-on NUM] [--worst-status] [--comment COMMENT] [--summarize-failed ERROR-TEXT [--summarize-failed-separator SEP]] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [-c ...] --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] | SIMPLECOMMAND [...] [--] DIR [...] [-?|-h|--help]"
+    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" "[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [-c ...] --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] | SIMPLECOMMAND [...] [--] DIR [...] [-?|-h|--help]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "[...] -c|--command \"COMMANDLINE\" [...] --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] | SIMPLECOMMAND [...] -f|--find FIND-ARGS ..."
 }
@@ -37,54 +37,44 @@ HELPDESCRIPTION
     printShortUsage "$1"
     echo
     cat <<HELPTEXT
-    --local-dir|-l  Change the directory to the current DIR before executing
-		    COMMAND; nothing is appended to COMMAND then${dirMarker:+ (but $dirMarker is
-		    still replaced)}.${hasProgressNotification:+
-    --progress SINK Report the current DIR through one of the SINKs of the
-	    progressNotification command.}
-    --with-header   Print a header (containing the current DIR) before each
-		    execution.
+    --local-dir|-l	Change the directory to the current DIR before executing
+			COMMAND; nothing is appended to COMMAND then${dirMarker:+ (but $dirMarker is
+			still replaced)}.${hasProgressNotification:+
+    --progress SINK	Report the current DIR through one of the SINKs of the
+			progressNotification command.}
+    --with-header	Print a header (containing the current DIR) before each
+			execution.
     --with-basename-header
-		    Print a header (containing just the current DIR's name
-		    without any path) before each execution.
+			Print a header (containing just the current DIR's name
+			without any path) before each execution.
     --separate-errors	Do not combine command output and command errors into
 			one (paged) stream. Commands that just cause error
 			output won't have a header then. Error output will
 			remain on its separate file descriptor and will not be
 			paged. Useful if you want to suppress errors or handle
 			them separately.
-    --with-prompt   Emulate a full prompt (as if invoking COMMAND) before each
-		    execution.
-    --emulate-prompt	    Customizations of the prompt emulation around
-    --initial-status NUM    COMMAND; cp. runWithPrompt
-    --trailing-prompt
-    --no-trailing-prompt
-    --no-output-no-prompt
-    --no-output-no-error
-    --no-success-no-count   Stop on condition / summarize at end; cp. runWith
-    --no-count-on N	    Cannot be combined with --with-header.
-    --exit-on-success
-    --exit-on-failure
-    --exit-on NUM
-    --worst-status
-    --comment COMMENT
-    --summarize-failed ERROR-TEXT
-    --summarize-failed-separator SEP
+    --with-prompt	Emulate a full prompt (as if invoking COMMAND) before
+			each execution.
+HELPTEXT
+    runWithPrompt --get-long-usage 2>/dev/null
+    cat <<HELPTEXT
     --between-command BETWEEN-COMMAND
-		    Execute BETWEEN-COMMAND in between each COMMAND execution.
+			Execute BETWEEN-COMMAND in between each COMMAND
+			execution.
     --exec CMD [...] ${EACHDIR_EXEC_END}	Execute CMD; all following arguments are taken to be
-		    arguments to the CMD until an argument consisting of '${EACHDIR_EXEC_END}' is
-		    encountered.
-    --find|-f	    Execute find with the following FIND-ARGS (use of -type d
-		    recommended for performance reasons) to obtain the list of
-		    dirspecs instead of directly taking DIRs. This allows
-		    recursing into and filtering of subdirectories.
-		    (But you could alternatively directly use find -exec {} ;
-		    to do the same.)
+			arguments to the CMD until an argument consisting of
+			'${EACHDIR_EXEC_END}' is encountered.
+    --find|-f		Execute find with the following FIND-ARGS (use of
+			-type d recommended for performance reasons) to obtain
+			the list of dirspecs instead of directly taking DIRs.
+			This allows recursing into and filtering of
+			subdirectories. (But you could alternatively directly
+			use find -exec {} ; to do the same.)
     --usage-redirect COMMAND
-		    When no DIR(s) are passed, redirect to COMMAND --help for
-		    usage instructions instead of printing this command's usage.
-		    Useful for wrapper scripts to delegate back to themselves.
+			When no DIR(s) are passed, redirect to COMMAND --help
+			for usage instructions instead of printing this
+			command's usage. Useful for wrapper scripts to delegate
+			back to themselves.
 SEE ALSO:
 - eachFile iterates over files instead of directories.
 
@@ -160,7 +150,7 @@ do
 
 	--trailing-prompt|--no-trailing-prompt|--no-output-no-prompt|--no-output-no-error|--no-success-no-count|--exit-on-success|--exit-on-failure|--emulate-prompt|--worst-status)
 			runWithPromptArgs+=("$1"); shift;;
-	--initial-status|--no-count-on|--exit-on|--comment|--summarize-failed|--summarize-failed-separator)
+	--initial-status|--no-count-on|--exit-on|--exit-unless|--comment|--summarize-failed|--summarize-failed-separator)
 			runWithPromptArgs+=("$1" "$2"); shift; shift;;
 
 	--between-command)
