@@ -120,8 +120,7 @@ with=
 isHeaderBasename=
 errorRedir='2>&1'
 typeset -a colorArg=()
-isNeedEval=
-typeset -a commands=()
+commands=
 betweenCommand=
 usageRedirectCommand=
 runWithCommand=runWith
@@ -146,10 +145,9 @@ do
 			    exit 2
 			fi >&2
 			shift
-			commands+=(${commands:+;} "$cmd")
-			isNeedEval=t
+			commands+="${commands:+ ; }${cmd}"
 			;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--command|-c)	shift; commands+="${commands:+ ; }$1"; shift;;
 	--progress)	shift; progressSink="$1"; shift;;
 	--with-header)	shift; with=header;;
 	--with-basename-header)
@@ -190,15 +188,11 @@ do
 				cmd+=("$1")
 				shift
 			    done
-			    if [ "$isNeedEval" ]; then
-				# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-				# undo the effects of eval.
-				printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
-				printf -v escapedDirMarker %q "$dirMarker"
-				commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedDirMarker"/$dirMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
-			    else
-				commands+=(${commands:+;} "${cmd[@]}")
-			    fi
+			    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+			    # undo the effects of eval.
+			    printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
+			    printf -v escapedDirMarker %q "$dirMarker"
+			    commands+="${commands:+ ; }${quotedSimpleCommand//"$escapedDirMarker"/$dirMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 			fi
 
 			if [ ${#dirspecs[@]} -gt 0 ]; then
@@ -208,7 +202,7 @@ do
 			;;
     esac
 done
-if [ ${#commands[@]} -eq 0 ]; then
+if [ -z "$commands" ]; then
     echo "ERROR: No COMMAND(s) specified; need to pass -c|--command \"COMMANDLINE\", or --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} or SIMPLECOMMAND."
     echo
     printUsage "$0"
@@ -248,7 +242,6 @@ dirspec=.
 case "$with" in
     prompt)
 	[ ${#runWithPromptArgs[@]} -eq 0 ] && runWithPromptArgs=(--worst-status)
-	quoter='%q'; [ "$isNeedEval" ] && quoter='%s'
 	eval '$dirSource "$@"' "${dirProcessor:+|}" "$dirProcessor" | while IFS=$'\n' read -r dirspec || [ -n "$dirspec" ]
 	do
 	    [ -d "$dirspec" ] || continue
@@ -261,20 +254,19 @@ case "$with" in
 		fi
 	    fi
 
+	    printf -v quotedDirspec '%q' "$dirspec"
 	    if [ "$isLocalDir" ]; then
 		printf 'cd %q && ' "$dirspec"   # Previous COMMANDS may have changed the directory, so unconditionally do the chdir.
-		[ "$isNeedEval" ] && printf -v dirspec '%q' "$dirspec"
-		typeset -a interpolatedCommands=("${commands[@]//"$dirMarker"/$dirspec}")
+		interpolatedCommands="${commands//"$dirMarker"/$quotedDirspec}"
 		f=()
 	    else
-		[ "$isNeedEval" ] && printf -v dirspec '%q' "$dirspec"
-		typeset -a interpolatedCommands=("${commands[@]//"$dirMarker"/$dirspec}")
-		typeset -a f=("$dirspec")	# Quoter for isNeedEval=t is off, so need to use quoted arg here.
-		[ "${interpolatedCommands[*]}" = "${commands[*]}" ] || f=()
+		interpolatedCommands="${commands//"$dirMarker"/$quotedDirspec}"
+		typeset -a f=("$quotedDirspec")
+		[ "$interpolatedCommands" = "$commands" ] || f=()
 	    fi
 
 	    reportProgress "$dirspec"
-	    printf "$quoter " "${interpolatedCommands[@]}" "${f[@]}"
+	    printf '%s ' "$interpolatedCommands" "${f[@]}"
 	    printf '\n'
 	    isFirst=
 	done | ${runWithCommand:?} "${runWithPromptArgs[@]}"
@@ -302,22 +294,17 @@ case "$with" in
 			status=1; continue
 		    fi
 		fi
-		typeset -a interpolatedCommands=("${commands[@]//"$dirMarker"/$dirspec}")
+		interpolatedCommands="${commands//"$dirMarker"/$dirspec}"
 		f=()
 	    else
 		typeset -a f=("$dirspec")	# No quoting, as array provides separation.
-		[ "$isNeedEval" ] && printf -v dirspec '%q' "$dirspec"
-		typeset -a interpolatedCommands=("${commands[@]//"$dirMarker"/$dirspec}")
-		[ "${interpolatedCommands[*]}" = "${commands[*]}" ] || f=()
+		printf -v quotedDirspec '%q' "$dirspec"
+		interpolatedCommands="${commands//"$dirMarker"/$quotedDirspec}"
+		[ "$interpolatedCommands" = "$commands" ] || f=()
 	    fi
 
 	    reportProgress "$header"
-	    if [ "$isNeedEval" ]; then
-		typeset -a c=("${interpolatedCommands[@]}" "${f[@]}")
-	    else
-		typeset -a c=('"${interpolatedCommands[@]}" "${f[@]}"')
-	    fi
-	    (eval "${isHeader:+{}" "${c[@]}" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHDIR_HEADER_ID' -- '$header'}") <&3 || \
+	    (eval "${isHeader:+{}" "$interpolatedCommands" "${f[@]}" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHDIR_HEADER_ID' -- '$header'}") <&3 || \
 		{ exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
 	    isFirst=
 	done < <(eval '$dirSource "$@"' "${dirProcessor:+|}" "$dirProcessor")

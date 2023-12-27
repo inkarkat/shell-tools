@@ -71,8 +71,7 @@ HELPTEXT
 
 progressSink=
 with=
-isNeedEval=
-typeset -a commands=()
+commands=
 betweenCommand=
 usageRedirectCommand=
 runWithCommand=runWith
@@ -81,7 +80,7 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--command|-c)	shift; commands+="${commands:+ ; }$1"; shift;;
 	--progress)	shift; progressSink="$1"; shift;;
 	--with-header)	shift; with=header;;
 	--with-prompt)	shift; with=prompt; runWithCommand=runWithPrompt;;
@@ -103,19 +102,15 @@ do
 			    cmd+=("$1")
 			    shift
 			done
-			if [ "$isNeedEval" ]; then
-			    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-			    # undo the effects of eval.
-			    printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
-			    printf -v escapedArgMarker %q "$argMarker"
-			    commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedArgMarker"/$argMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
-			else
-			    commands+=(${commands:+;} "${cmd[@]}")
-			fi
+			# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+			# undo the effects of eval.
+			printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
+			printf -v escapedArgMarker %q "$argMarker"
+			commands+="${commands:+ ; }${quotedSimpleCommand//"$escapedArgMarker"/$argMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 			;;
     esac
 done
-if [ ${#commands[@]} -eq 0 ]; then
+if [ -z "$commands" ]; then
     echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
     echo
     printUsage "$0"
@@ -154,7 +149,6 @@ isFirst=t
 case "$with" in
     prompt)
 	[ ${#runWithPromptArgs[@]} -eq 0 ] && runWithPromptArgs=(--worst-status)
-	quoter='%q'; [ "$isNeedEval" ] && quoter='%s'
 	for arg
 	do
 	    if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
@@ -165,13 +159,13 @@ case "$with" in
 		fi
 	    fi
 
-	    [ "$isNeedEval" ] && printf -v arg '%q' "$arg"
-	    typeset -a interpolatedCommands=("${commands[@]//"$argMarker"/$arg}")
-	    typeset -a a=("$arg")   # Quoter for isNeedEval=t is off, so need to use quoted arg here.
-	    [ "${interpolatedCommands[*]}" = "${commands[*]}" ] || a=()
+	    printf -v quotedArg '%q' "$arg"
+	    interpolatedCommands="${commands//"$argMarker"/$quotedArg}"
+	    typeset -a a=("$quotedArg")
+	    [ "$interpolatedCommands" = "$commands" ] || a=()
 
 	    reportProgress "$arg"
-	    printf "$quoter " "${interpolatedCommands[@]}" "${a[@]}"
+	    printf '%s ' "$interpolatedCommands" "${a[@]}"
 	    printf '\n'
 	    isFirst=
 	done | ${runWithCommand:?} "${runWithPromptArgs[@]}"
@@ -189,16 +183,13 @@ case "$with" in
 	    fi
 
 	    typeset -a a=("$arg")   # No quoting, as array provides separation.
-	    [ "$isNeedEval" ] && printf -v arg '%q' "$arg"
-	    typeset -a interpolatedCommands=("${commands[@]//"$argMarker"/$arg}")
-	    [ "${interpolatedCommands[*]}" = "${commands[*]}" ] || a=()
+	    printf -v quotedArg '%q' "$arg"
+	    interpolatedCommands="${commands//"$argMarker"/$quotedArg}"
+	    [ "$interpolatedCommands" = "$commands" ] || a=()
 
 	    reportProgress "$arg"
-	    if [ "$isNeedEval" ]; then
-		eval "${interpolatedCommands[@]}" '"${a[@]}"'
-	    else
-		"${interpolatedCommands[@]}" "${a[@]}"
-	    fi || { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
+	    eval "$interpolatedCommands" '"${a[@]}"' \
+		|| { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
 	    isFirst=
 	done
 	exit $status
