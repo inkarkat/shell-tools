@@ -1,5 +1,6 @@
 #!/bin/bash
 
+: ${EACHARG_EXEC_END=;}
 : ${EACHARG_ARG_WHAT=arg}
 : ${EACHARG_ARG_MARKER='{}'}
 argMarker="$EACHARG_ARG_MARKER"; unset EACHARG_ARG_MARKER
@@ -10,7 +11,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q%s %s\n' "$(basename "$1")" "${hasProgressNotification:+ [--progress SINK]}" "[--with-header|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [...] | SIMPLECOMMAND [...] -- ARGUMENT [...] [-?|-h|--help]"
+    printf 'Usage: %q%s %s\n' "$(basename "$1")" "${hasProgressNotification:+ [--progress SINK]}" "[--with-header|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [...] --exec SIMPLECOMMAND [...] ${EACHARG_EXEC_END} [--exec ...] | SIMPLECOMMAND [...] -- ARGUMENT [...] [-?|-h|--help]"
 }
 printUsage()
 {
@@ -43,6 +44,9 @@ HELPTEXT
     cat <<HELPTEXT
     --between-command BETWEEN-COMMAND
 		    Execute BETWEEN-COMMAND in between each COMMAND execution.
+    --exec CMD [...] ${EACHARG_EXEC_END}	Execute CMD; all following arguments are taken to be
+			arguments to the CMD until an argument consisting of
+			'${EACHARG_EXEC_END}' is encountered.
     --usage-redirect COMMAND
 		    When no ARGUMENT(s) are passed, redirect to COMMAND --help
 		    for usage instructions instead of printing this command's
@@ -68,6 +72,22 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--exec)		shift
+			cmd=
+			printf -v escapedFileMarker %q "$argMarker"
+			while [ $# -gt 0 -a "$1" != "$EACHARG_EXEC_END" ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd="${cmd}${cmd:+ }${quotedArg//"$escapedFileMarker"/$argMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${EACHARG_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			commands+="${commands:+ ; }${cmd}"
+			;;
 	--command|-c)	shift; commands+="${commands:+ ; }$1"; shift;;
 	--progress)	shift; progressSink="$1"; shift;;
 	--with-header)	shift; with=header;;
