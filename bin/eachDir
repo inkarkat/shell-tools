@@ -238,7 +238,6 @@ else
 fi
 
 isFirst=t
-dirspec=.
 case "$with" in
     prompt)
 	[ ${#runWithPromptArgs[@]} -eq 0 ] && runWithPromptArgs=(--worst-status)
