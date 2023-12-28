@@ -1,0 +1,23 @@
+#!/bin/bash
+
+: ${UNTILFIRSTSUCCEEDINGARG_ARG_MARKER='{}'}
+argMarker="$UNTILFIRSTSUCCEEDINGARG_ARG_MARKER"; unset UNTILFIRSTSUCCEEDINGARG_ARG_MARKER
+
+printUsage()
+{
+    eachArg --help 2>&1 | sed \
+	-e "1s#^.*\$#Execute COMMAND on each supplied ARGUMENT (which ${argMarker:+either }is appended${argMarker:+ or replaces any $argMarker marker} inside COMMANDLINE) individually, until a COMMAND invocation succeeds.#" \
+	-e '2b removeFirstParagraphLoop' \
+	-e '/^ *\(--with-header\|--exit-on\|--exit-unless\)/b removeOptionLoop' \
+	-e '/^Usage:$/N' -e '/\(^\|\n\)Usage: */{ s/\(^\|\n\)\(Usage: *\)\?\([^ ]\+ \)*eachArg /\1\2'"$(basename "$1")"' /; s/--with-header|//; s/ \[--exit-on-success|--exit-on-failure|--exit-on NUM|--exit-unless NUM\]//; }' \
+	-e '/^Example:$/N' -e '/\(^\|\n\)Example: */{ s/\(^\|\n\)\(Example: *\)\?eachArg /\1\2'"$(basename "$1") /; }" \
+	-e b -e :removeFirstParagraphLoop -e '{ /\(^\|\n\)$/{ s/^\(.*\n\)\?//; b; }; N; b removeFirstParagraphLoop; }' \
+	-e b -e :removeOptionLoop -e '{ /\n *\(--with-header\|--exit-on\|--exit-unless\)[^\n]*$/{ N; b removeOptionLoop; }; /\n *--[^\n]*$\|\n[^	 ]\|\n$/{ s/^\(.*\n\)\?//; b; }; N; b removeOptionLoop; }'
+}
+case "$1" in
+    --help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+esac
+
+EACHARG_ARG_MARKER="$argMarker" \
+EACHARG_EXEC_END="${UNTILFIRSTSUCCEEDINGARG_EXEC_END-;}" \
+    exec eachArg --exit-on-success "$@"
