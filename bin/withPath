@@ -49,10 +49,13 @@ HELPTEXT
     runWithPrompt --get-long-usage 2>/dev/null
 }
 
+typeset -A addedPaths=()
 pathAdd=''
 addPath()
 {
-    [ -z "$1" ] || pathAdd+="${pathAdd:+:}${1:?}"
+    [ -z "$1" ] || [ "${addedPaths["$1"]}" ] && return
+    addedPaths["$1"]=t
+    pathAdd+="${pathAdd:+:}${1:?}"
 }
 
 isFirst=t
