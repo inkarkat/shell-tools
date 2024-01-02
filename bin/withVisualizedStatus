@@ -6,7 +6,7 @@ printShortUsage()
     # skim the long one.
     printf 'Usage: %q %s\n' "$(basename "$1")" '[-i|--icon|-I|--no-icon] [--color|-C|--no-color] [-m|--message MESSAGE] [-k|--success-message MESSAGE] [-M|--fail-message MESSAGE] [-n|--message-for N=MESSAGE [-n ...]] [-s|--command-name|-l|--full-command] [-o|--output|-O|--no-output] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
     echo
-    printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" '[...] [--bare|[--trailing-prompt|--no-trailing-prompt] [--emulate-prompt] [--worst-status]]'
+    printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" "[...] [--bare|$(runWithPrompt --get-short-usage 2>/dev/null)]"
     echo
     printf 'Usage: %q %s <<EOF\n  COMMANDLINE\n...\nEOF\n' "$(basename "$1")" '[...]'
 }
@@ -62,10 +62,9 @@ new output format can be built via the following options (in the order given):
 			command, it can also be passed as such.
     --bare		Do not print a status line before and after launching
 			the COMMAND.
-    --trailing-prompt	Customizations of the prompt emulation around COMMAND;
-    --no-trailing-prompt cp. runWithPrompt
-    --emulate-prompt
-    --worst-status
+HELPTEXT
+    runWithPrompt --get-long-usage 2>/dev/null
+    cat <<HELPTEXT
 
 SEE ALSO:
 - alert is meant for long-running commands and uses desktop notification and/or
@@ -76,6 +75,8 @@ HELPTEXT
 isBare=
 isNeedEval=
 typeset -a commands=()
+typeset -a bashArgs=()
+runWithCommand=runWithPrompt
 typeset -a runWithPromptArgs=()
 redir=
 hasColor=; [ -t 1 ] && hasColor=t
@@ -135,8 +136,13 @@ do
 			;;
 	--no-output|-O)	shift; redir='>/dev/null 2>&1';;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
-	--bare)		shift; isBare=t;;
-	--no-trailing-prompt|--trailing-prompt|--emulate-prompt|--worst-status)  runWithPromptArgs+=("$1"); shift;;
+	--bare)		shift; isBare=t; runWithCommand=runWith;;
+	--exit-on-failure)
+			bashArgs+=(-e); runWithPromptArgs+=("$1"); shift;;
+	--trailing-prompt|--no-trailing-prompt|--no-output-no-prompt|--no-output-no-error|--no-success-no-count|--exit-on-success|--emulate-prompt|--worst-status)
+			runWithPromptArgs+=("$1"); shift;;
+	--initial-status|--no-count-on|--exit-on|--exit-unless|--comment|--summarize-failed|--summarize-failed-separator)
+			runWithPromptArgs+=("$1" "$2"); shift; shift;;
 
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
@@ -170,10 +176,10 @@ fi
 execute()
 {
     if [ ${#commands[@]} -eq 0 ]; then
-	if [ "$isBare" ]; then
-	    bash -
+	if [ "$isBare" ] && [ ${#runWithPromptArgs[@]} -eq 0 -o "${#runWithPromptArgs[*]}" = --exit-on-failure ]; then
+	    bash "${bashArgs[@]}" -
 	else
-	    runWithPrompt "${runWithPromptArgs[@]}"
+	    ${runWithCommand:?} "${runWithPromptArgs[@]}"
 	fi
     elif [ "$isNeedEval" ]; then
 	eval "${commands[@]}"

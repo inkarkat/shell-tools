@@ -20,7 +20,7 @@ STABILIZED_TIME=2147483647
 
 printShortUsage()
 {
-    printf 'Usage: %q %s\n' "$(basename "$1")" "-d|--dir DIR|-g|--glob 'FILE-GLOB' [-d|--dir DIR]|--source-command SOURCE-COMMAND [-d|--dir DIR] [--accept-existing] [-n|--count N|-1] [--delay NUMBER[SUFFIX]] [--stabilization-time NUMBER[SUFFIX]] [-i|--interval NUMBER[SUFFIX] [-l|--max-files N] [-D|--stop-on-empty-dir] [-S|--stop-on-empty-file [--delete-empty-file]] [-s|--stop-on-filename PATTERN] [-t|--stop-after TIMEOUT[SUFFIX]] --print] [[--bare|[--no-capture-output [--initial-status NUM] [--trailing-prompt|--no-trailing-prompt] [--no-output-no-prompt] [--no-output-no-error] [--emulate-prompt]] [--prefix-command PC] [--prefix-command-command PCC] [--parallel [--parallel-limit N] [--rate-limit NUMBER[SUFFIX]]] [--exit-on-success|--exit-on-failure|--exit-on|-exit-unless NUM] [--delete-on-success|--delete-on-failure|--delete-on NUM|--delete-unless NUM] -c|--command \"COMMANDLINE\" | [--] SIMPLECOMMAND [...]] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "-d|--dir DIR|-g|--glob 'FILE-GLOB' [-d|--dir DIR]|--source-command SOURCE-COMMAND [-d|--dir DIR] [--accept-existing] [-n|--count N|-1] [--delay NUMBER[SUFFIX]] [--stabilization-time NUMBER[SUFFIX]] [-i|--interval NUMBER[SUFFIX] [-l|--max-files N] [-D|--stop-on-empty-dir] [-S|--stop-on-empty-file [--delete-empty-file]] [-s|--stop-on-filename PATTERN] [-t|--stop-after TIMEOUT[SUFFIX]] --print] [[--bare|[--no-capture-output $(runWithPrompt --get-short-usage 2>/dev/null)] [--prefix-command PC] [--prefix-command-command PCC] [--parallel [--parallel-limit N] [--rate-limit NUMBER[SUFFIX]]] [--delete-on-success|--delete-on-failure|--delete-on NUM|--delete-unless NUM] -c|--command \"COMMANDLINE\" | [--] SIMPLECOMMAND [...]] [-?|-h|--help]"
 }
 printUsage()
 {
@@ -56,12 +56,9 @@ HELPDESCRIPTION
     --print		Print the added filespecs.
     --bare		Do not print a status line before and after launching
 			the COMMAND.
-    --initial-status NUM    Customizations of the prompt emulation around
-    --trailing-prompt	    COMMAND; cp. runWithPrompt
-    --no-trailing-prompt
-    --no-output-no-prompt
-    --no-output-no-error
-    --emulate-prompt
+HELPTEXT
+    runWithPrompt --get-long-usage 2>/dev/null
+    cat <<HELPTEXT
     --no-capture-output	By default, no status line is printed if the COMMAND did
 			not have any output, and failing parallel invocations
 			without output are ignored altogether. This option turns
@@ -179,7 +176,9 @@ prefixCommandCommand=
 isPrint=
 isBare=
 isCaptureOutput=t
+runWithCommand=runWithPrompt
 typeset -a runWithPromptArgs=()
+typeset -a runWithPromptExitArgs=()
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -190,17 +189,21 @@ do
 	--accept-existing)	shift; isAcceptExisting=t;;
 	--count|-n)		shift; count="$1"; shift;;
 	-1)			shift; count=1;;
-	--exit-on-success)	shift; exitOn=0; exitComparison=-eq;;
-	--exit-on-failure)	shift; exitOn=0; exitComparison=-ne;;
-	--exit-on)		shift; exitOn="$1"; shift; exitComparison=-eq;;
-	--exit-unless)		shift; exitOn="$1"; shift; exitComparison=-ne;;
+	--exit-on-success)	runWithPromptExitArgs+=("$1"); shift; exitOn=0; exitComparison=-eq;;
+	--exit-on-failure)	runWithPromptExitArgs+=("$1"); shift; exitOn=0; exitComparison=-ne;;
+	--exit-on)		runWithPromptExitArgs+=("$1" "$2"); shift; exitOn="$1"; shift; exitComparison=-eq;;
+	--exit-unless)		runWithPromptExitArgs+=("$1" "$2"); shift; exitOn="$1"; shift; exitComparison=-ne;;
 	--delete-on-success)	shift; deleteOn=0; deleteComparison=-eq;;
 	--delete-on-failure)	shift; deleteOn=0; deleteComparison=-ne;;
 	--delete-on)		shift; deleteOn="$1"; shift; deleteComparison=-eq;;
 	--delete-unless)	shift; deleteOn="$1"; shift; deleteComparison=-ne;;
 	--parallel)		shift; isParallel=t;;
 	--print)		shift; isPrint=t;;
-	--bare)			shift; isBare=t;;
+	--bare)			shift; isBare=t; runWithCommand=runWith;;
+	--trailing-prompt|--no-trailing-prompt|--no-output-no-prompt|--no-output-no-error|--no-success-no-count|--emulate-prompt|--worst-status)
+				runWithPromptArgs+=("$1"); shift;;
+	--initial-status|--no-count-on|--comment|--summarize-failed|--summarize-failed-separator)
+				runWithPromptArgs+=("$1" "$2"); shift; shift;;
 	--no-capture-output)	shift; isCaptureOutput=;;
 	--command|-c)		shift
 				if [ -n "$prefixCommandCommand" ]; then
@@ -480,10 +483,10 @@ triggerFile()
 
     [ "$delay" ] && sleep "$delay"
 
-    if [ "$isBare" ]; then
+    if [ "$isBare" ] && [ ${#runWithPromptArgs[@]} -eq 0 ]; then
 	eval "${expandedCommands[@]}"
     else
-	{ printf '%s ' "${expandedCommands[@]}"; printf '\n'; } | runWithPrompt "${runWithPromptArgs[@]}" --comment "$observedChanges"
+	{ printf '%s ' "${expandedCommands[@]}"; printf '\n'; } | ${runWithCommand:?} "${runWithPromptExitArgs[@]}" "${runWithPromptArgs[@]}" --comment "$observedChanges"
     fi
     exitStatus=$?
 

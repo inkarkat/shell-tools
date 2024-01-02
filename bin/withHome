@@ -6,7 +6,7 @@ printShortUsage()
     # skim the long one.
     printf 'Usage: %q %s\n' "$(basename "$1")" 'HOME -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
     echo
-    printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" '[...] [--bare|[--trailing-prompt|--no-trailing-prompt] [--emulate-prompt] [--worst-status]]'
+    printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" "[...] [--bare|$(runWithPrompt --get-short-usage 2>/dev/null)]"
     echo
     printf 'Usage: %q %s <<EOF\n  COMMANDLINE\n...\nEOF\n' "$(basename "$1")" '[...]'
 }
@@ -33,10 +33,9 @@ This can be used to temporarily change the home directory.
 			command, it can also be passed as such.
     --bare		Do not print a status line before and after launching
 			the COMMAND.
-    --trailing-prompt	Customizations of the prompt emulation around COMMAND;
-    --no-trailing-prompt cp. runWithPrompt
-    --emulate-prompt
-    --worst-status
+HELPTEXT
+    runWithPrompt --get-long-usage 2>/dev/null
+    cat <<HELPTEXT
 HELPTEXT
 }
 
@@ -56,14 +55,21 @@ export HOME="$absoluteHome"; shift
 isBare=
 isNeedEval=
 typeset -a commands=()
+typeset -a bashArgs=()
+runWithCommand=runWithPrompt
 typeset -a runWithPromptArgs=()
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
-	--bare)		shift; isBare=t;;
-	--no-trailing-prompt|--trailing-prompt|--emulate-prompt|--worst-status)  runWithPromptArgs+=("$1"); shift;;
+	--bare)		shift; isBare=t; runWithCommand=runWith;;
+	--exit-on-failure)
+			bashArgs+=(-e); runWithPromptArgs+=("$1"); shift;;
+	--trailing-prompt|--no-trailing-prompt|--no-output-no-prompt|--no-output-no-error|--no-success-no-count|--exit-on-success|--emulate-prompt|--worst-status)
+			runWithPromptArgs+=("$1"); shift;;
+	--initial-status|--no-count-on|--exit-on|--exit-unless|--comment|--summarize-failed|--summarize-failed-separator)
+			runWithPromptArgs+=("$1" "$2"); shift; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
@@ -81,10 +87,10 @@ if [ $# -ne 0 ]; then
 fi
 
 if [ ${#commands[@]} -eq 0 ]; then
-    if [ "$isBare" ]; then
-	exec bash -
+    if [ "$isBare" ] && [ ${#runWithPromptArgs[@]} -eq 0 -o "${#runWithPromptArgs[*]}" = --exit-on-failure ]; then
+	exec bash "${bashArgs[@]}" -
     else
-	exec runWithPrompt "${runWithPromptArgs[@]}"
+	exec ${runWithCommand:?} "${runWithPromptArgs[@]}"
     fi
 elif [ "$isNeedEval" ]; then
     eval "${commands[@]}"

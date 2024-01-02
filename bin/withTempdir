@@ -9,7 +9,7 @@ printShortUsage()
     # skim the long one.
     printf 'Usage: %q %s\n' "$(basename "$1")" '[-p|--tmpdir DIRSPEC] [-n|--name NAME] [--move|-m|--move-on-success|-M|--move-on-failure|--rename|-r|--rename-on-success|-R|--rename-on-failure] [--keep|-k|--keep-on-success|-K|--keep-on-failure] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
     echo
-    printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" '[...] [--bare|[--trailing-prompt|--no-trailing-prompt] [--emulate-prompt] [--worst-status]]'
+    printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" "[...] [--bare|$(runWithPrompt --get-short-usage 2>/dev/null)]"
     echo
     printf 'Usage: %q %s <<EOF\n  COMMANDLINE\n...\nEOF\n' "$(basename "$1")" '[...]'
 }
@@ -59,10 +59,9 @@ HELPDESCRIPTION
 			command, it can also be passed as such.
     --bare		Do not print a status line before and after launching
 			the COMMAND.
-    --trailing-prompt	Customizations of the prompt emulation around COMMAND;
-    --no-trailing-prompt cp. runWithPrompt
-    --emulate-prompt
-    --worst-status
+HELPTEXT
+    runWithPrompt --get-long-usage 2>/dev/null
+    cat <<HELPTEXT
 
 SEE ALSO:
 - tempdir executes a passed command inside the tempdir instead of passing it,
