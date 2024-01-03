@@ -59,9 +59,8 @@ HELPTEXT
 }
 
 isBare=
-isNeedEval=
-typeset -a deltaCommands=()
-typeset -a commands=()
+deltaCommands=
+commands=
 typeset -a bashArgs=()
 runWithCommand=runWithPrompt
 typeset -a runWithPromptArgs=()
@@ -70,7 +69,7 @@ do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 	--delta-command|-d)
-			shift; deltaCommands+=(${deltaCommands:+;} "$1"); shift;;
+			shift; deltaCommands+="${deltaCommands:+ ; }$1"; shift;;
 	--delta-exec|-D)
 			shift
 			cmd=
@@ -85,9 +84,9 @@ do
 			    exit 2
 			fi >&2
 			shift
-			deltaCommands+=(${deltaCommands:+;} "$cmd")
+			deltaCommands+="${deltaCommands:+ ; }${cmd}"
 			;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--command|-c)	shift; commands+="${commands:+ ; }$1"; shift;;
 	--exec)		shift
 			cmd=
 			while [ $# -gt 0 -a "$1" != "$WITHDELTACOMMAND_EXEC_END" ]
@@ -101,8 +100,7 @@ do
 			    exit 2
 			fi >&2
 			shift
-			commands+=(${commands:+;} "$cmd")
-			isNeedEval=t
+			commands+="${commands:+ ; }${cmd}"
 			;;
 	--bare)		shift; isBare=t; runWithCommand=runWith;;
 	--exit-on-failure)
@@ -117,16 +115,12 @@ do
     esac
 done
 if [ $# -ne 0 ]; then
-    if [ "$isNeedEval" ]; then
-	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-	# undo the effects of eval.
-	printf -v quotedSimpleCommand '%q ' "$@"
-	commands+=(${commands:+;} "${quotedSimpleCommand% }")
-    else
-	commands=("$@")
-    fi
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    commands+="${commands:+ ; }${quotedSimpleCommand% }"
 fi
-if [ ${#deltaCommands[@]} -eq 0 ]; then
+if [ -z "$deltaCommands" ]; then
     echo "ERROR: No DELTA-COMMAND(s) specified; need to pass -d|--delta-command \"COMMANDLINE\", or -D|--delta-exec SIMPLE-DELTA-COMMAND [...] $WITHDELTACOMMAND_EXEC_END"
     echo
     printUsage "$0"
@@ -135,22 +129,20 @@ fi >&2
 
 execute()
 {
-    if [ ${#commands[@]} -eq 0 ]; then
+    if [ -z "$commands" ]; then
 	if [ "$isBare" ] && [ ${#runWithPromptArgs[@]} -eq 0 -o "${#runWithPromptArgs[*]}" = --exit-on-failure ]; then
 	    bash "${bashArgs[@]}" -
 	else
 	    ${runWithCommand:?} "${runWithPromptArgs[@]}"
 	fi
-    elif [ "$isNeedEval" ]; then
-	eval "${commands[@]}"
     else
-	"${commands[@]}"
+	eval "$commands"
     fi
 }
 
 executeDelta()
 {
-    eval "${deltaCommands[@]}"
+    eval "$deltaCommands"
 }
 
 executeDelta
