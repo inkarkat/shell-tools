@@ -8,7 +8,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "-d|--delta-command DELTA-COMMANDLINE | -D|--delta-exec SIMPLE-DELTA-COMMAND [...] $WITHDELTACOMMAND_EXEC_END [...] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHDELTACOMMAND_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "-d|--delta-command DELTA-COMMANDLINE | -D|--delta-exec SIMPLE-DELTA-COMMAND [...] $WITHDELTACOMMAND_EXEC_END [...] [-E|--output-at-end] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHDELTACOMMAND_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
     echo
     printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" "[...] [--bare|$(runWithPrompt --get-short-usage 2>/dev/null)]"
     echo
@@ -39,6 +39,9 @@ HELPDESCRIPTION
 			following arguments are taken to be arguments to the
 			DELTA-COMMAND until an argument consisting of '${WITHDELTACOMMAND_EXEC_END}' is
 			encountered.
+    --output-at-end|-E	Capture the (stdout) output of the first DELTA-COMMAND
+			and print it after COMMAND but before the second
+			DELTA-COMMAND.
     --command|-c CMD	The command line to be executed. When this is a simple
 			command, it can also be passed as such.
     --exec CMD [...] ${WITHDELTACOMMAND_EXEC_END}	Execute CMD; all following arguments are taken to be
@@ -58,9 +61,10 @@ EXIT STATUS:
 HELPTEXT
 }
 
-isBare=
 deltaCommands=
+isOutputAtEnd=
 commands=
+isBare=
 typeset -a bashArgs=()
 runWithCommand=runWithPrompt
 typeset -a runWithPromptArgs=()
@@ -68,6 +72,8 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--output-at-end|-E)
+			shift; isOutputAtEnd=t;;
 	--delta-command|-d)
 			shift; deltaCommands+="${deltaCommands:+ ; }$1"; shift;;
 	--delta-exec|-D)
@@ -145,6 +151,7 @@ executeDelta()
     eval "$deltaCommands"
 }
 
-executeDelta
-trap 'executeDelta' EXIT
+eval "${isOutputAtEnd:+firstDelta=\"\$(}executeDelta${isOutputAtEnd:+)\"}"
+
+trap "${isOutputAtEnd:+printf '%s\n' \"\$firstDelta\"; }executeDelta" EXIT
 execute
