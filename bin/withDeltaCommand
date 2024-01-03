@@ -2,6 +2,9 @@
 set -o pipefail
 shopt -qs extglob
 
+: ${WITHDELTACOMMAND_OUTPUT_END_PREFIX=}
+: ${WITHDELTACOMMAND_OUTPUT_END_SUFFIX=}
+: ${WITHDELTACOMMAND_OUTPUT_END_SEPARATOR=$'\n'}
 : ${WITHDELTACOMMAND_EXEC_END=;}
 
 printShortUsage()
@@ -151,7 +154,12 @@ executeDelta()
     eval "$deltaCommands"
 }
 
-eval "${isOutputAtEnd:+firstDelta=\"\$(}executeDelta${isOutputAtEnd:+)\"}"
+if [ "$isOutputAtEnd" ]; then
+    firstDelta="$(executeDelta)"
+    trap 'secondDelta="$(executeDelta)"; printf "%s%s%s%s%s\\n" "$WITHDELTACOMMAND_OUTPUT_END_PREFIX" "$firstDelta" "$WITHDELTACOMMAND_OUTPUT_END_SEPARATOR" "$secondDelta" "$WITHDELTACOMMAND_OUTPUT_END_SUFFIX"' EXIT
+else
+    executeDelta
+    trap executeDelta EXIT
+fi
 
-trap "${isOutputAtEnd:+printf '%s\n' \"\$firstDelta\"; }executeDelta" EXIT
 execute
