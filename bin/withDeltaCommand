@@ -6,12 +6,17 @@ shopt -qs extglob
 : ${WITHDELTACOMMAND_OUTPUT_END_SUFFIX=}
 : ${WITHDELTACOMMAND_OUTPUT_END_SEPARATOR=$'\n'}
 : ${WITHDELTACOMMAND_EXEC_END=;}
+: ${WITHDELTACOMMAND_COMMAND_JOINER=;}
+: ${WITHDELTACOMMAND_OUTPUT_BEFORE_MARKER='{a}'}
+: ${WITHDELTACOMMAND_OUTPUT_AFTER_MARKER='{b}'}
+outputBeforeMarker="$WITHDELTACOMMAND_OUTPUT_BEFORE_MARKER"; unset WITHDELTACOMMAND_OUTPUT_BEFORE_MARKER
+outputAfterMarker="$WITHDELTACOMMAND_OUTPUT_AFTER_MARKER"; unset WITHDELTACOMMAND_OUTPUT_AFTER_MARKER
 
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "-d|--delta-command DELTA-COMMANDLINE | -D|--delta-exec SIMPLE-DELTA-COMMAND [...] $WITHDELTACOMMAND_EXEC_END [...] [-E|--output-at-end] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHDELTACOMMAND_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "-d|--delta-command DELTA-COMMANDLINE | -D|--delta-exec SIMPLE-DELTA-COMMAND [...] $WITHDELTACOMMAND_EXEC_END [...] [-E|--output-at-end|-s|--sink-command \"COMMANDLINE\" [-s ...]|--sink-exec SIMPLECOMMAND [...] ${WITHDELTACOMMAND_EXEC_END} [--sink-exec ...]] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHDELTACOMMAND_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
     echo
     printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" "[...] [--bare|$(runWithPrompt --get-short-usage 2>/dev/null)]"
     echo
@@ -44,7 +49,17 @@ HELPDESCRIPTION
 			encountered.
     --output-at-end|-E	Capture the (stdout) output of the first DELTA-COMMAND
 			and print it after COMMAND but before the second
-			DELTA-COMMAND.
+			DELTA-COMMAND. (Before any sinks receive it.)
+    --sink-command|-s CMD
+			Capture the (stdout) output of the first DELTA-COMMAND
+			and pass both to CMD. Outputs ${outputBeforeMarker:+either }are appended${outputBeforeMarker:+ or
+			replace any $outputBeforeMarker / $outputAfterMarker markers} inside COMMANDLINE.
+    --sink-exec CMD [...] ${WITHDELTACOMMAND_EXEC_END}
+			Capture the (stdout) output of the first DELTA-COMMAND
+			and pass both to CMD; all following arguments are taken
+			to be arguments to the CMD until an argument consisting
+			of '${WITHDELTACOMMAND_EXEC_END}' is encountered. Outputs ${outputBeforeMarker:+either }are appended${outputBeforeMarker:+ or
+			replace any $outputBeforeMarker / $outputAfterMarker markers} inside COMMANDLINE.
     --command|-c CMD	The command line to be executed. When this is a simple
 			command, it can also be passed as such.
     --exec CMD [...] ${WITHDELTACOMMAND_EXEC_END}	Execute CMD; all following arguments are taken to be
@@ -77,6 +92,27 @@ do
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 	--output-at-end|-E)
 			shift; isOutputAtEnd=t;;
+	--sink-command|-s)
+			shift; sinkCommands+="${sinkCommands:+ $WITHDELTACOMMAND_COMMAND_JOINER }${1?}"; shift;;
+	--sink-exec)	shift
+			cmd=
+			printf -v escapedOutputBeforeMarker %q "$outputBeforeMarker"
+			printf -v escapedOutputAfterMarker %q "$outputAfterMarker"
+			while [ $# -gt 0 -a "$1" != "$WITHDELTACOMMAND_EXEC_END" ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    quotedArg="${quotedArg//"$escapedOutputBeforeMarker"/$outputBeforeMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    quotedArg="${quotedArg//"$escapedOutputAfterMarker"/$outputAfterMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    cmd+="${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --sink-exec command must be concluded with '${WITHDELTACOMMAND_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			sinkCommands+="${sinkCommands:+ $WITHDELTACOMMAND_COMMAND_JOINER }${cmd}"
+			;;
 	--delta-command|-d)
 			shift; deltaCommands+="${deltaCommands:+ ; }$1"; shift;;
 	--delta-exec|-D)
@@ -156,10 +192,20 @@ executeDelta()
 
 executeSink()
 {
-    printf '%s%s%s%s%s\n' "$WITHDELTACOMMAND_OUTPUT_END_PREFIX" "$firstDelta" "$WITHDELTACOMMAND_OUTPUT_END_SEPARATOR" "$secondDelta" "$WITHDELTACOMMAND_OUTPUT_END_SUFFIX"
+    [ ! "$isOutputAtEnd" ] \
+	|| printf '%s%s%s%s%s\n' "$WITHDELTACOMMAND_OUTPUT_END_PREFIX" "$firstDelta" "$WITHDELTACOMMAND_OUTPUT_END_SEPARATOR" "$secondDelta" "$WITHDELTACOMMAND_OUTPUT_END_SUFFIX"
+
+    [ -n "$sinkCommands" ] || return 0
+    printf -v quotedFirstDelta %q "$firstDelta"
+    printf -v quotedSecondDelta %q "$secondDelta"
+    typeset -a a=("$firstDelta" "$secondDelta")
+    interpolatedSinkCommands="${sinkCommands//"$outputBeforeMarker"/$quotedFirstDelta}"
+    interpolatedSinkCommands="${interpolatedSinkCommands//"$outputAfterMarker"/$quotedSecondDelta}"
+    [ "$interpolatedSinkCommands" = "$sinkCommands" ] || a=()
+    eval "$interpolatedSinkCommands" '"${a[@]}"'
 }
 
-if [ "$isOutputAtEnd" ]; then
+if [ "$isOutputAtEnd" ] || [ -n "$sinkCommands" ]; then
     firstDelta="$(executeDelta)"
     trap 'secondDelta="$(executeDelta)"; executeSink' EXIT
 else
