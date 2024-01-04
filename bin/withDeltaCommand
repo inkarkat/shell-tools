@@ -114,7 +114,7 @@ do
 			sinkCommands+="${sinkCommands:+ $WITHDELTACOMMAND_COMMAND_JOINER }${cmd}"
 			;;
 	--delta-command|-d)
-			shift; deltaCommands+="${deltaCommands:+ ; }$1"; shift;;
+			shift; deltaCommands+="${deltaCommands:+ $WITHDELTACOMMAND_COMMAND_JOINER }$1"; shift;;
 	--delta-exec|-D)
 			shift
 			cmd=
@@ -129,9 +129,9 @@ do
 			    exit 2
 			fi >&2
 			shift
-			deltaCommands+="${deltaCommands:+ ; }${cmd}"
+			deltaCommands+="${deltaCommands:+ $WITHDELTACOMMAND_COMMAND_JOINER }${cmd}"
 			;;
-	--command|-c)	shift; commands+="${commands:+ ; }$1"; shift;;
+	--command|-c)	shift; commands+="${commands:+ $WITHDELTACOMMAND_COMMAND_JOINER }$1"; shift;;
 	--exec)		shift
 			cmd=
 			while [ $# -gt 0 -a "$1" != "$WITHDELTACOMMAND_EXEC_END" ]
@@ -145,7 +145,7 @@ do
 			    exit 2
 			fi >&2
 			shift
-			commands+="${commands:+ ; }${cmd}"
+			commands+="${commands:+ $WITHDELTACOMMAND_COMMAND_JOINER }${cmd}"
 			;;
 	--bare)		shift; isBare=t; runWithCommand=runWith;;
 	--exit-on-failure)
@@ -163,7 +163,7 @@ if [ $# -ne 0 ]; then
     # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
     # undo the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
-    commands+="${commands:+ ; }${quotedSimpleCommand% }"
+    commands+="${commands:+ $WITHDELTACOMMAND_COMMAND_JOINER }${quotedSimpleCommand% }"
 fi
 if [ -z "$deltaCommands" ]; then
     echo "ERROR: No DELTA-COMMAND(s) specified; need to pass -d|--delta-command \"COMMANDLINE\", or -D|--delta-exec SIMPLE-DELTA-COMMAND [...] $WITHDELTACOMMAND_EXEC_END"
