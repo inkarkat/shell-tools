@@ -154,9 +154,14 @@ executeDelta()
     eval "$deltaCommands"
 }
 
+executeSink()
+{
+    printf '%s%s%s%s%s\n' "$WITHDELTACOMMAND_OUTPUT_END_PREFIX" "$firstDelta" "$WITHDELTACOMMAND_OUTPUT_END_SEPARATOR" "$secondDelta" "$WITHDELTACOMMAND_OUTPUT_END_SUFFIX"
+}
+
 if [ "$isOutputAtEnd" ]; then
     firstDelta="$(executeDelta)"
-    trap 'secondDelta="$(executeDelta)"; printf "%s%s%s%s%s\\n" "$WITHDELTACOMMAND_OUTPUT_END_PREFIX" "$firstDelta" "$WITHDELTACOMMAND_OUTPUT_END_SEPARATOR" "$secondDelta" "$WITHDELTACOMMAND_OUTPUT_END_SUFFIX"' EXIT
+    trap 'secondDelta="$(executeDelta)"; executeSink' EXIT
 else
     executeDelta
     trap executeDelta EXIT
