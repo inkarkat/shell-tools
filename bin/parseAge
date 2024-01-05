@@ -105,7 +105,6 @@ do
 	*)		break;;
     esac
 done
-typeset -a requiredArgs=(-ge 1); [ -n "$spanCompareOp" ] && requiredArgs=(-eq 1)
 if [ $# -eq 0 -a ${#sourceCommand[@]} -eq 0 ]; then
     printUsage "$0" >&2
     exit 2
