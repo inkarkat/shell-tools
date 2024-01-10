@@ -59,7 +59,7 @@ HELPTEXT
     cat <<HELPTEXT
     --between-command BETWEEN-COMMAND
 			Execute BETWEEN-COMMAND in between each COMMAND
-			execution.
+			execution. The last COMMAND's exit status is in \$?.
     --exec CMD [...] ${EACHFILE_EXEC_END}	Execute CMD; all following arguments are taken to be
 			arguments to the CMD until an argument consisting of
 			'${EACHFILE_EXEC_END}' is encountered.
@@ -227,6 +227,11 @@ else
     reportProgress() { :; }
 fi
 
+setStatus()
+{
+    return ${1:-0}
+}
+
 isFirst=t
 isHeader=
 case "$with" in
@@ -268,7 +273,7 @@ case "$with" in
 	while IFS=$'\n' read -r filespec || [ -n "$filespec" ]
 	do
 	    if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
-		eval "$betweenCommand" <&3 || { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
+		setStatus $exitStatus; eval "$betweenCommand" <&3 || { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
 	    fi
 
 	    header="$filespec"
