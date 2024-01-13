@@ -1,5 +1,6 @@
 #!/bin/bash
 
+: ${WITHPID_COMMAND_JOINER=;}
 : ${WITHPID_PID_MARKER='{}'}
 pidMarker="$WITHPID_PID_MARKER"; unset WITHPID_PID_MARKER
 
@@ -51,7 +52,7 @@ HELPTEXT
 }
 
 isBare=
-typeset -a commands=()
+commands=
 typeset -a bashArgs=()
 runWithCommand=runWithPrompt
 typeset -a runWithPromptArgs=()
@@ -62,7 +63,7 @@ do
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 	--source-command|-s)
 			shift; sourceCommand="$1"; shift;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
+	--command|-c)	shift; commands+="${commands:+ $WITHPID_COMMAND_JOINER }$1"; shift;;
 	--bare)		shift; isBare=t; runWithCommand=runWith;;
 	--exit-on-failure)
 			bashArgs+=(-e); runWithPromptArgs+=("$1"); shift;;
@@ -80,7 +81,7 @@ if [ $# -ne 0 ]; then
     # undo the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
     printf -v escapedPidMarker %q "$pidMarker"
-    commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedPidMarker"/$pidMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
+    commands+="${commands:+ $WITHPID_COMMAND_JOINER }${quotedSimpleCommand//"$escapedPidMarker"/$pidMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 fi
 if [ -z "$sourceCommand" ]; then
     echo 'ERROR: No -s|--source-command SOURCE-COMMANDLINE specified.'
@@ -92,7 +93,7 @@ fi >&2
 eval "$sourceCommand &" || exit 126
 pid=$!
 
-if [ ${#commands[@]} -eq 0 ]; then
+if [ -z "$commands" ]; then
     literalPidMarker="$(printf %s "$pidMarker" | sed -e 's/[][\$*.^#]/\\&/g')"
     sed --unbuffered -e "s#${literalPidMarker}#${pid}#g" \
 	| if [ "$isBare" ] && [ ${#runWithPromptArgs[@]} -eq 0 -o "${#runWithPromptArgs[*]}" = --exit-on-failure ]; then
@@ -103,7 +104,7 @@ if [ ${#commands[@]} -eq 0 ]; then
 else
     typeset -a p=("$pid")
     printf -v pid '%q' "$pid"
-    typeset -a interpolatedCommands=("${commands[@]//"$pidMarker"/$pid}")
-    [ "${interpolatedCommands[*]}" = "${commands[*]}" ] || p=()
-    eval "${interpolatedCommands[@]}" '"${p[@]}"'
+    interpolatedCommands="${commands//"$pidMarker"/$pid}"
+    [ "$interpolatedCommands" = "$commands" ] || p=()
+    eval "$interpolatedCommands" '"${p[@]}"'
 fi

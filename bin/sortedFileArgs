@@ -1,6 +1,7 @@
 #!/bin/bash
 shopt -qs extglob
 
+: ${SORTEDFILEARGS_COMMAND_JOINER=;}
 : ${SORTEDFILEARGS_FILE_MARKER='{}'}
 fileMarker="$SORTEDFILEARGS_FILE_MARKER"; unset SORTEDFILEARGS_FILE_MARKER
 
@@ -37,7 +38,7 @@ HELPTEXT
 
 isRequireFile=
 typeset -a lsArgs=()
-typeset -a commands=()
+commands=
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -54,7 +55,7 @@ do
 	--@(sort|ignore))
 			lsArgs+=("$1" "$2"); shift; shift;;
 
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
+	--command|-c)	shift; commands+="${commands:+ $SORTEDFILEARGS_COMMAND_JOINER }$1"; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		typeset -a files=()
@@ -80,7 +81,7 @@ do
 			    # undo the effects of eval.
 			    printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
 			    printf -v escapedFileMarker %q "$fileMarker"
-			    commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
+			    commands+="${commands:+ $SORTEDFILEARGS_COMMAND_JOINER }${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 			fi
 
 			if [ ${#files[@]} -gt 0 ]; then
@@ -90,7 +91,7 @@ do
 			;;
     esac
 done
-if [ ${#commands[@]} -eq 0 ]; then
+if [ -z "$commands" ]; then
     echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
     exit 2
 elif [ ${#lsArgs[@]} -eq 0 ]; then
@@ -108,6 +109,6 @@ unset "files[$((${#files[@]}-1))]"
 
 
 printf -v quotedFiles '%q ' "${files[@]}"; quotedFiles="${quotedFiles% }"
-typeset -a interpolatedCommands=("${commands[@]//"$fileMarker"/$quotedFiles}")
-[ "${interpolatedCommands[*]}" = "${commands[*]}" ] && interpolatedCommands+=("$quotedFiles")
-eval "${interpolatedCommands[@]}"
+interpolatedCommands="${commands//"$fileMarker"/$quotedFiles}"
+[ "$interpolatedCommands" = "$commands" ] && interpolatedCommands+=" $quotedFiles"
+eval "$interpolatedCommands"

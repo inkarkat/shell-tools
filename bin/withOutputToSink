@@ -2,6 +2,8 @@
 set -o pipefail
 shopt -qs extglob
 
+: ${WITHOUTPUTTOSINK_COMMAND_JOINER=;}
+: ${WITHOUTPUTTOSINK_SINKCOMMAND_JOINER=|}
 : ${WITHOUTPUTTOSINK_EXEC_END=;}
 
 printShortUsage()
@@ -74,8 +76,8 @@ isTee=
 teePrefix='2>&1'
 teeSuffix=
 isBare=
-typeset -a sinkCommands=()
-typeset -a commands=()
+sinkCommands=
+commands=
 typeset -a bashArgs=()
 runWithCommand=runWithPrompt
 typeset -a runWithPromptArgs=()
@@ -87,7 +89,7 @@ do
 	--stdout|-1)	shift; teePrefix='';;
 	--stderr|-2)	shift; teePrefix='3>&1 1>&2 2>&3 3>&-'; teeSuffix='3>&1 1>&2 2>&3 3>&-';;
 	--sink-command|-s)
-			shift; sinkCommands+=(${sinkCommands:+|} "$1"); shift;;
+			shift; sinkCommands+="${sinkCommands:+ $WITHOUTPUTTOSINK_SINKCOMMAND_JOINER }$1"; shift;;
 	--sink-exec|-S)	shift
 			cmd=
 			while [ $# -gt 0 -a "$1" != "$WITHOUTPUTTOSINK_EXEC_END" ]
@@ -101,9 +103,9 @@ do
 			    exit 2
 			fi >&2
 			shift
-			sinkCommands+=(${sinkCommands:+|} "$cmd")
+			sinkCommands+="${sinkCommands:+ $WITHOUTPUTTOSINK_SINKCOMMAND_JOINER }${cmd}"
 			;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
+	--command|-c)	shift; commands+="${commands:+ $WITHOUTPUTTOSINK_COMMAND_JOINER }$1"; shift;;
 	--exec)		shift
 			cmd=
 			while [ $# -gt 0 -a "$1" != "$WITHOUTPUTTOSINK_EXEC_END" ]
@@ -117,7 +119,7 @@ do
 			    exit 2
 			fi >&2
 			shift
-			commands+=(${commands:+;} "$cmd")
+			commands+="${commands:+ $WITHOUTPUTTOSINK_COMMAND_JOINER }${cmd}"
 			;;
 	--bare)		shift; isBare=t; runWithCommand=runWith;;
 	--exit-on-failure)
@@ -135,9 +137,9 @@ if [ $# -ne 0 ]; then
     # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
     # undo the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
-    commands+=(${commands:+;} "${quotedSimpleCommand% }")
+    commands+="${commands:+ $WITHOUTPUTTOSINK_COMMAND_JOINER }${quotedSimpleCommand% }"
 fi
-if [ ${#sinkCommands[@]} -eq 0 ]; then
+if [ -z "$sinkCommands" ]; then
     echo "ERROR: No SINK-COMMAND(s) specified; need to pass -s|--sink-command \"COMMANDLINE\", or -S|--sink-exec SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINK_EXEC_END"
     echo
     printUsage "$0"
@@ -146,15 +148,15 @@ fi >&2
 
 execute()
 {
-    if [ ${#commands[@]} -eq 0 ]; then
+    if [ -z "$commands" ]; then
 	if [ "$isBare" ] && [ ${#runWithPromptArgs[@]} -eq 0 -o "${#runWithPromptArgs[*]}" = --exit-on-failure ]; then
 	    bash "${bashArgs[@]}" -
 	else
 	    ${runWithCommand:?} "${runWithPromptArgs[@]}"
 	fi
     else
-	eval "${commands[@]}"
+	eval "$commands"
     fi
 }
 
-eval "{ execute ${teePrefix} | ${isTee:+"tee >("}" "${sinkCommands[@]}" "${isTee:+)}; } ${teeSuffix}"
+eval "{ execute ${teePrefix} | ${isTee:+"tee >("}" "$sinkCommands" "${isTee:+)}; } ${teeSuffix}"

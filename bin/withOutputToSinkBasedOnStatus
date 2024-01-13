@@ -2,6 +2,8 @@
 set -o pipefail
 shopt -qs extglob
 
+: ${WITHOUTPUTTOSINKBASEDONSTATUS_COMMAND_JOINER=;}
+: ${WITHOUTPUTTOSINKBASEDONSTATUS_SINKCOMMAND_JOINER=|}
 : ${WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END=;}
 
 printShortUsage()
@@ -102,7 +104,7 @@ teeSuffix=
 isBare=
 typeset -a sinkRanges=()
 typeset -A statusSinkCommands=()
-typeset -a commands=()
+commands=
 typeset -a bashArgs=()
 runWithCommand=runWithPrompt
 typeset -a runWithPromptArgs=()
@@ -116,15 +118,15 @@ do
 	--success-command)
 			shift
 			sinkRanges+=('0')
-			statusSinkCommands['0']+="${statusSinkCommands['0']:+|}$1"; shift;;
+			statusSinkCommands['0']+="${statusSinkCommands['0']:+ $WITHOUTPUTTOSINKBASEDONSTATUS_SINKCOMMAND_JOINER }$1"; shift;;
 	--fail-command) shift
 			sinkRanges+=('!0')
-			statusSinkCommands['!0']+="${statusSinkCommands['!0']:+|}$1"; shift;;
+			statusSinkCommands['!0']+="${statusSinkCommands['!0']:+ $WITHOUTPUTTOSINKBASEDONSTATUS_SINKCOMMAND_JOINER }$1"; shift;;
 	--status-command|-s)
 			shift
 			status="$1"; shift
 			sinkRanges+=("$status")
-			statusSinkCommands["$status"]+="${statusSinkCommands["$status"]:+|}$1"; shift;;
+			statusSinkCommands["$status"]+="${statusSinkCommands["$status"]:+ $WITHOUTPUTTOSINKBASEDONSTATUS_SINKCOMMAND_JOINER }$1"; shift;;
 	--success-exec) shift
 			cmd=
 			while [ $# -gt 0 -a "$1" != "$WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END" ]
@@ -139,7 +141,7 @@ do
 			fi >&2
 			shift
 			sinkRanges+=('0')
-			statusSinkCommands['0']+="${statusSinkCommands['0']:+|}$cmd"
+			statusSinkCommands['0']+="${statusSinkCommands['0']:+ $WITHOUTPUTTOSINKBASEDONSTATUS_SINKCOMMAND_JOINER }$cmd"
 			;;
 	--fail-exec)	shift
 			cmd=
@@ -155,7 +157,7 @@ do
 			fi >&2
 			shift
 			sinkRanges+=('!0')
-			statusSinkCommands['!0']+="${statusSinkCommands['!0']:+|}$cmd"
+			statusSinkCommands['!0']+="${statusSinkCommands['!0']:+ $WITHOUTPUTTOSINKBASEDONSTATUS_SINKCOMMAND_JOINER }$cmd"
 			;;
 	--status-exec|-S)
 			shift
@@ -173,9 +175,9 @@ do
 			fi >&2
 			shift
 			sinkRanges+=("$status")
-			statusSinkCommands["$status"]+="${statusSinkCommands["$status"]:+|}$cmd"
+			statusSinkCommands["$status"]+="${statusSinkCommands["$status"]:+ $WITHOUTPUTTOSINKBASEDONSTATUS_SINKCOMMAND_JOINER }$cmd"
 			;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
+	--command|-c)	shift; commands+="${commands:+ $WITHOUTPUTTOSINKBASEDONSTATUS_COMMAND_JOINER }$1"; shift;;
 	--exec)		shift
 			cmd=
 			while [ $# -gt 0 -a "$1" != "$WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END" ]
@@ -189,7 +191,7 @@ do
 			    exit 2
 			fi >&2
 			shift
-			commands+=(${commands:+;} "$cmd")
+			commands+="${commands:+ $WITHOUTPUTTOSINKBASEDONSTATUS_COMMAND_JOINER }${cmd}"
 			;;
 	--bare)		shift; isBare=t; runWithCommand=runWith;;
 	--exit-on-failure)
@@ -207,7 +209,7 @@ if [ $# -ne 0 ]; then
     # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
     # undo the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
-    commands+=(${commands:+;} "${quotedSimpleCommand% }")
+    commands+="${commands:+ $WITHOUTPUTTOSINKBASEDONSTATUS_COMMAND_JOINER }${quotedSimpleCommand% }"
 fi
 if [ ${#statusSinkCommands[@]} -eq 0 ]; then
     echo 'ERROR: No SINK-COMMAND(s) specified; need to pass --success-command|--fail-command|-s|--status-command, or --success-exec|--fail-exec|-S|--status-exec'
@@ -218,14 +220,14 @@ fi >&2
 
 execute()
 {
-    if [ ${#commands[@]} -eq 0 ]; then
+    if [ -z "$commands" ]; then
 	if [ "$isBare" ] && [ ${#runWithPromptArgs[@]} -eq 0 -o "${#runWithPromptArgs[*]}" = --exit-on-failure ]; then
 	    bash "${bashArgs[@]}" -
 	else
 	    ${runWithCommand:?} "${runWithPromptArgs[@]}"
 	fi
     else
-	eval "${commands[@]}"
+	eval "$commands"
     fi
 }
 

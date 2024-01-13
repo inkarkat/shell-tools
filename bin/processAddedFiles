@@ -1,6 +1,7 @@
 #!/bin/bash
 set -o pipefail
 
+: ${PROCESSADDEDFILES_COMMAND_JOINER=;}
 : ${PROCESSADDEDFILES_FILE_MARKER='{}'}
 fileMarker="$PROCESSADDEDFILES_FILE_MARKER"; unset PROCESSADDEDFILES_FILE_MARKER
 
@@ -102,7 +103,7 @@ typeset -a lastExtractor=()
 typeset -a initialFilter=()
 typeset -a maxFilter=()
 typeset -a skipGlobs=()
-typeset -a commands=()
+commands=
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -131,7 +132,7 @@ do
 	--max-last)
 			shift; abortFirstLastFilter max "${maxFilter[@]}"; maxFilter=(tail -n "${1:?}"); shift;;
 	--skip|-s)	shift; skipGlobs+=("$1"); shift;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
+	--command|-c)	shift; commands+="${commands:+ $PROCESSADDEDFILES_COMMAND_JOINER }$1"; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
@@ -142,14 +143,14 @@ if [ $# -ne 0 ]; then
     # undo the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
     printf -v escapedFileMarker %q "$fileMarker"
-    commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
+    commands+="${commands:+ $PROCESSADDEDFILES_COMMAND_JOINER }${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 fi
 if [ -z "$id" ]; then
     echo 'ERROR: No -i|--id ID passed.'
     echo
     printUsage "$0"
     exit 2
-elif [ ${#commands[@]} -eq 0 ]; then
+elif [ -z "$commands" ]; then
     echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
     echo
     printUsage "$0"
@@ -221,10 +222,10 @@ if [ ${#fileExtractor[@]} -gt 0 ]; then
 fi
 
 printf -v quotedAddedFilespecs '%q ' "${addedFilespecs[@]}"; quotedAddedFilespecs="${quotedAddedFilespecs% }"
-typeset -a interpolatedCommands=("${commands[@]//"$fileMarker"/$quotedAddedFilespecs}")
-[ "${interpolatedCommands[*]}" = "${commands[*]}" ] && interpolatedCommands+=("$quotedAddedFilespecs")
+interpolatedCommands="${commands//"$fileMarker"/$quotedAddedFilespecs}"
+[ "$interpolatedCommands" = "$commands" ] && interpolatedCommands+=" $quotedAddedFilespecs"
 
-eval "${interpolatedCommands[@]}"; status=$?
+eval "$interpolatedCommands"; status=$?
 [ $status -eq 0 ] || exit $status
 
 if [ ${#lastExtractor[@]} -gt 0 ]; then

@@ -1,5 +1,6 @@
 #!/bin/bash
 
+: ${WITHTEMPFILE_COMMAND_JOINER=;}
 : ${WITHTEMPFILE_FILE_MARKER='{}'}
 fileMarker="$WITHTEMPFILE_FILE_MARKER"; unset WITHTEMPFILE_FILE_MARKER
 
@@ -93,7 +94,7 @@ renameOp=
 targetFilespec=
 keepOp=
 isBare=
-typeset -a commands=()
+commands=
 typeset -a bashArgs=()
 runWithCommand=runWithPrompt
 typeset -a runWithPromptArgs=()
@@ -120,7 +121,7 @@ do
 			shift; keepOp=-eq;;
 	--keep-on-failure|-K)
 			shift; keepOp=-ne;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
+	--command|-c)	shift; commands+="${commands:+ $WITHTEMPFILE_COMMAND_JOINER }$1"; shift;;
 	--bare)		shift; isBare=t; runWithCommand=runWith;;
 	--exit-on-failure)
 			bashArgs+=(-e); runWithPromptArgs+=("$1"); shift;;
@@ -138,7 +139,7 @@ if [ $# -ne 0 ]; then
     # undo the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
     printf -v escapedFileMarker %q "$fileMarker"
-    commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
+    commands+="${commands:+ $WITHTEMPFILE_COMMAND_JOINER }${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 fi
 
 getOctalFilePermissions()
@@ -183,7 +184,7 @@ finally()
 }
 trap 'finally' EXIT
 
-if [ ${#commands[@]} -eq 0 ]; then
+if [ -z "$commands" ]; then
     literalFileMarker="$(printf %s "$fileMarker" | sed -e 's/[][\$*.^#]/\\&/g')"
     literalTempFilespec="$tempFilespec"
     literalTempFilespec="${literalTempFilespec//\\/\\\\}"
@@ -198,8 +199,8 @@ if [ ${#commands[@]} -eq 0 ]; then
 else
     typeset -a f=("$tempFilespec")
     printf -v tempFilespec '%q' "$tempFilespec"
-    typeset -a interpolatedCommands=("${commands[@]//"$fileMarker"/$tempFilespec}")
-    [ "${interpolatedCommands[*]}" = "${commands[*]}" ] || f=()
+    interpolatedCommands="${commands//"$fileMarker"/$tempFilespec}"
+    [ "$interpolatedCommands" = "$commands" ] || f=()
 
-    eval "${interpolatedCommands[@]}" '"${f[@]}"'
+    eval "$interpolatedCommands" '"${f[@]}"'
 fi; status=$?

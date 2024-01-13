@@ -3,6 +3,7 @@ set -o pipefail
 
 : ${DATE:=date}
 
+: ${PROCESSPASSEDYEARS_COMMAND_JOINER=;}
 : ${PROCESSPASTYEARS_MARKER='{}'}
 marker="$PROCESSPASTYEARS_MARKER"; unset PROCESSPASTYEARS_MARKER
 
@@ -81,7 +82,7 @@ startAtYear=
 initialOffset=
 maxOffset=
 format=
-typeset -a commands=()
+commands=
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -118,7 +119,7 @@ do
 			shift
 			;;
 	--format|-f)	shift; format="$1"; shift;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
+	--command|-c)	shift; commands+="${commands:+ $PROCESSPASSEDYEARS_COMMAND_JOINER }$1"; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
@@ -129,14 +130,14 @@ if [ $# -ne 0 ]; then
     # undo the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
     printf -v escapedMarker %q "$marker"
-    commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedMarker"/$marker}")	# %q escapes {}, we don't want that to have it interpolated later.
+    commands+="${commands:+ $PROCESSPASSEDYEARS_COMMAND_JOINER }${quotedSimpleCommand//"$escapedMarker"/$marker}"	# %q escapes {}, we don't want that to have it interpolated later.
 fi
 if [ -z "$id" ]; then
     echo 'ERROR: No -i|--id ID passed.'
     echo
     printUsage "$0"
     exit 2
-elif [ ${#commands[@]} -eq 0 ]; then
+elif [ -z "$commands" ]; then
     echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
     echo
     printUsage "$0"
@@ -196,10 +197,10 @@ if [ -n "$format" ]; then
 fi
 
 printf -v quotedPassedYears '%q ' "${passedYears[@]}"; quotedPassedYears="${quotedPassedYears% }"
-typeset -a interpolatedCommands=("${commands[@]//"$marker"/$quotedPassedYears}")
-[ "${interpolatedCommands[*]}" = "${commands[*]}" ] && interpolatedCommands+=("$quotedPassedYears")
+interpolatedCommands="${commands//"$marker"/$quotedPassedYears}"
+[ "$interpolatedCommands" = "$commands" ] && interpolatedCommands+=" $quotedPassedYears"
 
-eval "${interpolatedCommands[@]}"; status=$?
+eval "$interpolatedCommands"; status=$?
 [ $status -eq 0 ] || exit $status
 
 updateDatabase "$YEAR" || exit 3

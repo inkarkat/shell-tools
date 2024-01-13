@@ -1,5 +1,7 @@
 #!/bin/bash
 
+: ${WITHPATH_COMMAND_JOINER=;}
+
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
@@ -61,7 +63,7 @@ addPath()
 isFirst=t
 isClean=
 isBare=
-typeset -a commands=()
+commands=
 typeset -a bashArgs=()
 runWithCommand=runWithPrompt
 typeset -a runWithPromptArgs=()
@@ -79,7 +81,7 @@ do
 			shift
 			;;
 	--clean|-C)	shift; isClean=t;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
+	--command|-c)	shift; commands+="${commands:+ $WITHPATH_COMMAND_JOINER }$1"; shift;;
 	--bare)		shift; isBare=t; runWithCommand=runWith;;
 	--exit-on-failure)
 			bashArgs+=(-e); runWithPromptArgs+=("$1"); shift;;
@@ -102,7 +104,7 @@ if [ $# -ne 0 ]; then
     # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
     # undo the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
-    commands+=(${commands:+;} "${quotedSimpleCommand% }")
+    commands+="${commands:+ $WITHPATH_COMMAND_JOINER }${quotedSimpleCommand% }"
 fi
 if [ -z "$pathAdd" ] && [ ! "$isClean" ]; then
     echo 'ERROR: No ADD-PATH or -C|--clean passed.'
@@ -118,12 +120,12 @@ else
 fi
 export PATH PATH_OVERRIDE=true
 
-if [ ${#commands[@]} -eq 0 ]; then
+if [ -z "$commands" ]; then
     if [ "$isBare" ] && [ ${#runWithPromptArgs[@]} -eq 0 -o "${#runWithPromptArgs[*]}" = --exit-on-failure ]; then
 	exec bash "${bashArgs[@]}" -
     else
 	exec ${runWithCommand:?} "${runWithPromptArgs[@]}"
     fi
 else
-    eval "${commands[@]}"
+    eval "$commands"
 fi

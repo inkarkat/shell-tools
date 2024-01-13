@@ -1,6 +1,8 @@
 #!/bin/bash
 
 : ${EDITOR:=vi}
+: ${TEMPEDIT_COMMAND_JOINER=;}
+: ${TEMPEDIT_SINKCOMMAND_JOINER=|}
 : ${TEMPEDIT_EXEC_END=;}
 : ${TEMPEDIT_FILE_MARKER='{}'}
 fileMarker="$TEMPEDIT_FILE_MARKER"; unset TEMPEDIT_FILE_MARKER
@@ -72,8 +74,8 @@ basename=
 extension=
 isEditEmpty=
 isPrint=t
-typeset -a sinkCommands=()
-typeset -a commands=()
+sinkCommands=
+commands=
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -86,7 +88,7 @@ do
 	--no-print|-P)	shift; isPrint=;;
 	--print|-p)	shift; isPrint=t;;
 	--sink-command|-s)
-			shift; sinkCommands+=(${sinkCommands:+|} "$1"); shift; isPrint=;;
+			shift; sinkCommands+="${sinkCommands:+ $TEMPEDIT_SINKCOMMAND_JOINER }$1"; shift; isPrint=;;
 	--sink-exec|-S)	shift
 			cmd=
 			printf -v escapedFileMarker %q "$fileMarker"
@@ -101,10 +103,10 @@ do
 			    exit 2
 			fi >&2
 			shift
-			sinkCommands+=(${sinkCommands:+|} "$cmd")
+			sinkCommands+="${sinkCommands:+ $TEMPEDIT_SINKCOMMAND_JOINER }${cmd}"
 			isPrint=
 			;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
+	--command|-c)	shift; commands+="${commands:+ $TEMPEDIT_COMMAND_JOINER }$1"; shift;;
 	--exec)		shift
 			cmd=
 			while [ $# -gt 0 -a "$1" != "$TEMPEDIT_EXEC_END" ]
@@ -118,7 +120,7 @@ do
 			    exit 2
 			fi >&2
 			shift
-			commands+=(${commands:+;} "$cmd")
+			commands+="${commands:+ $TEMPEDIT_COMMAND_JOINER }${cmd}"
 			;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
@@ -127,13 +129,13 @@ do
 done
 if [ $# -ne 0 ]; then
     printf -v quotedSimpleCommand '%q ' "$@"
-    commands+=(${commands:+;} "${quotedSimpleCommand% }")
+    commands+="${commands:+ $TEMPEDIT_COMMAND_JOINER }${quotedSimpleCommand% }"
 fi
 if [ -z "$basename" ]; then
-    if [ ${#commands[@]} -eq 0 ]; then
+    if [ -z "$commands" ]; then
 	basename="$(basename -- "$0")"
     else
-	basename="$(commandName --eval "${commands[@]}")"
+	basename="$(commandName --eval "$commands")"
     fi
 fi
 
@@ -149,16 +151,16 @@ cleanup()
     [ ! -e "$tempFilespec" ] || rm --force "$tempFilespec" 2>/dev/null
 }
 
-if [ ${#commands[@]} -eq 0 ]; then
+if [ -z "$commands" ]; then
     cat
 else
-    eval "${commands[@]}"
+    eval "$commands"
 fi > "$tempFilespec"
 
 [ "$isEditEmpty" ] || [ -s "$tempFilespec" ] || { cleanup; exit 1; }
 
 exec </dev/tty	# Reconnect stdin to terminal, to avoid that Vim complains that input is not from a terminal.
-if [ "$isPrint" ] || [ ${#sinkCommands[@]} -gt 0 ]; then
+if [ "$isPrint" ] || [ -n "$sinkCommands" ]; then
     exec 3>&1 1>/dev/tty	# Reconnect stdout to terminal, to avoid that Vim complains that output is not to a terminal
     [ "${DEBUG:-}" ] || trap 'cleanup' EXIT
 
@@ -170,12 +172,12 @@ if [ "$isPrint" ] || [ ${#sinkCommands[@]} -gt 0 ]; then
 
     [ $newModTime -eq $tmpModTime ] && exit 99
     [ ! "$isPrint" ] || cat -- "$tempFilespec"
-    if [ ${#sinkCommands[@]} -gt 0 ]; then
+    if [ -n "$sinkCommands" ]; then
 	typeset -a f=("$tempFilespec")
 	printf -v quotedTempFilespec '%q' "$tempFilespec"
-	typeset -a interpolatedCommands=("${sinkCommands[@]//"$fileMarker"/$quotedTempFilespec}")
-	[ "${interpolatedCommands[*]}" = "${sinkCommands[*]}" ] || f=()
-	eval "${interpolatedCommands[@]}" '"${f[@]}"'
+	interpolatedCommands="${sinkCommands//"$fileMarker"/$quotedTempFilespec}"
+	[ "$interpolatedCommands" = "$sinkCommands" ] || f=()
+	eval "$interpolatedCommands" '"${f[@]}"'
     fi
 else
     $EXEC "$EDITOR" "$tempFilespec"

@@ -2,6 +2,7 @@
 set -o pipefail
 shopt -qs extglob
 
+: ${WITHALIASEDCOMMAND_COMMAND_JOINER=;}
 : ${WITHALIASEDCOMMAND_ALIAS_END=;}
 : ${WITHALIASEDCOMMAND_EXEC_END=;}
 
@@ -92,7 +93,7 @@ writeAlias()
 }
 
 isBare=
-typeset -a commands=()
+commands=
 typeset -a bashArgs=()
 runWithCommand=runWithPrompt
 typeset -a runWithPromptArgs=()
@@ -164,7 +165,7 @@ do
 			aliasName=''
 			;;
 
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
+	--command|-c)	shift; commands+="${commands:+ $WITHALIASEDCOMMAND_COMMAND_JOINER }$1"; shift;;
 	--exec)		shift
 			cmd=
 			while [ $# -gt 0 -a "$1" != "$WITHALIASEDCOMMAND_EXEC_END" ]
@@ -178,7 +179,7 @@ do
 			    exit 2
 			fi >&2
 			shift
-			commands+=(${commands:+;} "$cmd")
+			commands+="${commands:+ $WITHALIASEDCOMMAND_COMMAND_JOINER }$cmd"
 			;;
 
 	--bare)		shift; isBare=t; runWithCommand=runWith;;
@@ -203,17 +204,17 @@ if [ $# -ne 0 ]; then
     # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
     # undo the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
-    commands+=(${commands:+;} "${quotedSimpleCommand% }")
+    commands+="${commands:+ $WITHALIASEDCOMMAND_COMMAND_JOINER }${quotedSimpleCommand% }"
 fi
 
 export PATH="${TMPDIR}${PATH:+:}${PATH}"    # Activate the wrapper commands by placing them first in the PATH.
 
-if [ ${#commands[@]} -eq 0 ]; then
+if [ -z "$commands" ]; then
     if [ "$isBare" ] && [ ${#runWithPromptArgs[@]} -eq 0 -o "${#runWithPromptArgs[*]}" = --exit-on-failure ]; then
 	bash "${bashArgs[@]}" -
     else
 	${runWithCommand:?} "${runWithPromptArgs[@]}"
     fi
 else
-    eval "${commands[@]}"
+    eval "$commands"
 fi

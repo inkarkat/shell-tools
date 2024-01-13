@@ -1,5 +1,6 @@
 #!/bin/bash
 
+: ${WITHACCESSIBLEFILE_COMMAND_JOINER=;}
 : ${WITHACCESSIBLEFILE_FILE_MARKER='{}'}
 targetMarker="$WITHACCESSIBLEFILE_FILE_MARKER"; unset WITHACCESSIBLEFILE_FILE_MARKER
 
@@ -79,7 +80,7 @@ group=
 mode=
 owner=
 isBare=
-typeset -a commands=()
+commands=
 typeset -a bashArgs=()
 runWithCommand=runWithPrompt
 typeset -a runWithPromptArgs=()
@@ -87,7 +88,7 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
+	--command|-c)	shift; commands+="${commands:+ $WITHACCESSIBLEFILE_COMMAND_JOINER }$1"; shift;;
 	--read|-r)	shift; tempPermissions='o+r';;
 	--group|-g)	shift; group="$1"; shift; isChangeNew=t;;
 	--mode|-m)	shift; mode="$1"; shift; isChangeNew=t;;
@@ -109,7 +110,7 @@ if [ $# -ne 0 ]; then
     # undo the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
     printf -v escapedTargetMarker %q "$targetMarker"
-    commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedTargetMarker"/$targetMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
+    commands+="${commands:+ $WITHACCESSIBLEFILE_COMMAND_JOINER }${quotedSimpleCommand//"$escapedTargetMarker"/$targetMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 fi
 
 : ${SUDO:=sudo}; [ $EUID -eq 0 ] && SUDO=''
@@ -164,13 +165,13 @@ restorePermissions()
 }
 trap 'restorePermissions' EXIT
 
-typeset -a interpolatedCommands=("${commands[@]//"$targetMarker"/$firstTarget}")
-if [ ${#commands[@]} -eq 0 ]; then
+interpolatedCommands="${commands//"$targetMarker"/$firstTarget}"
+if [ -z "$commands" ]; then
     if [ "$isBare" ] && [ ${#runWithPromptArgs[@]} -eq 0 -o "${#runWithPromptArgs[*]}" = --exit-on-failure ]; then
 	bash "${bashArgs[@]}" -
     else
 	${runWithCommand:?} "${runWithPromptArgs[@]}"
     fi
 else
-    eval "${interpolatedCommands[@]}"
+    eval "$interpolatedCommands"
 fi

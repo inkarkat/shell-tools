@@ -2,6 +2,8 @@
 set -o pipefail
 shopt -qs extglob
 
+: ${WITHOUTPUTTOSINKBASEDONMATCH_COMMAND_JOINER=;}
+: ${WITHOUTPUTTOSINKBASEDONMATCH_SINKCOMMAND_JOINER=|}
 : ${WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END=;}
 
 printShortUsage()
@@ -94,7 +96,7 @@ teeSuffix=
 isBare=
 typeset -A matchSinkCommands=()
 typeset -A nonMatchSinkCommands=()
-typeset -a commands=()
+commands=
 typeset -a bashArgs=()
 runWithCommand=runWithPrompt
 typeset -a runWithPromptArgs=()
@@ -108,11 +110,11 @@ do
 	--match-command|-m)
 			shift
 			pattern="$1"; shift
-			matchSinkCommands["$pattern"]+="${matchSinkCommands["$pattern"]:+|}$1"; shift;;
+			matchSinkCommands["$pattern"]+="${matchSinkCommands["$pattern"]:+ $WITHOUTPUTTOSINKBASEDONMATCH_SINKCOMMAND_JOINER }$1"; shift;;
 	--no-match-command|-v)
 			shift
 			pattern="$1"; shift
-			nonMatchSinkCommands["$pattern"]+="${nonMatchSinkCommands["$pattern"]:+|}$1"; shift;;
+			nonMatchSinkCommands["$pattern"]+="${nonMatchSinkCommands["$pattern"]:+ $WITHOUTPUTTOSINKBASEDONMATCH_SINKCOMMAND_JOINER }$1"; shift;;
 	--match-exec|-M)
 			shift
 			pattern="$1"; shift
@@ -128,7 +130,7 @@ do
 			    exit 2
 			fi >&2
 			shift
-			matchSinkCommands["$pattern"]+="${matchSinkCommands["$pattern"]:+|}$cmd"
+			matchSinkCommands["$pattern"]+="${matchSinkCommands["$pattern"]:+ $WITHOUTPUTTOSINKBASEDONMATCH_SINKCOMMAND_JOINER }$cmd"
 			;;
 	--no-match-exec|-V)
 			shift
@@ -145,9 +147,9 @@ do
 			    exit 2
 			fi >&2
 			shift
-			nonMatchSinkCommands["$pattern"]+="${nonMatchSinkCommands["$pattern"]:+|}$cmd"
+			nonMatchSinkCommands["$pattern"]+="${nonMatchSinkCommands["$pattern"]:+ $WITHOUTPUTTOSINKBASEDONMATCH_SINKCOMMAND_JOINER }$cmd"
 			;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
+	--command|-c)	shift; commands+="${commands:+ $WITHOUTPUTTOSINKBASEDONMATCH_COMMAND_JOINER }$1"; shift;;
 	--exec)		shift
 			cmd=
 			while [ $# -gt 0 -a "$1" != "$WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END" ]
@@ -161,7 +163,7 @@ do
 			    exit 2
 			fi >&2
 			shift
-			commands+=(${commands:+;} "$cmd")
+			commands+="${commands:+ $WITHOUTPUTTOSINKBASEDONMATCH_COMMAND_JOINER }$cmd"
 			;;
 	--bare)		shift; isBare=t; runWithCommand=runWith;;
 	--exit-on-failure)
@@ -179,7 +181,7 @@ if [ $# -ne 0 ]; then
     # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
     # undo the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
-    commands+=(${commands:+;} "${quotedSimpleCommand% }")
+    commands+="${commands:+ $WITHOUTPUTTOSINKBASEDONMATCH_COMMAND_JOINER }${quotedSimpleCommand% }"
 fi
 if [ ${#matchSinkCommands[@]} -eq 0 -a ${#nonMatchSinkCommands[@]} -eq 0 ]; then
     echo 'ERROR: No SINK-COMMAND(s) specified; need to pass -m|--match-command|-v|--no-match-command, or -M|--match-exec|-V|--no-match-exec'
@@ -190,14 +192,14 @@ fi >&2
 
 execute()
 {
-    if [ ${#commands[@]} -eq 0 ]; then
+    if [ -z "$commands" ]; then
 	if [ "$isBare" ] && [ ${#runWithPromptArgs[@]} -eq 0 -o "${#runWithPromptArgs[*]}" = --exit-on-failure ]; then
 	    bash "${bashArgs[@]}" -
 	else
 	    ${runWithCommand:?} "${runWithPromptArgs[@]}"
 	fi
     else
-	eval "${commands[@]}"
+	eval "$commands"
     fi
 }
 

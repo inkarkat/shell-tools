@@ -1,5 +1,6 @@
 #!/bin/bash
 
+: ${SAMESCREENPOSITION_COMMAND_JOINER=;}
 : ${RESTORE_CURSOR_POSITION=[u}
 : ${SAVE_CURSOR_POSITION=[s}
 : ${ERASE_TO_END=[0J}
@@ -34,7 +35,7 @@ after="$RESTORE_CURSOR_POSITION"
 isFirst=
 maxLength=
 reserveLines=1
-typeset -a commands=()
+commands=
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -46,7 +47,7 @@ do
 			shift; maxLength="$1"; shift;;
 	--reserve-lines|-L)
 			shift; reserveLines="$1"; shift;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
+	--command|-c)	shift; commands+="${commands:+ $SAMESCREENPOSITION_COMMAND_JOINER }$1"; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
@@ -56,9 +57,9 @@ if [ $# -ne 0 ]; then
     # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
     # undo the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
-    commands+=(${commands:+;} "${quotedSimpleCommand% }")
+    commands+="${commands:+ $SAMESCREENPOSITION_COMMAND_JOINER }${quotedSimpleCommand% }"
 fi
-if [ ${#commands[@]} -eq 0 ] && [ ! "$isFirst" ]; then
+if [ -z "$commands" ] && [ ! "$isFirst" ]; then
     echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
     echo
     printUsage "$0"
@@ -80,4 +81,4 @@ fi
 [ -z "$before" ] || printf >/dev/tty %s "$before"
 [ -z "$after" ] || trap 'printf >/dev/tty %s "$after"' INT QUIT EXIT
 
-eval "${commands[@]}"
+eval "$commands"

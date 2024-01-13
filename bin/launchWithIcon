@@ -1,5 +1,6 @@
 #!/bin/bash
 
+: ${LAUNCHWITHICON_COMMAND_JOINER=;}
 : ${LAUNCHWITHICON_TIMEOUT:=30}
 
 printUsage()
@@ -36,12 +37,12 @@ if [ $# -eq 0 ]; then
 fi >&2
 iconFilespec="$(getIconFilespec "$1")" || exit $?; shift
 
-typeset -a commands=()
+commands=
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
+	--command|-c)	shift; commands+="${commands:+ $LAUNCHWITHICON_COMMAND_JOINER }$1"; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
@@ -51,16 +52,16 @@ if [ $# -ne 0 ]; then
     # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
     # undo the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
-    commands+=(${commands:+;} "${quotedSimpleCommand% }")
+    commands+="${commands:+ $LAUNCHWITHICON_COMMAND_JOINER }${quotedSimpleCommand% }"
 fi
-if [ ${#commands[@]} -eq 0 ]; then
+if [ -z "$commands" ]; then
     echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
     echo
     printUsage "$0"
     exit 2
 fi >&2
 
-{ eval "${commands[@]}" & } || exit 126
+{ eval "$commands" & } || exit 126
 pid=$!
 
 SECONDS=0

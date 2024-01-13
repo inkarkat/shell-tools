@@ -2,6 +2,8 @@
 set -o pipefail
 shopt -qs extglob
 
+: ${WITHLOGGINGTO_COMMAND_JOINER=;}
+
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
@@ -66,7 +68,7 @@ isTee=
 teePrefix='2>&1'
 teeSuffix=
 isBare=
-typeset -a commands=()
+commands=
 typeset -a bashArgs=()
 runWithCommand=runWithPrompt
 typeset -a runWithPromptArgs=()
@@ -86,7 +88,7 @@ do
 	--tee|-t)	shift; isTee=t;;
 	--stdout|-1)	shift; redirSuffix=''; teePrefix='';;
 	--stderr|-2)	shift; redirPrefix='2'; redirSuffix=''; teePrefix='3>&1 1>&2 2>&3 3>&-'; teeSuffix='3>&1 1>&2 2>&3 3>&-';;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
+	--command|-c)	shift; commands+="${commands:+ $WITHLOGGINGTO_COMMAND_JOINER }$1"; shift;;
 	--bare)		shift; isBare=t; runWithCommand=runWith;;
 	--exit-on-failure)
 			bashArgs+=(-e); runWithPromptArgs+=("$1"); shift;;
@@ -103,19 +105,19 @@ if [ $# -ne 0 ]; then
     # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
     # undo the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
-    commands+=(${commands:+;} "${quotedSimpleCommand% }")
+    commands+="${commands:+ $WITHLOGGINGTO_COMMAND_JOINER }${quotedSimpleCommand% }"
 fi
 
 execute()
 {
-    if [ ${#commands[@]} -eq 0 ]; then
+    if [ -z "$commands" ]; then
 	if [ "$isBare" ] && [ ${#runWithPromptArgs[@]} -eq 0 -o "${#runWithPromptArgs[*]}" = --exit-on-failure ]; then
 	    bash "${bashArgs[@]}" -
 	else
 	    ${runWithCommand:?} "${runWithPromptArgs[@]}"
 	fi
     else
-	eval "${commands[@]}"
+	eval "$commands"
     fi
 }
 

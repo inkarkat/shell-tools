@@ -1,5 +1,7 @@
 #!/bin/bash
 
+: ${TEMPDIR_COMMAND_JOINER=;}
+
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
@@ -57,7 +59,7 @@ createSubdir=
 isStdin=
 isPrint=
 keepOnComparison=
-typeset -a commands=()
+commands=
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -67,7 +69,7 @@ do
 	--create-subdir|-C)
 			shift; createSubdir="${1:?}"; shift;;
 	--name|-n)	shift; prefix="${1:?}"; shift;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
+	--command|-c)	shift; commands+="${commands:+ $TEMPDIR_COMMAND_JOINER }$1"; shift;;
 	--stdin|-)	shift; isStdin=t;;
 	--print|-p)	shift; isPrint=t;;
 	--keep|-k)	shift; keepOnComparison=-ge;;
@@ -91,14 +93,14 @@ if [ $# -ne 0 ]; then
     # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
     # undo the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
-    commands+=(${commands:+;} "${quotedSimpleCommand% }")
+    commands+="${commands:+ $TEMPDIR_COMMAND_JOINER }${quotedSimpleCommand% }"
 elif [ "$isStdin" ]; then
-    commands+=("$(< /dev/stdin)")
-    [ ${#commands[@]} -gt 0 ] || exit 1
+    commands+="$(< /dev/stdin)"
+    [ -n "$commands" ] || exit 1
 
     { exec 0</dev/tty; } 2>/dev/null
 fi
-if [ "$isPrint" ] && [ ${#commands[@]} -gt 0 ]; then
+if [ "$isPrint" ] && [ -n "$commands" ]; then
     echo 'ERROR: Cannot combine --print with COMMANDs.'
     echo
     printUsage "$0"
@@ -155,8 +157,8 @@ fi
 
 cd "$tmpDirspec" || exit $?
 
-if [ ${#commands[@]} -gt 0 ]; then
-    eval "${commands[@]}"
+if [ -n "$commands" ]; then
+    eval "$commands"
 else
     let _SHLVL_BASE-=1
     "$SHELL" -i

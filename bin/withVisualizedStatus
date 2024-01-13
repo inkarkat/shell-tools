@@ -1,5 +1,7 @@
 #!/bin/bash
 
+: ${WITHVISUALIZEDSTATUS_COMMAND_JOINER=;}
+
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
@@ -73,7 +75,7 @@ HELPTEXT
 }
 
 isBare=
-typeset -a commands=()
+commands=
 typeset -a bashArgs=()
 runWithCommand=runWithPrompt
 typeset -a runWithPromptArgs=()
@@ -134,7 +136,7 @@ do
 			redir='> "$TMPFILE" 2>&1'
 			;;
 	--no-output|-O)	shift; redir='>/dev/null 2>&1';;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
+	--command|-c)	shift; commands+="${commands:+ $WITHVISUALIZEDSTATUS_COMMAND_JOINER }$1"; shift;;
 	--bare)		shift; isBare=t; runWithCommand=runWith;;
 	--exit-on-failure)
 			bashArgs+=(-e); runWithPromptArgs+=("$1"); shift;;
@@ -152,7 +154,7 @@ if [ $# -ne 0 ]; then
     # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
     # undo the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
-    commands+=(${commands:+;} "${quotedSimpleCommand% }")
+    commands+="${commands:+ $WITHVISUALIZEDSTATUS_COMMAND_JOINER }${quotedSimpleCommand% }"
 fi
 
 if [ ${#formats[@]} -eq 0 ] || [ ${#formats[@]} -eq 1 -a \( "${formats[0]}" = color -o "${formats[0]}" = nocolor \) ]; then
@@ -170,14 +172,14 @@ fi
 
 execute()
 {
-    if [ ${#commands[@]} -eq 0 ]; then
+    if [ -z "$commands" ]; then
 	if [ "$isBare" ] && [ ${#runWithPromptArgs[@]} -eq 0 -o "${#runWithPromptArgs[*]}" = --exit-on-failure ]; then
 	    bash "${bashArgs[@]}" -
 	else
 	    ${runWithCommand:?} "${runWithPromptArgs[@]}"
 	fi
     else
-	eval "${commands[@]}"
+	eval "$commands"
     fi
 }
 
@@ -233,15 +235,15 @@ do
 	    isIncompleteLine=t
 	    ;;
 	commandname)
-	    if [ ${#commands[@]} -eq 0 ]; then
+	    if [ -z "$commands" ]; then
 		printf "${isIncompleteLine:+ } (stdin)"
 	    else
-		printf "${isIncompleteLine:+ }%s" "$(commandName --no-interpreter --undefined '???' --eval "${commands[@]}")"
+		printf "${isIncompleteLine:+ }%s" "$(commandName --no-interpreter --undefined '???' --eval "$commands")"
 	    fi
 	    isIncompleteLine=t
 	    ;;
 	commandline)
-	    printf "${isIncompleteLine:+ }%s" "${commands[*]:-(stdin)}"
+	    printf "${isIncompleteLine:+ }%s" "${commands:-(stdin)}"
 	    isIncompleteLine=t
 	    ;;
 	output)

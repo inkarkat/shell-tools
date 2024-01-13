@@ -1,6 +1,7 @@
 #!/bin/bash
 shopt -qs extglob
 
+: ${REVERSEFILEARGS_COMMAND_JOINER=;}
 : ${REVERSEFILEARGS_FILE_MARKER='{}'}
 fileMarker="$REVERSEFILEARGS_FILE_MARKER"; unset REVERSEFILEARGS_FILE_MARKER
 
@@ -36,13 +37,13 @@ HELPTEXT
 }
 
 isRequireFile=
-typeset -a commands=()
+commands=
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 	--require-file)	shift; isRequireFile=t;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
+	--command|-c)	shift; commands+="${commands:+ $REVERSEFILEARGS_COMMAND_JOINER }$1"; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		typeset -a files=()
@@ -68,7 +69,7 @@ do
 			    # undo the effects of eval.
 			    printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
 			    printf -v escapedFileMarker %q "$fileMarker"
-			    commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
+			    commands+="${commands:+ $REVERSEFILEARGS_COMMAND_JOINER }${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 			fi
 
 			if [ ${#files[@]} -gt 0 ]; then
@@ -78,7 +79,7 @@ do
 			;;
     esac
 done
-if [ ${#commands[@]} -eq 0 ]; then
+if [ -z "$commands" ]; then
     echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
     exit 2
 elif [ "$isRequireFile" ] && [ $# -eq 0 ]; then
@@ -94,6 +95,6 @@ done
 
 
 printf -v quotedFiles '%q ' "${reversedFiles[@]}"; quotedFiles="${quotedFiles% }"
-typeset -a interpolatedCommands=("${commands[@]//"$fileMarker"/$quotedFiles}")
-[ "${interpolatedCommands[*]}" = "${commands[*]}" ] && interpolatedCommands+=("$quotedFiles")
-eval "${interpolatedCommands[@]}"
+interpolatedCommands="${commands//"$fileMarker"/$quotedFiles}"
+[ "$interpolatedCommands" = "$commands" ] && interpolatedCommands+=" $quotedFiles"
+eval "$interpolatedCommands"
