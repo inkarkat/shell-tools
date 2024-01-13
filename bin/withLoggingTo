@@ -66,7 +66,6 @@ isTee=
 teePrefix='2>&1'
 teeSuffix=
 isBare=
-isNeedEval=
 typeset -a commands=()
 typeset -a bashArgs=()
 runWithCommand=runWithPrompt
@@ -87,7 +86,7 @@ do
 	--tee|-t)	shift; isTee=t;;
 	--stdout|-1)	shift; redirSuffix=''; teePrefix='';;
 	--stderr|-2)	shift; redirPrefix='2'; redirSuffix=''; teePrefix='3>&1 1>&2 2>&3 3>&-'; teeSuffix='3>&1 1>&2 2>&3 3>&-';;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
 	--bare)		shift; isBare=t; runWithCommand=runWith;;
 	--exit-on-failure)
 			bashArgs+=(-e); runWithPromptArgs+=("$1"); shift;;
@@ -101,14 +100,10 @@ do
     esac
 done
 if [ $# -ne 0 ]; then
-    if [ "$isNeedEval" ]; then
-	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-	# undo the effects of eval.
-	printf -v quotedSimpleCommand '%q ' "$@"
-	commands+=(${commands:+;} "${quotedSimpleCommand% }")
-    else
-	commands=("$@")
-    fi
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    commands+=(${commands:+;} "${quotedSimpleCommand% }")
 fi
 
 execute()
@@ -119,10 +114,8 @@ execute()
 	else
 	    ${runWithCommand:?} "${runWithPromptArgs[@]}"
 	fi
-    elif [ "$isNeedEval" ]; then
-	eval "${commands[@]}"
     else
-	"${commands[@]}"
+	eval "${commands[@]}"
     fi
 }
 

@@ -87,7 +87,7 @@ do
 			shift
 			sinkCommands+=(${sinkCommands:+|} "$cmd")
 			;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
 	--exec)		shift
 			cmd=
 			while [ $# -gt 0 -a "$1" != "$TEMPFILE_EXEC_END" ]
@@ -102,7 +102,6 @@ do
 			fi >&2
 			shift
 			commands+=(${commands:+;} "$cmd")
-			isNeedEval=t
 			;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
@@ -110,18 +109,14 @@ do
     esac
 done
 if [ $# -ne 0 ]; then
-    if [ "$isNeedEval" ]; then
-	printf -v quotedSimpleCommand '%q ' "$@"
-	commands+=(${commands:+;} "${quotedSimpleCommand% }")
-    else
-	commands=("$@")
-    fi
+    printf -v quotedSimpleCommand '%q ' "$@"
+    commands+=(${commands:+;} "${quotedSimpleCommand% }")
 fi
 if [ -z "$basename" ]; then
     if [ ${#commands[@]} -eq 0 ]; then
 	basename="$(basename -- "$0")"
     else
-	basename="$(commandName ${isNeedEval:+--eval} "${commands[@]}")"
+	basename="$(commandName --eval "${commands[@]}")"
     fi
 fi
 
@@ -135,10 +130,8 @@ fi
 
 if [ ${#commands[@]} -eq 0 ]; then
     cat
-elif [ "$isNeedEval" ]; then
-    eval "${commands[@]}"
 else
-    "${commands[@]}"
+    eval "${commands[@]}"
 fi > "$tempFilespec"
 read lineCnt wordCnt byteCnt _ < <(wc -- "$tempFilespec")
 lineCntPlural=s; [ $lineCnt -eq 1 ] && lineCntPlural=

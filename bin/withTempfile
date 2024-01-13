@@ -93,7 +93,6 @@ renameOp=
 targetFilespec=
 keepOp=
 isBare=
-isNeedEval=
 typeset -a commands=()
 typeset -a bashArgs=()
 runWithCommand=runWithPrompt
@@ -121,7 +120,7 @@ do
 			shift; keepOp=-eq;;
 	--keep-on-failure|-K)
 			shift; keepOp=-ne;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
 	--bare)		shift; isBare=t; runWithCommand=runWith;;
 	--exit-on-failure)
 			bashArgs+=(-e); runWithPromptArgs+=("$1"); shift;;
@@ -135,15 +134,11 @@ do
     esac
 done
 if [ $# -ne 0 ]; then
-    if [ "$isNeedEval" ]; then
-	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-	# undo the effects of eval.
-	printf -v quotedSimpleCommand '%q ' "$@"
-	printf -v escapedFileMarker %q "$fileMarker"
-	commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
-    else
-	commands=("$@")
-    fi
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    printf -v escapedFileMarker %q "$fileMarker"
+    commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
 fi
 
 getOctalFilePermissions()
@@ -202,13 +197,9 @@ if [ ${#commands[@]} -eq 0 ]; then
 	fi
 else
     typeset -a f=("$tempFilespec")
-    [ "$isNeedEval" ] && printf -v tempFilespec '%q' "$tempFilespec"
+    printf -v tempFilespec '%q' "$tempFilespec"
     typeset -a interpolatedCommands=("${commands[@]//"$fileMarker"/$tempFilespec}")
     [ "${interpolatedCommands[*]}" = "${commands[*]}" ] || f=()
 
-    if [ "$isNeedEval" ]; then
-	eval "${interpolatedCommands[@]}" '"${f[@]}"'
-    else
-	"${interpolatedCommands[@]}" "${f[@]}"
-    fi
+    eval "${interpolatedCommands[@]}" '"${f[@]}"'
 fi; status=$?

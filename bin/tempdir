@@ -55,7 +55,6 @@ prefix="$(basename -- "$0")"
 typeset -a tmpDirspecs=()
 createSubdir=
 isStdin=
-isNeedEval=
 isPrint=
 keepOnComparison=
 typeset -a commands=()
@@ -68,7 +67,7 @@ do
 	--create-subdir|-C)
 			shift; createSubdir="${1:?}"; shift;;
 	--name|-n)	shift; prefix="${1:?}"; shift;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
 	--stdin|-)	shift; isStdin=t;;
 	--print|-p)	shift; isPrint=t;;
 	--keep|-k)	shift; keepOnComparison=-ge;;
@@ -89,19 +88,14 @@ if [ $# -ne 0 ]; then
 	exit 2
     fi >&2
 
-    if [ "$isNeedEval" ]; then
-	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-	# undo the effects of eval.
-	printf -v quotedSimpleCommand '%q ' "$@"
-	commands+=(${commands:+;} "${quotedSimpleCommand% }")
-    else
-	commands=("$@")
-    fi
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    commands+=(${commands:+;} "${quotedSimpleCommand% }")
 elif [ "$isStdin" ]; then
     commands+=("$(< /dev/stdin)")
     [ ${#commands[@]} -gt 0 ] || exit 1
 
-    isNeedEval=t
     { exec 0</dev/tty; } 2>/dev/null
 fi
 if [ "$isPrint" ] && [ ${#commands[@]} -gt 0 ]; then
@@ -162,11 +156,7 @@ fi
 cd "$tmpDirspec" || exit $?
 
 if [ ${#commands[@]} -gt 0 ]; then
-    if [ "$isNeedEval" ]; then
-	eval "${commands[@]}"
-    else
-	"${commands[@]}"
-    fi
+    eval "${commands[@]}"
 else
     let _SHLVL_BASE-=1
     "$SHELL" -i

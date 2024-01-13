@@ -36,14 +36,13 @@ HELPTEXT
 }
 
 isRequireFile=
-isNeedEval=
 typeset -a commands=()
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 	--require-file)	shift; isRequireFile=t;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		typeset -a files=()
@@ -65,15 +64,11 @@ do
 				cmd+=("$1")
 				shift
 			    done
-			    if [ "$isNeedEval" ]; then
-				# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-				# undo the effects of eval.
-				printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
-				printf -v escapedFileMarker %q "$fileMarker"
-				commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
-			    else
-				commands+=(${commands:+;} "${cmd[@]}")
-			    fi
+			    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+			    # undo the effects of eval.
+			    printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
+			    printf -v escapedFileMarker %q "$fileMarker"
+			    commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
 			fi
 
 			if [ ${#files[@]} -gt 0 ]; then
@@ -98,25 +93,7 @@ do
 done
 
 
-if [ "$isNeedEval" ]; then
-    printf -v quotedFiles '%q ' "${reversedFiles[@]}"; quotedFiles="${quotedFiles% }"
-    typeset -a interpolatedCommands=("${commands[@]//"$fileMarker"/$quotedFiles}")
-    [ "${interpolatedCommands[*]}" = "${commands[*]}" ] && interpolatedCommands+=("$quotedFiles")
-
-    eval "${interpolatedCommands[@]}"
-else
-    didInterpolate=
-    typeset -a interpolatedCommands=()
-    for c in "${commands[@]}"
-    do
-    if [ "$c" = "$fileMarker" ]; then
-	interpolatedCommands+=("${reversedFiles[@]}")
-	didInterpolate=t
-    else
-	interpolatedCommands+=("$c")
-    fi
-    done
-    [ "$didInterpolate" ] || interpolatedCommands+=("${reversedFiles[@]}")
-
-    "${interpolatedCommands[@]}"
-fi
+printf -v quotedFiles '%q ' "${reversedFiles[@]}"; quotedFiles="${quotedFiles% }"
+typeset -a interpolatedCommands=("${commands[@]//"$fileMarker"/$quotedFiles}")
+[ "${interpolatedCommands[*]}" = "${commands[*]}" ] && interpolatedCommands+=("$quotedFiles")
+eval "${interpolatedCommands[@]}"

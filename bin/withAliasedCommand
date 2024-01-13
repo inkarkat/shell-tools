@@ -92,7 +92,6 @@ writeAlias()
 }
 
 isBare=
-isNeedEval=
 typeset -a commands=()
 typeset -a bashArgs=()
 runWithCommand=runWithPrompt
@@ -165,7 +164,7 @@ do
 			aliasName=''
 			;;
 
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
 	--exec)		shift
 			cmd=
 			while [ $# -gt 0 -a "$1" != "$WITHALIASEDCOMMAND_EXEC_END" ]
@@ -180,7 +179,6 @@ do
 			fi >&2
 			shift
 			commands+=(${commands:+;} "$cmd")
-			isNeedEval=t
 			;;
 
 	--bare)		shift; isBare=t; runWithCommand=runWith;;
@@ -202,14 +200,10 @@ if [ ! "$isHaveAliases" ]; then
     exit 2
 fi >&2
 if [ $# -ne 0 ]; then
-    if [ "$isNeedEval" ]; then
-	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-	# undo the effects of eval.
-	printf -v quotedSimpleCommand '%q ' "$@"
-	commands+=(${commands:+;} "${quotedSimpleCommand% }")
-    else
-	commands=("$@")
-    fi
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    commands+=(${commands:+;} "${quotedSimpleCommand% }")
 fi
 
 export PATH="${TMPDIR}${PATH:+:}${PATH}"    # Activate the wrapper commands by placing them first in the PATH.
@@ -220,8 +214,6 @@ if [ ${#commands[@]} -eq 0 ]; then
     else
 	${runWithCommand:?} "${runWithPromptArgs[@]}"
     fi
-elif [ "$isNeedEval" ]; then
-    eval "${commands[@]}"
 else
-    "${commands[@]}"
+    eval "${commands[@]}"
 fi

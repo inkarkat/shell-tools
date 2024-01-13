@@ -74,7 +74,6 @@ isTee=
 teePrefix='2>&1'
 teeSuffix=
 isBare=
-isNeedEval=
 typeset -a sinkCommands=()
 typeset -a commands=()
 typeset -a bashArgs=()
@@ -104,7 +103,7 @@ do
 			shift
 			sinkCommands+=(${sinkCommands:+|} "$cmd")
 			;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
 	--exec)		shift
 			cmd=
 			while [ $# -gt 0 -a "$1" != "$WITHOUTPUTTOSINK_EXEC_END" ]
@@ -119,7 +118,6 @@ do
 			fi >&2
 			shift
 			commands+=(${commands:+;} "$cmd")
-			isNeedEval=t
 			;;
 	--bare)		shift; isBare=t; runWithCommand=runWith;;
 	--exit-on-failure)
@@ -134,14 +132,10 @@ do
     esac
 done
 if [ $# -ne 0 ]; then
-    if [ "$isNeedEval" ]; then
-	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-	# undo the effects of eval.
-	printf -v quotedSimpleCommand '%q ' "$@"
-	commands+=(${commands:+;} "${quotedSimpleCommand% }")
-    else
-	commands=("$@")
-    fi
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    commands+=(${commands:+;} "${quotedSimpleCommand% }")
 fi
 if [ ${#sinkCommands[@]} -eq 0 ]; then
     echo "ERROR: No SINK-COMMAND(s) specified; need to pass -s|--sink-command \"COMMANDLINE\", or -S|--sink-exec SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINK_EXEC_END"
@@ -158,10 +152,8 @@ execute()
 	else
 	    ${runWithCommand:?} "${runWithPromptArgs[@]}"
 	fi
-    elif [ "$isNeedEval" ]; then
-	eval "${commands[@]}"
     else
-	"${commands[@]}"
+	eval "${commands[@]}"
     fi
 }
 

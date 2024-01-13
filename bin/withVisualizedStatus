@@ -73,7 +73,6 @@ HELPTEXT
 }
 
 isBare=
-isNeedEval=
 typeset -a commands=()
 typeset -a bashArgs=()
 runWithCommand=runWithPrompt
@@ -135,7 +134,7 @@ do
 			redir='> "$TMPFILE" 2>&1'
 			;;
 	--no-output|-O)	shift; redir='>/dev/null 2>&1';;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
 	--bare)		shift; isBare=t; runWithCommand=runWith;;
 	--exit-on-failure)
 			bashArgs+=(-e); runWithPromptArgs+=("$1"); shift;;
@@ -150,14 +149,10 @@ do
     esac
 done
 if [ $# -ne 0 ]; then
-    if [ "$isNeedEval" ]; then
-	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-	# undo the effects of eval.
-	printf -v quotedSimpleCommand '%q ' "$@"
-	commands+=(${commands:+;} "${quotedSimpleCommand% }")
-    else
-	commands=("$@")
-    fi
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    commands+=(${commands:+;} "${quotedSimpleCommand% }")
 fi
 
 if [ ${#formats[@]} -eq 0 ] || [ ${#formats[@]} -eq 1 -a \( "${formats[0]}" = color -o "${formats[0]}" = nocolor \) ]; then
@@ -181,10 +176,8 @@ execute()
 	else
 	    ${runWithCommand:?} "${runWithPromptArgs[@]}"
 	fi
-    elif [ "$isNeedEval" ]; then
-	eval "${commands[@]}"
     else
-	"${commands[@]}"
+	eval "${commands[@]}"
     fi
 }
 
@@ -243,7 +236,7 @@ do
 	    if [ ${#commands[@]} -eq 0 ]; then
 		printf "${isIncompleteLine:+ } (stdin)"
 	    else
-		printf "${isIncompleteLine:+ }%s" "$(commandName --no-interpreter --undefined '???' ${isNeedEval:+--eval} "${commands[@]}")"
+		printf "${isIncompleteLine:+ }%s" "$(commandName --no-interpreter --undefined '???' --eval "${commands[@]}")"
 	    fi
 	    isIncompleteLine=t
 	    ;;

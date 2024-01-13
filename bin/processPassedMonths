@@ -82,7 +82,6 @@ startAtMonth=
 initialOffset=
 maxOffset=
 format=
-isNeedEval=
 typeset -a commands=()
 while [ $# -ne 0 ]
 do
@@ -121,22 +120,18 @@ do
 			shift
 			;;
 	--format|-f)	shift; format="$1"; shift;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
     esac
 done
 if [ $# -ne 0 ]; then
-    if [ "$isNeedEval" ]; then
-	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-	# undo the effects of eval.
-	printf -v quotedSimpleCommand '%q ' "$@"
-	printf -v escapedMarker %q "$marker"
-	commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedMarker"/$marker}")	# %q escapes {}, we don't want that to have it interpolated later.
-    else
-	commands=("$@")
-    fi
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    printf -v escapedMarker %q "$marker"
+    commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedMarker"/$marker}")	# %q escapes {}, we don't want that to have it interpolated later.
 fi
 if [ -z "$id" ]; then
     echo 'ERROR: No -i|--id ID passed.'
@@ -220,28 +215,11 @@ if [ -n "$format" ]; then
     passedMonths=("${renderedMonths[@]}")
 fi
 
-if [ "$isNeedEval" ]; then
-    printf -v quotedPassedMonths '%q ' "${passedMonths[@]}"; quotedPassedMonths="${quotedPassedMonths% }"
-    typeset -a interpolatedCommands=("${commands[@]//"$marker"/$quotedPassedMonths}")
-    [ "${interpolatedCommands[*]}" = "${commands[*]}" ] && interpolatedCommands+=("$quotedPassedMonths")
+printf -v quotedPassedMonths '%q ' "${passedMonths[@]}"; quotedPassedMonths="${quotedPassedMonths% }"
+typeset -a interpolatedCommands=("${commands[@]//"$marker"/$quotedPassedMonths}")
+[ "${interpolatedCommands[*]}" = "${commands[*]}" ] && interpolatedCommands+=("$quotedPassedMonths")
 
-    eval "${interpolatedCommands[@]}"
-else
-    didInterpolate=
-    typeset -a interpolatedCommands=()
-    for c in "${commands[@]}"
-    do
-	if [ "$c" = "$marker" ]; then
-	    interpolatedCommands+=("${passedMonths[@]}")
-	    didInterpolate=t
-	else
-	    interpolatedCommands+=("$c")
-	fi
-    done
-    [ "$didInterpolate" ] || interpolatedCommands+=("${passedMonths[@]}")
-
-    "${interpolatedCommands[@]}"
-fi
-status=$?; [ $status -eq 0 ] || exit $status
+eval "${interpolatedCommands[@]}"; status=$?
+[ $status -eq 0 ] || exit $status
 
 updateDatabase "$YEAR" "$MONTH" || exit 3

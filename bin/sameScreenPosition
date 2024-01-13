@@ -34,7 +34,6 @@ after="$RESTORE_CURSOR_POSITION"
 isFirst=
 maxLength=
 reserveLines=1
-isNeedEval=
 typeset -a commands=()
 while [ $# -ne 0 ]
 do
@@ -47,21 +46,17 @@ do
 			shift; maxLength="$1"; shift;;
 	--reserve-lines|-L)
 			shift; reserveLines="$1"; shift;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
     esac
 done
 if [ $# -ne 0 ]; then
-    if [ "$isNeedEval" ]; then
-	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-	# undo the effects of eval.
-	printf -v quotedSimpleCommand '%q ' "$@"
-	commands+=(${commands:+;} "${quotedSimpleCommand% }")
-    else
-	commands=("$@")
-    fi
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    commands+=(${commands:+;} "${quotedSimpleCommand% }")
 fi
 if [ ${#commands[@]} -eq 0 ] && [ ! "$isFirst" ]; then
     echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
@@ -85,8 +80,4 @@ fi
 [ -z "$before" ] || printf >/dev/tty %s "$before"
 [ -z "$after" ] || trap 'printf >/dev/tty %s "$after"' INT QUIT EXIT
 
-if [ "$isNeedEval" ]; then
-    eval "${commands[@]}"
-else
-    "${commands[@]}"
-fi
+eval "${commands[@]}"

@@ -61,7 +61,6 @@ addPath()
 isFirst=t
 isClean=
 isBare=
-isNeedEval=
 typeset -a commands=()
 typeset -a bashArgs=()
 runWithCommand=runWithPrompt
@@ -80,7 +79,7 @@ do
 			shift
 			;;
 	--clean|-C)	shift; isClean=t;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
 	--bare)		shift; isBare=t; runWithCommand=runWith;;
 	--exit-on-failure)
 			bashArgs+=(-e); runWithPromptArgs+=("$1"); shift;;
@@ -100,14 +99,10 @@ do
     isFirst=
 done
 if [ $# -ne 0 ]; then
-    if [ "$isNeedEval" ]; then
-	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-	# undo the effects of eval.
-	printf -v quotedSimpleCommand '%q ' "$@"
-	commands+=(${commands:+;} "${quotedSimpleCommand% }")
-    else
-	commands=("$@")
-    fi
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    commands+=(${commands:+;} "${quotedSimpleCommand% }")
 fi
 if [ -z "$pathAdd" ] && [ ! "$isClean" ]; then
     echo 'ERROR: No ADD-PATH or -C|--clean passed.'
@@ -129,8 +124,6 @@ if [ ${#commands[@]} -eq 0 ]; then
     else
 	exec ${runWithCommand:?} "${runWithPromptArgs[@]}"
     fi
-elif [ "$isNeedEval" ]; then
-    eval "${commands[@]}"
 else
-    "${commands[@]}"
+    eval "${commands[@]}"
 fi

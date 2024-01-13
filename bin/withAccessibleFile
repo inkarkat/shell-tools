@@ -79,7 +79,6 @@ group=
 mode=
 owner=
 isBare=
-isNeedEval=
 typeset -a commands=()
 typeset -a bashArgs=()
 runWithCommand=runWithPrompt
@@ -88,7 +87,7 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
 	--read|-r)	shift; tempPermissions='o+r';;
 	--group|-g)	shift; group="$1"; shift; isChangeNew=t;;
 	--mode|-m)	shift; mode="$1"; shift; isChangeNew=t;;
@@ -106,15 +105,11 @@ do
     esac
 done
 if [ $# -ne 0 ]; then
-    if [ "$isNeedEval" ]; then
-	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-	# undo the effects of eval.
-	printf -v quotedSimpleCommand '%q ' "$@"
-	printf -v escapedTargetMarker %q "$targetMarker"
-	commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedTargetMarker"/$targetMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
-    else
-	commands=("$@")
-    fi
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    printf -v escapedTargetMarker %q "$targetMarker"
+    commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedTargetMarker"/$targetMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
 fi
 
 : ${SUDO:=sudo}; [ $EUID -eq 0 ] && SUDO=''
@@ -176,8 +171,6 @@ if [ ${#commands[@]} -eq 0 ]; then
     else
 	${runWithCommand:?} "${runWithPromptArgs[@]}"
     fi
-elif [ "$isNeedEval" ]; then
-    eval "${interpolatedCommands[@]}"
 else
-    "${interpolatedCommands[@]}"
+    eval "${interpolatedCommands[@]}"
 fi

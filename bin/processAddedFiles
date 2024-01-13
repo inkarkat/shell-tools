@@ -102,7 +102,6 @@ typeset -a lastExtractor=()
 typeset -a initialFilter=()
 typeset -a maxFilter=()
 typeset -a skipGlobs=()
-isNeedEval=
 typeset -a commands=()
 while [ $# -ne 0 ]
 do
@@ -132,22 +131,18 @@ do
 	--max-last)
 			shift; abortFirstLastFilter max "${maxFilter[@]}"; maxFilter=(tail -n "${1:?}"); shift;;
 	--skip|-s)	shift; skipGlobs+=("$1"); shift;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
     esac
 done
 if [ $# -ne 0 ]; then
-    if [ "$isNeedEval" ]; then
-	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-	# undo the effects of eval.
-	printf -v quotedSimpleCommand '%q ' "$@"
-	printf -v escapedFileMarker %q "$fileMarker"
-	commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
-    else
-	commands=("$@")
-    fi
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    printf -v escapedFileMarker %q "$fileMarker"
+    commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
 fi
 if [ -z "$id" ]; then
     echo 'ERROR: No -i|--id ID passed.'
@@ -225,29 +220,12 @@ if [ ${#fileExtractor[@]} -gt 0 ]; then
     [ -z "${addedFilespecs[-1]}" ] && unset 'addedFilespecs[-1]'
 fi
 
-if [ "$isNeedEval" ]; then
-    printf -v quotedAddedFilespecs '%q ' "${addedFilespecs[@]}"; quotedAddedFilespecs="${quotedAddedFilespecs% }"
-    typeset -a interpolatedCommands=("${commands[@]//"$fileMarker"/$quotedAddedFilespecs}")
-    [ "${interpolatedCommands[*]}" = "${commands[*]}" ] && interpolatedCommands+=("$quotedAddedFilespecs")
+printf -v quotedAddedFilespecs '%q ' "${addedFilespecs[@]}"; quotedAddedFilespecs="${quotedAddedFilespecs% }"
+typeset -a interpolatedCommands=("${commands[@]//"$fileMarker"/$quotedAddedFilespecs}")
+[ "${interpolatedCommands[*]}" = "${commands[*]}" ] && interpolatedCommands+=("$quotedAddedFilespecs")
 
-    eval "${interpolatedCommands[@]}"
-else
-    didInterpolate=
-    typeset -a interpolatedCommands=()
-    for c in "${commands[@]}"
-    do
-	if [ "$c" = "$fileMarker" ]; then
-	    interpolatedCommands+=("${addedFilespecs[@]}")
-	    didInterpolate=t
-	else
-	    interpolatedCommands+=("$c")
-	fi
-    done
-    [ "$didInterpolate" ] || interpolatedCommands+=("${addedFilespecs[@]}")
-
-    "${interpolatedCommands[@]}"
-fi
-status=$?; [ $status -eq 0 ] || exit $status
+eval "${interpolatedCommands[@]}"; status=$?
+[ $status -eq 0 ] || exit $status
 
 if [ ${#lastExtractor[@]} -gt 0 ]; then
     last="$(printf '%s\n' "$last" | "${lastExtractor[@]}")" || exit 3

@@ -92,7 +92,6 @@ teePipe='>'
 teePrefix='2>&1'
 teeSuffix=
 isBare=
-isNeedEval=
 typeset -A matchSinkCommands=()
 typeset -A nonMatchSinkCommands=()
 typeset -a commands=()
@@ -148,7 +147,7 @@ do
 			shift
 			nonMatchSinkCommands["$pattern"]+="${nonMatchSinkCommands["$pattern"]:+|}$cmd"
 			;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
 	--exec)		shift
 			cmd=
 			while [ $# -gt 0 -a "$1" != "$WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END" ]
@@ -163,7 +162,6 @@ do
 			fi >&2
 			shift
 			commands+=(${commands:+;} "$cmd")
-			isNeedEval=t
 			;;
 	--bare)		shift; isBare=t; runWithCommand=runWith;;
 	--exit-on-failure)
@@ -178,14 +176,10 @@ do
     esac
 done
 if [ $# -ne 0 ]; then
-    if [ "$isNeedEval" ]; then
-	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-	# undo the effects of eval.
-	printf -v quotedSimpleCommand '%q ' "$@"
-	commands+=(${commands:+;} "${quotedSimpleCommand% }")
-    else
-	commands=("$@")
-    fi
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    commands+=(${commands:+;} "${quotedSimpleCommand% }")
 fi
 if [ ${#matchSinkCommands[@]} -eq 0 -a ${#nonMatchSinkCommands[@]} -eq 0 ]; then
     echo 'ERROR: No SINK-COMMAND(s) specified; need to pass -m|--match-command|-v|--no-match-command, or -M|--match-exec|-V|--no-match-exec'
@@ -202,10 +196,8 @@ execute()
 	else
 	    ${runWithCommand:?} "${runWithPromptArgs[@]}"
 	fi
-    elif [ "$isNeedEval" ]; then
-	eval "${commands[@]}"
     else
-	"${commands[@]}"
+	eval "${commands[@]}"
     fi
 }
 
