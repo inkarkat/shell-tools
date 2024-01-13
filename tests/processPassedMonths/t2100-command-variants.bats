@@ -37,7 +37,7 @@ load fixture
     run processPassedMonths --id ID -- false
 
     setDate 2021-06-01
-    export PROCESSPASTMONTHS_MARKER='[X]'
+    export PROCESSPASSEDMONTHS_MARKER='[X]'
     run processPassedMonths --id ID -- printf '[%s]-{}-' first '[X]' last
     [ $status -eq 0 ]
     [ "$output" = "[first]-{}-[2021-04]-{}-[2021-05]-{}-[last]-{}-" ]
@@ -48,7 +48,7 @@ load fixture
     run processPassedMonths --id ID -- false
 
     setDate 2021-06-01
-    export PROCESSPASTMONTHS_MARKER='@@'
+    export PROCESSPASSEDMONTHS_MARKER='@@'
     run processPassedMonths --id ID --command 'printf AA{}ZZ@@' -- printf '[%s]-{}-' first '@@' last
     [ $status -eq 0 ]
     [ "$output" = "AA{}ZZ2021-04[first]-{}-[2021-04]-{}-[2021-05]-{}-[last]-{}-" ]

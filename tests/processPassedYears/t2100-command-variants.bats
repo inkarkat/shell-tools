@@ -37,7 +37,7 @@ load fixture
     run processPassedYears --id ID -- false
 
     setDate 2021-06-01
-    export PROCESSPASTYEARS_MARKER='[X]'
+    export PROCESSPASSEDYEARS_MARKER='[X]'
     run processPassedYears --id ID -- printf '[%s]-{}-' first '[X]' last
     [ $status -eq 0 ]
     [ "$output" = "[first]-{}-[2019]-{}-[2020]-{}-[last]-{}-" ]
@@ -48,7 +48,7 @@ load fixture
     run processPassedYears --id ID -- false
 
     setDate 2021-06-01
-    export PROCESSPASTYEARS_MARKER='@@'
+    export PROCESSPASSEDYEARS_MARKER='@@'
     run processPassedYears --id ID --command 'printf AA{}ZZ@@' -- printf '[%s]-{}-' first '@@' last
     [ $status -eq 0 ]
     [ "$output" = "AA{}ZZ2019[first]-{}-[2019]-{}-[2020]-{}-[last]-{}-" ]
