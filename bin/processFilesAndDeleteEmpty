@@ -1,5 +1,6 @@
 #!/bin/bash
 
+: ${PROCESSFILESANDDELETEEMPTY_COMMAND_JOINER=;}
 : ${PROCESSFILESANDDELETEEMPTY_EXEC_END=;}
 : ${PROCESSFILESANDDELETEEMPTY_FILE_MARKER='{}'}
 fileMarker="$PROCESSFILESANDDELETEEMPTY_FILE_MARKER"; unset PROCESSFILESANDDELETEEMPTY_FILE_MARKER
@@ -16,12 +17,12 @@ HELPTEXT
     printf 'Usage: %q %s\n' "$(basename "$1")" "-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND ... ${fileMarker:+[}${fileMarker}${fileMarker:+]} $PROCESSFILESANDDELETEEMPTY_EXEC_END [--exec ...] [--] FILE [...] [-?|-h|--help]"
 }
 
-typeset -a commands=()
+commands=
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
+	--command|-c)	shift; commands+="${commands:+ $PROCESSFILESANDDELETEEMPTY_COMMAND_JOINER }$1"; shift;;
 	--exec)		shift
 			cmd=
 			printf -v escapedFileMarker %q "$fileMarker"
@@ -36,14 +37,14 @@ do
 			    exit 2
 			fi >&2
 			shift
-			commands+=(${commands:+;} "$cmd")
+			commands+="${commands:+ $PROCESSFILESANDDELETEEMPTY_COMMAND_JOINER }${cmd}"
 			;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
     esac
 done
-if [ ${#commands[@]} -eq 0 ]; then
+if [ -z "$commands" ]; then
     echo "ERROR: No COMMAND(s) specified; need to pass -c|--command \"COMMANDLINE\", or --exec SIMPLECOMMAND ... $PROCESSFILESANDDELETEEMPTY_EXEC_END"
     echo
     printUsage "$0"
@@ -56,10 +57,10 @@ elif [ $# -eq 0 ]; then
 fi >&2
 
 printf -v quotedFiles '%q ' "$@"; quotedFiles="${quotedFiles% }"
-typeset -a interpolatedCommands=("${commands[@]//"$fileMarker"/$quotedFiles}")
-[ "${interpolatedCommands[*]}" = "${commands[*]}" ] && interpolatedCommands+=("$quotedFiles")
+interpolatedCommands="${commands//"$fileMarker"/$quotedFiles}"
+[ "$interpolatedCommands" = "$commands" ] && interpolatedCommands+=" $quotedFiles"
 
-eval "${interpolatedCommands[@]}" || exit $?
+eval "$interpolatedCommands" || exit $?
 
 status=0
 for filespec

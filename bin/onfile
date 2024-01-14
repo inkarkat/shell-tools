@@ -13,6 +13,7 @@ if [ -z "$PGID" ]; then # No parent script has become the process group leader y
     fi
 fi
 
+: ${ONFILE_COMMAND_JOINER=;}
 : ${ONFILE_FILE_MARKER='{}'}
 fileMarker="$ONFILE_FILE_MARKER"
 STABILIZED_TIME=2147483647
@@ -170,7 +171,7 @@ exitOn=
 exitComparison=-eq
 deleteOn=
 deleteComparison=-eq
-typeset -a commands=()
+commands=
 prefixCommand=
 prefixCommandCommand=
 isPrint=
@@ -209,9 +210,9 @@ do
 				if [ -n "$prefixCommandCommand" ]; then
 				    printf -v quotedCommand %q "$1"
 				    printf -v escapedFileMarker %q "$fileMarker" # %q escapes {}, we don't want that to have it interpolated later.
-				    commands+=(${commands:+;} "${prefixCommandCommand} --command ${quotedCommand//"$escapedFileMarker"/$fileMarker}")
+				    commands+="${commands:+ $ONFILE_COMMAND_JOINER }${prefixCommandCommand} --command ${quotedCommand//"$escapedFileMarker"/$fileMarker}"
 				else
-				    commands+=(${commands:+;} "${prefixCommand}$1")
+				    commands+="${commands:+ $ONFILE_COMMAND_JOINER }${prefixCommand}$1"
 				fi
 				shift
 				;;
@@ -242,7 +243,7 @@ if [ $# -ne 0 ]; then
     # undo the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
     printf -v escapedFileMarker %q "$fileMarker"
-    commands+=(${commands:+;} "${prefixCommand}${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
+    commands+="${commands:+ $ONFILE_COMMAND_JOINER }${prefixCommand}${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 fi
 if [ -z "${dir}${glob}${sourceCommand}" ]; then
     echo 'ERROR: No -d|--dir DIR|-g|--glob 'FILE-GLOB'|--source-command SOURCE-COMMAND passed.'
@@ -262,7 +263,7 @@ elif [ -n "$dir" ] && ! cd "$dir"; then
 elif [ "$isDeleteEmptyFile" ] && [ ! "$isStopOnEmptyFile" ]; then
     printUsage "$0"
     exit 2
-elif [ ! "$isPrint" ] && [ ! "$count" ] && [ ${#commands[@]} -eq 0 ]; then
+elif [ ! "$isPrint" ] && [ ! "$count" ] && [ -z "$commands" ]; then
     echo 'ERROR: Need to pass either -1|-n|--count to count changes, --print to show updated files, or -c|--command to execute a command.'
     echo
     printUsage "$0"
@@ -458,7 +459,7 @@ executeTrigger()
 
     [ "$isPrint" ] && printf '%s\n' "$@"
 
-    if [ ${#commands[@]} -ge 1 ]; then
+    if [ -n "$commands" ]; then
 	if [ -n "$exitOn" -a -n "$isParallel" -a ! -e "$keepRunningMarkerFile" ]; then
 	    # The marker file is gone; this means we should not trigger anything
 	    # new, and instead exit the script.
@@ -479,14 +480,14 @@ executeTrigger()
 triggerFile()
 {
     local quotedFilespecs; printf -v quotedFilespecs '%q ' "$@"; quotedFilespecs=${quotedFilespecs% }
-    typeset -a expandedCommands=("${commands[@]//"$fileMarker"/$quotedFilespecs}")
+    local expandedCommands="${commands//"$fileMarker"/$quotedFilespecs}"
 
     [ "$delay" ] && sleep "$delay"
 
     if [ "$isBare" ] && [ ${#runWithPromptArgs[@]} -eq 0 ]; then
-	eval "${expandedCommands[@]}"
+	eval "$expandedCommands"
     else
-	{ printf '%s ' "${expandedCommands[@]}"; printf '\n'; } | ${runWithCommand:?} "${runWithPromptExitArgs[@]}" "${runWithPromptArgs[@]}" --comment "$observedChanges"
+	printf '%s\n' "$expandedCommands" | ${runWithCommand:?} "${runWithPromptExitArgs[@]}" "${runWithPromptArgs[@]}" --comment "$observedChanges"
     fi
     exitStatus=$?
 
