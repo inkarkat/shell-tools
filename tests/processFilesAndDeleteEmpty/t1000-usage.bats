@@ -23,6 +23,6 @@
 @test "--exec without ; prints message and usage instructions" {
     run processFilesAndDeleteEmpty --exec true
     [ $status -eq 2 ]
-    [ "${lines[0]}" = 'ERROR: --exec command must be concluded with ;!' ]
+    [ "${lines[0]}" = "ERROR: --exec command must be concluded with ';'" ]
     [ "${lines[-1]%% *}" = 'Usage:' ]
 }

@@ -44,7 +44,7 @@
 @test "missing --alias conclusion with ; prints message and usage instructions" {
     run withAliasedCommand --name foo --alias dummy
     [ $status -eq 2 ]
-    [ "${lines[0]}" = 'ERROR: --alias command must be concluded with ;!' ]
+    [ "${lines[0]}" = "ERROR: --alias command must be concluded with ';'" ]
     [ "${lines[2]%% *}" = 'Usage:' ]
 }
 
