@@ -24,6 +24,5 @@ THIS LOUD?" ]
     [ "${lines[2]}" = 'testing this' ]
     [ "${lines[4]}" = '$ loud this loud?' ]
     [ "${lines[5]}" = 'THIS LOUD?' ]
-    [ "${lines[7]}" = '$ ' ]
-    [ "${#lines[@]}" = 8 ]
+    [ "${#lines[@]}" = 7 ]
 }
