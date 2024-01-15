@@ -61,7 +61,7 @@ if [ -z "$commands" ]; then
     exit 2
 fi >&2
 
-{ eval "$commands" & } || exit 126
+eval "$commands &" || exit 126
 pid=$!
 
 SECONDS=0
