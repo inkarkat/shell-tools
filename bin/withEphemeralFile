@@ -161,23 +161,25 @@ elif [ -z "$sourceActions" ]; then
     exit 2
 fi >&2
 
-eval "$sourceActions" || exit 3
-
-interpolatedCommands="$commands"
-interpolatedCommands="${interpolatedCommands//"$fileMarker"/${filespecs[0]}}"
-for ((n = 1; n <= ${#filespecs[@]}; n++))
-do
-    interpolatedCommands="${interpolatedCommands//"${countedFileMarker/N/$n}"/${filespecs[n-1]}}"
-done
-
+status=
 finally()
 {
-    status=0
-    rm -- "${filespecs[@]}" 2>/dev/null || status=4
+    rm -- "${filespecs[@]}" 2>/dev/null || : ${status:=4}
     [ ! "$isParents" ] || [ ${#dirspecs[@]} -eq 0 ] \
 	|| rmemptydir --parents -- "${!dirspecs[@]}" 2>/dev/null # Ignore failure to remove a directory; on the emphemeral FILE(s) themselves must not be left behind.
-    exit $status
+    exit ${status:-0}
 }
 trap finally EXIT
 
-eval "$interpolatedCommands"
+if eval "$sourceActions"; then
+    interpolatedCommands="$commands"
+    interpolatedCommands="${interpolatedCommands//"$fileMarker"/${filespecs[0]}}"
+    for ((n = 1; n <= ${#filespecs[@]}; n++))
+    do
+	interpolatedCommands="${interpolatedCommands//"${countedFileMarker/N/$n}"/${filespecs[n-1]}}"
+    done
+
+    eval "$interpolatedCommands" || status=$?
+else
+    status=3
+fi
