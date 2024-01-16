@@ -57,6 +57,15 @@ HELPTEXT
 
 sourceActions=
 typeset -a filespecs=()
+addSource()
+{
+    local action="${1:?}"; shift
+    local filespec="${1:?}"; shift
+    sourceActions+="${sourceActions:+ && }${action}"
+    filespecs+=("$filespec")
+}
+
+isParents=
 commands=
 while [ $# -ne 0 ]
 do
@@ -69,20 +78,17 @@ do
 			# DWIM: If target is a directory, append the source filename (like cp does).
 			[ -d "$targetFilespec" ] && targetFilespec="${targetFilespec%/}/$(basename -- "${1:?}")"
 			printf -v quotedAction 'cp -- %q %q' "${1:?}" "$targetFilespec"
-			sourceActions+="${sourceActions}${sourceActions:+ && }${quotedAction% }"
-			filespecs+=("$targetFilespec"); shift; shift
+			addSource "${quotedAction% }" "$targetFilespec"; shift; shift
 			;;
 	--source-contents|-S)
 			shift
 			printf -v quotedAction 'printf %%s\\\\n %q > %q' "${1:?}" "${2:?}"
-			sourceActions+="${sourceActions}${sourceActions:+ && }${quotedAction% }"
-			filespecs+=("$2"); shift; shift
+			addSource "${quotedAction% }" "$2"; shift; shift
 			;;
 	--source-command|-C)
 			shift
 			printf -v quotedAction '%s > %q' "${1:?}" "${2:?}"
-			sourceActions+="${sourceActions}${sourceActions:+ && }${quotedAction% }"
-			filespecs+=("$2"); shift; shift
+			addSource "${quotedAction% }" "$2"; shift; shift
 			;;
 
 	--command|-c)	shift; commands+="${commands:+ $WITHEPHEMERALFILE_COMMAND_JOINER }$1"; shift;;
