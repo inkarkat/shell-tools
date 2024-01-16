@@ -11,7 +11,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "(-s|--source-file SOURCE-FILE FILE|DIR|-S|--source-contents CONTENTS FILE|--source-command SOURCE-COMMANDLINE FILE) [...] -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...]${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]}${countedFileMarker:+ [}${countedFileMarker}${countedFileMarker:+] [...]} ${WITHEPHEMERALFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[-p|--parents] (-s|--source-file SOURCE-FILE FILE|DIR|-S|--source-contents CONTENTS FILE|--source-command SOURCE-COMMANDLINE FILE) [...] -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...]${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]}${countedFileMarker:+ [}${countedFileMarker}${countedFileMarker:+] [...]} ${WITHEPHEMERALFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
 }
 printUsage()
 {
@@ -32,6 +32,8 @@ HELPDESCRIPTION
     printShortUsage "$1"
     echo
     cat <<HELPTEXT
+    --parents|-p	Make parent directories of FILE(s) as needed, and
+			recursively remove empty directories at the end, too.
     --source-file|-s SOURCE-FILE FILE|DIR
 			Copy SOURCE-FILE to FILE|DIR.
     --source-contents|-S CONTENTS FILE
@@ -57,10 +59,23 @@ HELPTEXT
 
 sourceActions=
 typeset -a filespecs=()
+typeset -A dirspecs=()
 addSource()
 {
     local action="${1:?}"; shift
     local filespec="${1:?}"; shift
+
+    if [ "$isParents" ]; then
+	local dirspec; printf -v dirspec %q "$(dirname -- "$filespec")"
+	if [ ! "${dirspecs["$dirspec"]}" ]; then
+	    if [ ! -d "$dirspec" ]; then
+		local quotedDirspec; printf -v quotedDirspec %q "$dirspec"
+		sourceActions+="${sourceActions:+ && }mkdir --parents -- $quotedDirspec"
+	    fi
+	    dirspecs["$dirspec"]=t
+	fi
+    fi
+
     sourceActions+="${sourceActions:+ && }${action}"
     filespecs+=("$filespec")
 }
@@ -71,6 +86,7 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--parents|-p)	isParents=t; shift;;
 
 	--source-file|-s)
 			shift
@@ -156,7 +172,11 @@ done
 
 finally()
 {
-    rm -- "${filespecs[@]}" 2>/dev/null || exit 4
+    status=0
+    rm -- "${filespecs[@]}" 2>/dev/null || status=4
+    [ ! "$isParents" ] || [ ${#dirspecs[@]} -eq 0 ] \
+	|| rmemptydir --parents -- "${!dirspecs[@]}" 2>/dev/null # Ignore failure to remove a directory; on the emphemeral FILE(s) themselves must not be left behind.
+    exit $status
 }
 trap finally EXIT
 
