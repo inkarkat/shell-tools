@@ -1,0 +1,195 @@
+#!/bin/bash
+
+: ${WITHEPHEMERALFILE_COMMAND_JOINER=;}
+: ${WITHEPHEMERALFILE_EXEC_END=;}
+: ${WITHEPHEMERALFILE_FILE_MARKER='{}'}
+: ${WITHEPHEMERALFILE_COUNTED_FILE_MARKER='{N}'}
+fileMarker="$WITHEPHEMERALFILE_FILE_MARKER"; unset WITHEPHEMERALFILE_FILE_MARKER
+countedFileMarker="$WITHEPHEMERALFILE_COUNTED_FILE_MARKER"; unset WITHEPHEMERALFILE_COUNTED_FILE_MARKER
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[-i|--ignore-existing] [-p|--parents] (-s|--source-file SOURCE-FILE FILE|DIR|-S|--source-contents CONTENTS FILE|--source-command SOURCE-COMMANDLINE FILE) [...] -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...]${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]}${countedFileMarker:+ [}${countedFileMarker}${countedFileMarker:+] [...]} ${WITHEPHEMERALFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Execute COMMAND while FILE(s) are in place; after the execution of COMMAND,
+FILE(s) are removed again.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --ignore-existing|-i
+			Don't fail if a FILE already exists.
+    --parents|-p	Make parent directories of FILE(s) as needed, and
+			recursively remove empty directories at the end, too.
+    --source-file|-s SOURCE-FILE FILE|DIR
+			Copy SOURCE-FILE to FILE|DIR.
+    --source-contents|-S CONTENTS FILE
+			Write CONTENTS to FILE.
+    --source-command|-C SOURCE-COMMANDLINE FILE
+			Execute SOURCE-COMMANDLINE; the output is written to
+			FILE.
+    --command|-c CMD	Execute CMD as a command-line.${fileMarker:+ The string $fileMarker is replaced
+			by the first FILE.${countedFileMarker:+ The string $countedFileMarker is replaced by FILE
+			number N.}}
+    --exec CMD [...] ${WITHEPHEMERALFILE_EXEC_END}	Execute CMD; all following arguments are taken to be
+			arguments to the CMD until an argument consisting of
+			'${WITHEPHEMERALFILE_EXEC_END}' is encountered.${fileMarker:+ The string $fileMarker is replaced by the
+			first FILE.}${countedFileMarker:+ The string $countedFileMarker is replaced by FILE number N.}
+EXIT STATUS:
+    0	Complete success.
+    2	Bad invocation, wrong or missing command-line arguments.
+    3	Failed to place a FILE / FILE already exists; no COMMAND(s) executed.
+    4	A FILE was left behind after execution of COMMAND(s).
+    *   any exit status from COMMAND(s)
+HELPTEXT
+}
+
+sourceActions=
+typeset -a filespecs=()
+typeset -A dirspecs=()
+addSource()
+{
+    local action="${1:?}"; shift
+    local filespec="${1:?}"; shift
+
+    if [ ! "$isIgnoreExisting" ] && [ -e "$filespec" ]; then
+	printf >&2 'ERROR: File already exists: %s\n' "$filespec"
+	exit 3
+    fi
+
+    if [ "$isParents" ]; then
+	local dirspec; printf -v dirspec %q "$(dirname -- "$filespec")"
+	if [ ! "${dirspecs["$dirspec"]}" ]; then
+	    if [ ! -d "$dirspec" ]; then
+		local quotedDirspec; printf -v quotedDirspec %q "$dirspec"
+		sourceActions+="${sourceActions:+ && }mkdir --parents -- $quotedDirspec"
+	    fi
+	    dirspecs["$dirspec"]=t
+	fi
+    fi
+
+    sourceActions+="${sourceActions:+ && }${action}"
+    filespecs+=("$filespec")
+}
+
+isIgnoreExisting=
+isParents=
+commands=
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--ignore-existing|-i)
+			shift; isIgnoreExisting=t;;
+	--parents|-p)	isParents=t; shift;;
+
+	--source-file|-s)
+			shift
+			targetFilespec="${2:?}"
+			# DWIM: If target is a directory, append the source filename (like cp does).
+			[ -d "$targetFilespec" ] && targetFilespec="${targetFilespec%/}/$(basename -- "${1:?}")"
+			printf -v quotedAction 'cp -- %q %q' "${1:?}" "$targetFilespec"
+			addSource "${quotedAction% }" "$targetFilespec"; shift; shift
+			;;
+	--source-contents|-S)
+			shift
+			printf -v quotedAction 'printf %%s\\\\n %q > %q' "${1:?}" "${2:?}"
+			addSource "${quotedAction% }" "$2"; shift; shift
+			;;
+	--source-command|-C)
+			shift
+			printf -v quotedAction '%s > %q' "${1:?}" "${2:?}"
+			addSource "${quotedAction% }" "$2"; shift; shift
+			;;
+
+	--command|-c)	shift; commands+="${commands:+ $WITHEPHEMERALFILE_COMMAND_JOINER }$1"; shift;;
+	--exec)		shift
+			cmd=
+			printf -v escapedFileMarker %q "$fileMarker"
+			printf -v escapedCountedfileMarker %q "$countedFileMarker"
+			while [ $# -gt 0 -a "$1" != "$WITHEPHEMERALFILE_EXEC_END" ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    quotedArg="${quotedArg//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    # XXX: --exec can only consider already encountered filespecs, not those that follow. Unescaping with a glob for the number would be much more complex, however.
+			    for ((n = 1; n <= ${#filespecs[@]}; n++))
+			    do
+				quotedArg="${quotedArg//"${escapedCountedfileMarker/N/$n}"/${countedFileMarker/N/$n}}"	# %q escapes {N}, we don't want that to have it interpolated later.
+			    done
+			    cmd+="${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${WITHEPHEMERALFILE_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			commands+="${commands:+ $WITHEPHEMERALFILE_COMMAND_JOINER }${cmd}"
+			;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    printf -v escapedFileMarker %q "$fileMarker"
+    printf -v escapedCountedfileMarker %q "$countedFileMarker"
+    quotedSimpleCommand="${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+    for ((n = 1; n <= ${#filespecs[@]}; n++))
+    do
+	quotedSimpleCommand="${quotedSimpleCommand//"${escapedCountedfileMarker/N/$n}"/${countedFileMarker/N/$n}}"	# %q escapes {N}, we don't want that to have it interpolated later.
+    done
+    commands+="${commands:+ $WITHEPHEMERALFILE_COMMAND_JOINER }${quotedSimpleCommand}"
+fi
+if [ -z "$commands" ]; then
+    echo "ERROR: No COMMAND(s) specified; need to pass -c|--command \"COMMANDLINE\", or --exec SIMPLECOMMAND [...] $WITHEPHEMERALFILE_EXEC_END or SIMPLECOMMAND."
+    echo
+    printUsage "$0"
+    exit 2
+elif [ -z "$sourceActions" ]; then
+    echo "ERROR: No source action(s) specified; need to pass --source-file|-s SOURCE-FILE FILE, --source-contents|-S CONTENTS FILE, or --source-command|-C SOURCE-COMMANDLINE FILE."
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+status=
+finally()
+{
+    rm -- "${filespecs[@]}" 2>/dev/null || : ${status:=4}
+    [ ! "$isParents" ] || [ ${#dirspecs[@]} -eq 0 ] \
+	|| rmemptydir --parents -- "${!dirspecs[@]}" 2>/dev/null # Ignore failure to remove a directory; on the emphemeral FILE(s) themselves must not be left behind.
+    exit ${status:-0}
+}
+trap finally EXIT
+
+if eval "$sourceActions"; then
+    interpolatedCommands="$commands"
+    interpolatedCommands="${interpolatedCommands//"$fileMarker"/${filespecs[0]}}"
+    for ((n = 1; n <= ${#filespecs[@]}; n++))
+    do
+	interpolatedCommands="${interpolatedCommands//"${countedFileMarker/N/$n}"/${filespecs[n-1]}}"
+    done
+
+    eval "$interpolatedCommands" || status=$?
+else
+    status=3
+fi
