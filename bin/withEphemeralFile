@@ -11,7 +11,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[-p|--parents] (-s|--source-file SOURCE-FILE FILE|DIR|-S|--source-contents CONTENTS FILE|--source-command SOURCE-COMMANDLINE FILE) [...] -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...]${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]}${countedFileMarker:+ [}${countedFileMarker}${countedFileMarker:+] [...]} ${WITHEPHEMERALFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[-i|--ignore-existing] [-p|--parents] (-s|--source-file SOURCE-FILE FILE|DIR|-S|--source-contents CONTENTS FILE|--source-command SOURCE-COMMANDLINE FILE) [...] -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...]${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]}${countedFileMarker:+ [}${countedFileMarker}${countedFileMarker:+] [...]} ${WITHEPHEMERALFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
 }
 printUsage()
 {
@@ -32,6 +32,8 @@ HELPDESCRIPTION
     printShortUsage "$1"
     echo
     cat <<HELPTEXT
+    --ignore-existing|-i
+			Don't fail if a FILE already exists.
     --parents|-p	Make parent directories of FILE(s) as needed, and
 			recursively remove empty directories at the end, too.
     --source-file|-s SOURCE-FILE FILE|DIR
@@ -51,7 +53,7 @@ HELPDESCRIPTION
 EXIT STATUS:
     0	Complete success.
     2	Bad invocation, wrong or missing command-line arguments.
-    3	Failed to place a FILE; no COMMAND(s) executed.
+    3	Failed to place a FILE / FILE already exists; no COMMAND(s) executed.
     4	A FILE was left behind after execution of COMMAND(s).
     *   any exit status from COMMAND(s)
 HELPTEXT
@@ -64,6 +66,11 @@ addSource()
 {
     local action="${1:?}"; shift
     local filespec="${1:?}"; shift
+
+    if [ ! "$isIgnoreExisting" ] && [ -e "$filespec" ]; then
+	printf >&2 'ERROR: File already exists: %s\n' "$filespec"
+	exit 3
+    fi
 
     if [ "$isParents" ]; then
 	local dirspec; printf -v dirspec %q "$(dirname -- "$filespec")"
@@ -80,12 +87,15 @@ addSource()
     filespecs+=("$filespec")
 }
 
+isIgnoreExisting=
 isParents=
 commands=
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--ignore-existing|-i)
+			shift; isIgnoreExisting=t;;
 	--parents|-p)	isParents=t; shift;;
 
 	--source-file|-s)
