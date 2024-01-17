@@ -74,6 +74,11 @@ addDebugCommand()
     fi
 }
 
+addCommand()
+{
+    commands+="${commands:+ $WITHDEBUG_COMMAND_JOINER }${1:?}"
+}
+
 commands=
 while [ $# -ne 0 ]
 do
@@ -94,7 +99,7 @@ do
 			isOnly=t
 			;;
 	--command|-c)	shift
-			commands+="${commands:+ $WITHDEBUG_COMMAND_JOINER }$1"
+			addCommand "${1:?}"
 			addDebugCommand "$1" || exit 2
 			shift
 			;;
@@ -111,7 +116,7 @@ do
 			    exit 2
 			fi >&2
 			shift
-			commands+="${commands:+ $WITHDEBUG_COMMAND_JOINER }${cmd}"
+			addCommand "$cmd"
 			addDebugCommand "$cmd" || exit 2
 			;;
 	--)		shift; break;;
@@ -123,7 +128,7 @@ if [ $# -ne 0 ]; then
     # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
     # undo the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
-    commands+="${commands:+ $WITHDEBUG_COMMAND_JOINER }${quotedSimpleCommand% }"
+    addCommand "${quotedSimpleCommand% }"
 fi
 if [ -z "$commands" ]; then
     echo "ERROR: No COMMAND(s) specified; need to pass -c|--command \"COMMANDLINE\", or --exec SIMPLECOMMAND [...] $WITHDEBUG_EXEC_END or SIMPLECOMMAND."
