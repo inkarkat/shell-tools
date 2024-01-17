@@ -1,0 +1,175 @@
+#!/bin/bash
+
+: ${WITHDEBUG_COMMAND_JOINER=;}
+: ${WITHDEBUG_EXEC_END=;}
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[-v|--verbose] [-m|--module MODULE|'' [-m ...]|-M|--only-module MODULE|'' [-M ...]] --for COMMANDNAME [--for ...]|-c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${WITHDEBUG_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Execute COMMAND while enabling debugging diagnostics for it. This is done by
+adding the COMMAND's name to the \$DEBUG environment variable. If a
+DEBUG_<command-name>_WRAPPER environment variable exists, its contents are
+prepended before the corresponding COMMAND and that executed instead.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --verbose|-v	Print the full command line (with all debugging
+			configuration) before executing it, in a format suitable
+			for copy-and-pasting it into the shell.
+    --module|-m MODULE	Also enable debugging diagnostics for MODULE of the
+			following COMMAND(s).
+    --only-module|-M MODULE
+			Just enable debugging diagnostics for MODULE of the
+			following COMMAND(s), but not for the overall COMMAND
+			itself.
+    --[only-]module ''	Reset modules; following COMMAND(s) just print the over
+			debugging diagnostics.
+    --for COMMANDNAME	Also enable debugging diagnostics for COMMANDNAME.
+    --command|-c CMD	Execute CMD as a command-line.
+    --exec CMD [...] ${WITHDEBUG_EXEC_END}	Execute CMD; all following arguments are taken to be arguments to the CMD until an argument consisting of '${WITHDEBUG_EXEC_END}' is encountered.
+HELPTEXT
+}
+
+typeset -a modules=()
+addModule()
+{
+    [ -n "$1" ] && modules+=("$1")
+}
+
+isOnly=
+add()
+{
+    DEBUG+="${DEBUG:+,}${1:?}"
+}
+commandName=
+addDebug()
+{
+    commandName="${1:?}"; shift
+    [ "$isOnly" ] || add "$commandName"
+
+    for module in "${modules[@]}"
+    do
+	add "${commandName}:${module}"
+    done
+}
+addDebugCommand()
+{
+    local cmd="${1:?}"; shift
+    commandName="$(commandName --no-interpreter --eval "$cmd")"
+    if [ -z "$commandName" ]; then
+	printf >&2 'ERROR: Could not determine command name for %s\n' "$cmd"
+	return 1
+    fi
+    addDebug "$commandName"
+}
+
+addCommand()
+{
+    local cmd="${1:?}"; shift
+
+    local wrapperConfigName="DEBUG_${commandName:?}_WRAPPER"
+    if [ -n "${!wrapperConfigName}" ]; then
+	# Prepend the wrapper command to the executed command.
+	cmd="${!wrapperConfigName} $cmd"
+    fi
+
+    commands+="${commands:+ $WITHDEBUG_COMMAND_JOINER }${cmd}"
+}
+
+isVerbose=
+commands=
+let commandCnt=0
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--verbose|-v)	shift; isVerbose=t;;
+	--for)		shift
+			addDebug "${1:?}"; shift
+			;;
+	--module|-m)	shift
+			[ "$isOnly" ] && modules=()
+			addModule "${1?}"; shift
+			isOnly=
+			;;
+	--only-module|-M)
+			shift
+			[ "$isOnly" ] || modules=()
+			addModule "${1?}"; shift
+			isOnly=t
+			;;
+	--command|-c)	shift
+			addDebugCommand "${1:?}" || exit 2
+			addCommand "$1"
+			if [[ "$1" =~ [\;\&\|] ]]; then
+			    let commandCnt+=2	# multiple commands
+			else
+			    let commandCnt+=1
+			fi
+			shift
+			;;
+	--exec)		shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != "$WITHDEBUG_EXEC_END" ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd+="${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${WITHDEBUG_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			addDebugCommand "$cmd" || exit 2
+			addCommand "$cmd"
+			let commandCnt+=1
+			;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    quotedSimpleCommand="${quotedSimpleCommand% }"
+    addDebugCommand "$quotedSimpleCommand" || exit 2
+    addCommand "$quotedSimpleCommand"
+    let commandCnt+=1
+fi
+if [ -z "$commands" ]; then
+    echo "ERROR: No COMMAND(s) specified; need to pass -c|--command \"COMMANDLINE\", or --exec SIMPLECOMMAND [...] $WITHDEBUG_EXEC_END or SIMPLECOMMAND."
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+if [ "$isVerbose" ]; then
+    if [ $commandCnt -eq 1 ]; then
+	printf >&2 '%sDEBUG=%q %s\n' "${PS4:-\$ }" "$DEBUG" "$commands"
+    else
+	printf >&2 '%s{ DEBUG=%q; %s; }\n' "${PS4:-\$ }" "$DEBUG" "$commands"
+    fi
+fi
+
+export DEBUG
+eval "$commands"
