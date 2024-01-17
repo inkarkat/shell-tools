@@ -22,7 +22,9 @@ printLongUsage()
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
 Execute COMMAND while enabling debugging diagnostics for it. This is done by
-adding the COMMAND's name to the \$DEBUG environment variable.
+adding the COMMAND's name to the \$DEBUG environment variable. If a
+DEBUG_<command-name>_WRAPPER environment variable exists, its contents are
+prepended before the corresponding COMMAND and that executed instead.
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
@@ -53,11 +55,10 @@ add()
 {
     DEBUG+="${DEBUG:+,}${1:?}"
 }
+commandName=
 addDebug()
 {
-    local commandName="${1?}"; shift
-    [ -n "$commandName" ] || return 1
-
+    commandName="${1:?}"; shift
     [ "$isOnly" ] || add "$commandName"
 
     for module in "${modules[@]}"
@@ -68,15 +69,25 @@ addDebug()
 addDebugCommand()
 {
     local cmd="${1:?}"; shift
-    if ! addDebug "$(commandName --no-interpreter --eval "$cmd")"; then
+    commandName="$(commandName --no-interpreter --eval "$cmd")"
+    if [ -z "$commandName" ]; then
 	printf >&2 'ERROR: Could not determine command name for %s\n' "$cmd"
 	return 1
     fi
+    addDebug "$commandName"
 }
 
 addCommand()
 {
-    commands+="${commands:+ $WITHDEBUG_COMMAND_JOINER }${1:?}"
+    local cmd="${1:?}"; shift
+
+    local wrapperConfigName="DEBUG_${commandName:?}_WRAPPER"
+    if [ -n "${!wrapperConfigName}" ]; then
+	# Prepend the wrapper command to the executed command.
+	cmd="${!wrapperConfigName} $cmd"
+    fi
+
+    commands+="${commands:+ $WITHDEBUG_COMMAND_JOINER }${cmd}"
 }
 
 commands=
@@ -99,8 +110,8 @@ do
 			isOnly=t
 			;;
 	--command|-c)	shift
-			addCommand "${1:?}"
-			addDebugCommand "$1" || exit 2
+			addDebugCommand "${1:?}" || exit 2
+			addCommand "$1"
 			shift
 			;;
 	--exec)		shift
@@ -116,8 +127,8 @@ do
 			    exit 2
 			fi >&2
 			shift
-			addCommand "$cmd"
 			addDebugCommand "$cmd" || exit 2
+			addCommand "$cmd"
 			;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
@@ -128,7 +139,9 @@ if [ $# -ne 0 ]; then
     # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
     # undo the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
-    addCommand "${quotedSimpleCommand% }"
+    quotedSimpleCommand="${quotedSimpleCommand% }"
+    addDebugCommand "$quotedSimpleCommand" || exit 2
+    addCommand "$quotedSimpleCommand"
 fi
 if [ -z "$commands" ]; then
     echo "ERROR: No COMMAND(s) specified; need to pass -c|--command \"COMMANDLINE\", or --exec SIMPLECOMMAND [...] $WITHDEBUG_EXEC_END or SIMPLECOMMAND."
