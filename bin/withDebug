@@ -7,7 +7,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[-m|--module MODULE|'' [-m ...]|-M|--only-module MODULE|'' [-M ...]] --for COMMANDNAME [--for ...]|-c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${WITHDEBUG_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[-v|--verbose] [-m|--module MODULE|'' [-m ...]|-M|--only-module MODULE|'' [-M ...]] --for COMMANDNAME [--for ...]|-c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${WITHDEBUG_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
 }
 printUsage()
 {
@@ -30,7 +30,9 @@ HELPDESCRIPTION
     printShortUsage "$1"
     echo
     cat <<HELPTEXT
-    --for COMMANDNAME	Also enable debugging diagnostics for COMMANDNAME.
+    --verbose|-v	Print the full command line (with all debugging
+			configuration) before executing it, in a format suitable
+			for copy-and-pasting it into the shell.
     --module|-m MODULE	Also enable debugging diagnostics for MODULE of the
 			following COMMAND(s).
     --only-module|-M MODULE
@@ -39,6 +41,7 @@ HELPDESCRIPTION
 			itself.
     --[only-]module ''	Reset modules; following COMMAND(s) just print the over
 			debugging diagnostics.
+    --for COMMANDNAME	Also enable debugging diagnostics for COMMANDNAME.
     --command|-c CMD	Execute CMD as a command-line.
     --exec CMD [...] ${WITHDEBUG_EXEC_END}	Execute CMD; all following arguments are taken to be arguments to the CMD until an argument consisting of '${WITHDEBUG_EXEC_END}' is encountered.
 HELPTEXT
@@ -90,11 +93,14 @@ addCommand()
     commands+="${commands:+ $WITHDEBUG_COMMAND_JOINER }${cmd}"
 }
 
+isVerbose=
 commands=
+let commandCnt=0
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--verbose|-v)	shift; isVerbose=t;;
 	--for)		shift
 			addDebug "${1:?}"; shift
 			;;
@@ -112,6 +118,11 @@ do
 	--command|-c)	shift
 			addDebugCommand "${1:?}" || exit 2
 			addCommand "$1"
+			if [[ "$1" =~ [\;\&\|] ]]; then
+			    let commandCnt+=2	# multiple commands
+			else
+			    let commandCnt+=1
+			fi
 			shift
 			;;
 	--exec)		shift
@@ -129,6 +140,7 @@ do
 			shift
 			addDebugCommand "$cmd" || exit 2
 			addCommand "$cmd"
+			let commandCnt+=1
 			;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
@@ -142,6 +154,7 @@ if [ $# -ne 0 ]; then
     quotedSimpleCommand="${quotedSimpleCommand% }"
     addDebugCommand "$quotedSimpleCommand" || exit 2
     addCommand "$quotedSimpleCommand"
+    let commandCnt+=1
 fi
 if [ -z "$commands" ]; then
     echo "ERROR: No COMMAND(s) specified; need to pass -c|--command \"COMMANDLINE\", or --exec SIMPLECOMMAND [...] $WITHDEBUG_EXEC_END or SIMPLECOMMAND."
@@ -149,6 +162,14 @@ if [ -z "$commands" ]; then
     printUsage "$0"
     exit 2
 fi >&2
+
+if [ "$isVerbose" ]; then
+    if [ $commandCnt -eq 1 ]; then
+	printf >&2 '%sDEBUG=%q %s\n' "${PS4:-\$ }" "$DEBUG" "$commands"
+    else
+	printf >&2 '%s{ DEBUG=%q; %s; }\n' "${PS4:-\$ }" "$DEBUG" "$commands"
+    fi
+fi
 
 export DEBUG
 eval "$commands"
