@@ -75,11 +75,21 @@ do
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		typeset -a files=()
 			if ! contains -- "$@"; then
-			    # Consume existing FILEs from behind.
+			    # Consume arguments from behind. We need to encounter at least one existing
+			    # file, but continue consuming existing files. This has the side effect that
+			    # without --, leading non-existing FILE(s) are not dropped but passed to
+			    # SIMPLECOMMAND as arguments. This may be a nice trick for a strange use case,
+			    # though I would strongly prefer to use -- in all cases.
+			    isFoundExistingFile=
 			    while [ $# -gt 0 ]
 			    do
 				lastArg="${!#}"
-				[ -e "$lastArg" ] || break
+				if [ -e "$lastArg" ]; then
+				    isFoundExistingFile=t
+				elif [ "$isFoundExistingFile" ]; then
+				    # Stop before moving from existing to non-existing files.
+				    break
+				fi
 				files=("$lastArg" "${files[@]}")
 				set -- "${@:1:$(($#-1))}"
 			    done
