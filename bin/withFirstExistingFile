@@ -9,7 +9,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[-l|--local-dir] -c|--command \"COMMANDLINE\" [-c ...] --exec SIMPLECOMMAND [...] ${WITHFIRSTEXISTINGFILE_EXEC_END} [--exec ...] | SIMPLECOMMAND [...] [--] FILE [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[-l|--local-dir] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHFIRSTEXISTINGFILE_EXEC_END} [--exec ...] | SIMPLECOMMAND [...] [--] FILE [...] [-?|-h|--help]"
 }
 printUsage()
 {
