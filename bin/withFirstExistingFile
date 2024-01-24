@@ -38,6 +38,9 @@ HELPDESCRIPTION
 			'${WITHFIRSTEXISTINGFILE_EXEC_END}' is encountered.
 SEE ALSO:
 - eachFile executes COMMAND on each FILE individually, not just on the first.
+- withSelectedFiles passes FILEs through a SELECT-COMMAND (which can generically
+  filter any of those files, not just simply return the first file), and then
+  passes the resulting list of file(s) on to COMMAND.
 
 EXIT STATUS:
     2	Bad invocation, wrong or missing command-line arguments.

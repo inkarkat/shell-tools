@@ -75,6 +75,9 @@ HELPTEXT
 			back to themselves.
 SEE ALSO:
 - withFirstExistingFile stops execution after the first FILE that exists.
+- withSelectedFiles passes FILEs through a SELECT-COMMAND, and then passes the
+  resulting list of file(s) on to COMMAND. So eachFile with additional
+  filtering.
 - processEachFile also passes each FILE individually to COMMAND; instead of the
   header and prompt handling, it checks for changes and COMMAND success and can
   abort and print messages.
