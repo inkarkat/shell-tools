@@ -2,6 +2,7 @@
 set -o pipefail
 
 : ${WITHSELECTEDFILES_EXEC_END=;}
+: ${WITHSELECTEDFILES_FILES_END=;}
 : ${WITHSELECTEDFILES_FILE_MARKER='{}'}
 fileMarker="$WITHSELECTEDFILES_FILE_MARKER"; unset WITHSELECTEDFILES_FILE_MARKER
 : ${WITHSELECTEDFILES_SELECTED_EXEC_END=;}
@@ -10,9 +11,12 @@ selectFileMarker="$WITHSELECTEDFILES_SELECTED_FILE_MARKER"; unset WITHSELECTEDFI
 
 printShortUsage()
 {
+    local commonArgs="--select-command \"SELECT-COMMANDLINE\" [--select-command ...] | --select-exec SELECT-SIMPLECOMMAND [...] ${WITHSELECTEDFILES_SELECTED_EXEC_END} [--select-exec ...] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHSELECTEDFILES_EXEC_END} [--exec ...] | SIMPLECOMMAND [...]"
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "--select-command \"SELECT-COMMANDLINE\" [--select-command ...] | --select-exec SELECT-SIMPLECOMMAND [...] ${WITHSELECTEDFILES_SELECTED_EXEC_END} [--select-exec ...] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHSELECTEDFILES_EXEC_END} [--exec ...] | SIMPLECOMMAND [...] [--] FILE [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "${commonArgs} [--] FILE [...] [-?|-h|--help]"
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" "-f|--files FILE [...] ${WITHSELECTEDFILES_FILES_END} [-f ...] ${commonArgs} [-?|-h|--help]"
 }
 printUsage()
 {
@@ -37,6 +41,9 @@ HELPDESCRIPTION
     --exec CMD [...] ${WITHSELECTEDFILES_EXEC_END}	Execute CMD; all following arguments are taken to be
 			arguments to the CMD until an argument consisting of
 			'${WITHSELECTEDFILES_EXEC_END}' is encountered.
+    --files|-f FILE [...] ${WITHSELECTEDFILES_FILES_END}
+			Take FILE(s) separately, don't parse FILE(s) at the end;
+			all arguments there belong to SIMPLECOMMAND.
 SEE ALSO:
 - withFirstExistingFile only passes the first existing file to COMMAND.
 - eachFile executes COMMAND on each FILE individually, not just on the first.
@@ -50,11 +57,28 @@ HELPTEXT
 }
 
 selectCommands=
+typeset -a filespecs=()
 commands=
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--files|-f)	shift
+			while [ $# -gt 0 -a "$1" != "$WITHSELECTEDFILES_FILES_END" ]
+			do
+			    filespecs+=("$1")
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --files|-f must be concluded with '${WITHSELECTEDFILES_FILES_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			if [ ${#filespecs[@]} -eq 0 ]; then
+			    echo 'ERROR: --files|-f must be followed by at least one FILE.'; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			;;
 
 	--select-exec)	shift
 			cmd=
@@ -95,7 +119,7 @@ do
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		typeset -a files=()
-			if ! contains -- "$@"; then
+			if [ ${#filespecs[@]} -eq 0 ] && ! contains -- "$@"; then
 			    while [ $# -gt 0 ]
 			    do
 				lastArg="${!#}"
@@ -107,7 +131,7 @@ do
 
 			if [ $# -gt 0 ]; then
 			    typeset -a cmd=()
-			    while [ $# -gt 0 ] && [[ "$1" != -- ]]
+			    while [ $# -gt 0 ] && [ ${#filespecs[@]} -gt 0 -o "$1" != -- ]  # Note: No stopping at -- if --files is used.
 			    do
 				cmd+=("$1")
 				shift
@@ -126,6 +150,7 @@ do
 			;;
     esac
 done
+filespecs+=("$@")
 if [ -z "$selectCommands" ]; then
     echo "ERROR: No SELECT-COMMAND(s) specified; need to pass --select-command \"SELECT-COMMANDLINE\", or --select-exec SELECT-SIMPLECOMMAND [...] ${WITHSELECTEDFILES_SELECTED_EXEC_END}"
     echo
@@ -136,15 +161,15 @@ elif [ -z "$commands" ]; then
     echo
     printUsage "$0"
     exit 2
-elif [ $# -eq 0 ]; then
+elif [ ${#filespecs[@]} -eq 0 ]; then
     echo 'ERROR: No FILE(s) passed.'
     echo
     printUsage "$0"
     exit 2
 fi >&2
 
-printf -v quotedFiles '%q ' "$@"; quotedFiles="${quotedFiles% }"
-typeset -a s=("$@")
+printf -v quotedFiles '%q ' "${filespecs[@]}"; quotedFiles="${quotedFiles% }"
+typeset -a s=("${filespecs[@]}")
 interpolatedSelectCommands="${selectCommands//"$selectFileMarker"/$quotedFiles}"
 [ "$interpolatedSelectCommands" = "$selectCommands" ] || s=()
 readarray -t selectedFiles < <(eval "$interpolatedSelectCommands" '"${s[@]}"')
