@@ -37,8 +37,8 @@ HELPDESCRIPTION
     echo
     cat <<HELPTEXT
     --local-dir|-l	Change the directory to the one containing the current
-			FILE before executing COMMAND, and only pass the filename
-			itself.${hasProgressNotification:+
+			FILE before executing COMMAND, and only pass the
+			filename itself.${hasProgressNotification:+
     --progress SINK	Report the current FILE through one of the SINKs of the
 			progressNotification command.}
     --with-header	Print a header (containing the current FILE) before each
