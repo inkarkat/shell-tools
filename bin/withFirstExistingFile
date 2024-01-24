@@ -1,6 +1,5 @@
 #!/bin/bash
 set -o pipefail
-shopt -qs extglob
 
 : ${WITHFIRSTEXISTINGFILE_EXEC_END=;}
 : ${WITHFIRSTEXISTINGFILE_FILE_MARKER='{}'}
@@ -75,7 +74,7 @@ do
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		typeset -a files=()
-			if ! containsGlob '@(--|--find|-f)' "$@"; then
+			if ! contains -- "$@"; then
 			    # Consume existing FILEs from behind.
 			    while [ $# -gt 0 ]
 			    do
@@ -88,7 +87,7 @@ do
 
 			if [ $# -gt 0 ]; then
 			    typeset -a cmd=()
-			    while [ $# -gt 0 ] && [[ "$1" != @(--|--find|-f) ]]
+			    while [ $# -gt 0 ] && [[ "$1" != -- ]]
 			    do
 				cmd+=("$1")
 				shift
