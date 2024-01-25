@@ -9,7 +9,7 @@ printUsage()
 {
     cat <<HELPTEXT
 Execute COMMAND on the last modified file (which ${fileMarker:+either }is appended${fileMarker:+ or replaces
-any $fileMarker marker} inside COMMANDLINE) in DIR.
+any $fileMarker marker} inside COMMANDLINE) in ${dirspecs:-DIR}.
 HELPTEXT
     echo
     local commonArgs="-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHNEWESTFILE_EXEC_END} [--exec ...] | SIMPLECOMMAND [...]"
@@ -18,9 +18,26 @@ HELPTEXT
     printf 'Usage: %q %s\n' "$(basename "$1")" "-f|--files DIR [...] ${WITHNEWESTFILE_FILES_END} [-f ...] ${commonArgs} [-?|-h|--help]"
 }
 
-case "$1" in
-    --help|-h|-\?)	shift; printUsage "$0"; exit 0;;
-esac
+dirspecs=
+typeset -a allargs=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+	--files|-f)	allargs+=("$1"); shift
+			while [ $# -gt 0 -a "$1" != "$WITHNEWESTFILE_FILES_END" ]
+			do
+			    dirspecs+="${dirspecs:+, }$1"
+			    allargs+=("$1"); shift
+			done
+			allargs+=("$1"); shift
+			;;
+	--)		allargs+=("$1"); shift; break;;
+	*)		allargs+=("$1"); shift;;
+    esac
+done
+set -- "${allargs[@]}" "$@"
+
 
 WITHSELECTEDFILES_EXEC_END="$WITHNEWESTFILE_EXEC_END" \
 WITHSELECTEDFILES_FILES_END="$WITHNEWESTFILE_FILES_END" \
