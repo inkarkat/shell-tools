@@ -13,9 +13,13 @@ any $fileMarker marker} inside COMMANDLINE) in ${dirspecs:-DIR}.
 HELPTEXT
     echo
     local commonArgs="-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHNEWESTFILE_EXEC_END} [--exec ...] | SIMPLECOMMAND [...]"
-    printf 'Usage: %q %s\n' "$(basename "$1")" "${commonArgs} [--] DIR [...] [-?|-h|--help]"
-    echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "-f|--files DIR [...] ${WITHNEWESTFILE_FILES_END} [-f ...] ${commonArgs} [-?|-h|--help]"
+    if [ -n "$dirspecs" ]; then
+	printf 'Usage: %q %s\n' "${WITHNEWESTFILE_WRAPPER:-$(basename "$1")}" "${commonArgs} [-?|-h|--help]"
+    else
+	printf 'Usage: %q %s\n' "$(basename "$1")" "${commonArgs} [--] DIR [...] [-?|-h|--help]"
+	echo
+	printf 'Usage: %q %s\n' "$(basename "$1")" "-f|--files DIR [...] ${WITHNEWESTFILE_FILES_END} [-f ...] ${commonArgs} [-?|-h|--help]"
+    fi
 }
 
 dirspecs=

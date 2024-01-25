@@ -9,14 +9,18 @@ fileMarker="$WITHNEWESTFILES_FILE_MARKER"; unset WITHNEWESTFILES_FILE_MARKER
 printUsage()
 {
     cat <<HELPTEXT
-Execute COMMAND on the last modified file(s) (which ${fileMarker:+either }is appended${fileMarker:+ or replaces
-any $fileMarker marker} inside COMMANDLINE) in ${dirspecs:-DIR}.
+Execute COMMAND on the last modified file(s) (which ${fileMarker:+either }is appended${fileMarker:+ or
+replaces any $fileMarker marker} inside COMMANDLINE) in ${dirspecs:-DIR}.
 HELPTEXT
     echo
     local commonArgs="[-t|--newer-than EPOCH|-N|--newer FILE|'FILE-GLOB' [...]|-n|--count N] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHNEWESTFILES_EXEC_END} [--exec ...] | SIMPLECOMMAND [...]"
-    printf 'Usage: %q %s\n' "$(basename "$1")" "${commonArgs} [--] DIR [...] [-?|-h|--help]"
-    echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "-f|--files DIR [...] ${WITHNEWESTFILES_FILES_END} [-f ...] ${commonArgs} [-?|-h|--help]"
+    if [ -n "$dirspecs" ]; then
+	printf 'Usage: %q %s\n' "${WITHNEWESTFILES_WRAPPER:-$(basename "$1")}" "${commonArgs} [-?|-h|--help]"
+    else
+	printf 'Usage: %q %s\n' "$(basename "$1")" "${commonArgs} [--] DIR [...] [-?|-h|--help]"
+	echo
+	printf 'Usage: %q %s\n' "$(basename "$1")" "-f|--files DIR [...] ${WITHNEWESTFILES_FILES_END} [-f ...] ${commonArgs} [-?|-h|--help]"
+    fi
 }
 
 dirspecs=
