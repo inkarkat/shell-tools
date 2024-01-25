@@ -1,0 +1,28 @@
+#!/bin/bash
+
+: ${WITHNEWESTFILE_EXEC_END=;}
+: ${WITHNEWESTFILE_FILES_END=;}
+: ${WITHNEWESTFILE_FILE_MARKER='{}'}
+fileMarker="$WITHNEWESTFILE_FILE_MARKER"; unset WITHNEWESTFILE_FILE_MARKER
+
+printUsage()
+{
+    cat <<HELPTEXT
+Execute COMMAND on the last modified file (which ${fileMarker:+either }is appended${fileMarker:+ or replaces
+any $fileMarker marker} inside COMMANDLINE) in DIR.
+HELPTEXT
+    echo
+    local commonArgs="-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHNEWESTFILE_EXEC_END} [--exec ...] | SIMPLECOMMAND [...]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "${commonArgs} [--] DIR [...] [-?|-h|--help]"
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" "-f|--files DIR [...] ${WITHNEWESTFILE_FILES_END} [-f ...] ${commonArgs} [-?|-h|--help]"
+}
+
+case "$1" in
+    --help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+esac
+
+WITHSELECTEDFILES_EXEC_END="$WITHNEWESTFILE_EXEC_END" \
+WITHSELECTEDFILES_FILES_END="$WITHNEWESTFILE_FILES_END" \
+WITHSELECTEDFILES_FILE_MARKER="$fileMarker" \
+    exec withSelectedFiles --select-exec newestFile --name-only -- {} \; "$@"
