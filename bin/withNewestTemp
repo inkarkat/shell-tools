@@ -1,0 +1,6 @@
+#!/bin/bash
+
+: ${TMPDIR:=~/tmp}
+
+WITHNEWESTFILE_WRAPPER="$(basename "$0")" \
+    exec withNewestFile --files "$TMPDIR" \; "$@"

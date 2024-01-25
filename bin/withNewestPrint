@@ -1,0 +1,6 @@
+#!/bin/bash
+
+: ${WITHNEWESTPRINT_DIR:=~/Ablage/print}
+
+WITHNEWESTFILE_WRAPPER="$(basename "$0")" \
+    exec withNewestFile --files "$WITHNEWESTPRINT_DIR" \; "$@"
