@@ -1,0 +1,115 @@
+#!/bin/bash
+set -o pipefail
+
+: ${WITHPIPEDARGS_COMMAND_JOINER=|}
+: ${WITHPIPEDARGS_EXEC_END=;}
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf "Usage: [WITHPIPEDARGS_ARG_JOINER=' '] %q %s\\n" "$(basename "$1")" "[-r|--run-if-empty|-S|--stdin-if-empty] -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${WITHPIPEDARGS_EXEC_END} [--exec ...] | SIMPLECOMMAND -- [ARG ...] [-?|-h|--help]"
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Execute COMMAND while ARG(s) are piped into it (each on its own line).
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --run-if-empty|-r	Also run COMMANDs (with empty input) if there are no
+			ARG(s). By default, nothing will be executed.
+    --stdin-if-empty|-S	Also run COMMANDs (with standard input; i.e. COMMAND(s)
+			will wait for input) if there are no ARG(s).
+    --command|-c CMD	Execute CMD as a command-line.
+    --exec CMD [...] ${WITHPIPEDARGS_EXEC_END}	Execute CMD; all following arguments are taken to be
+			arguments to the CMD until an argument consisting of
+			'${WITHPIPEDARGS_EXEC_END}' is encountered.
+
+EXIT STATUS:
+    0	Complete success.
+    2	Bad invocation, wrong or missing command-line arguments.
+    99	No ARG(s) passed (and no --run-if-empty supplied).
+    *   any exit status from COMMAND(s)
+HELPTEXT
+}
+
+commands=
+typeset -a simpleCommand=()
+hasDashDash=
+unset onEmpty
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--run-if-empty|-r)
+			shift; typeset onEmpty='printf ""';;
+	--stdin-if-empty|-S)
+			shift; typeset onEmpty='';;
+	--command|-c)	shift; commands+="${commands:+ $WITHPIPEDARGS_COMMAND_JOINER }$1"; shift;;
+	--exec)		shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != "$WITHPIPEDARGS_EXEC_END" ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd+="${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${WITHPIPEDARGS_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			commands+="${commands:+ $WITHPIPEDARGS_COMMAND_JOINER }${cmd}"
+			;;
+	--)		shift; hasDashDash=t; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		simpleCommand+=("$1"); shift;;
+    esac
+done
+if [ ${#simpleCommand[@]} -gt 0 ]; then
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "${simpleCommand[@]}"
+    commands+="${commands:+ $WITHPIPEDARGS_COMMAND_JOINER }${quotedSimpleCommand% }"
+fi
+if [ -z "$commands" ]; then
+    echo "ERROR: No COMMAND(s) specified; need to pass -c|--command \"COMMANDLINE\", or --exec SIMPLECOMMAND [...] $WITHPIPEDARGS_EXEC_END or SIMPLECOMMAND."
+    echo
+    printUsage "$0"
+    exit 2
+elif [ ! "$hasDashDash" ]; then
+    echo 'ERROR: No ARG(s) to pass to COMMAND(s); need to pass -- [ARG ...]'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+[ $# -eq 0 ] && [ -z "${onEmpty+t}" ] && exit 99
+
+if [ $# -eq 0 ]; then
+    eval "${onEmpty}${onEmpty:+ | }${commands}"
+else
+    if [ -n "${WITHPIPEDARGS_ARG_JOINER+t}" ]; then
+	printf '%s' "$1"; shift
+	for arg
+	do
+	    printf '%s%s' "$WITHPIPEDARGS_ARG_JOINER" "$arg"
+	done
+	printf '\n'
+    else
+	printf '%s\n' "$@"
+    fi \
+	| eval "$commands"
+fi
