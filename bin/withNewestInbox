@@ -1,0 +1,6 @@
+#!/bin/bash
+
+: ${INBOX_DIR:=~/inbox}
+
+WITHNEWESTFILE_WRAPPER="$(basename "$0")" \
+    exec withNewestFile --files "$INBOX_DIR" \; "$@"

@@ -1,0 +1,6 @@
+#!/bin/bash
+
+: ${WITHNEWESTDOWNLOAD_DIR:=~/Downloads}
+
+WITHNEWESTFILE_WRAPPER="$(basename "$0")" \
+    exec withNewestFile --files "$WITHNEWESTDOWNLOAD_DIR" \; "$@"

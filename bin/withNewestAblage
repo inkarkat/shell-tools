@@ -1,0 +1,6 @@
+#!/bin/bash
+
+: ${WITHNEWESTABLAGE_DIR:=~/Ablage}
+
+WITHNEWESTFILE_WRAPPER="$(basename "$0")" \
+    exec withNewestFile --files "$WITHNEWESTABLAGE_DIR" \; "$@"
