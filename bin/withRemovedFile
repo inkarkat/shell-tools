@@ -1,0 +1,199 @@
+#!/bin/bash
+
+: ${WITHREMOVEDFILE_COMMAND_JOINER=;}
+: ${WITHREMOVEDFILE_EXEC_END=;}
+: ${WITHREMOVEDFILE_FILES_END=;}
+: ${WITHREMOVEDFILE_FILE_MARKER='{}'}
+: ${WITHREMOVEDFILE_COUNTED_FILE_MARKER='{N}'}
+fileMarker="$WITHREMOVEDFILE_FILE_MARKER"; unset WITHREMOVEDFILE_FILE_MARKER
+countedFileMarker="$WITHREMOVEDFILE_COUNTED_FILE_MARKER"; unset WITHREMOVEDFILE_COUNTED_FILE_MARKER
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[-i|--ignore-missing] [-p|--parents] [-T|--temp-dir TEMP-DIR] -f|--file FILE|DIR [-f ...]|--files FILE|DIR [...] ${WITHREMOVEDFILE_FILES_END} -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...]${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]}${countedFileMarker:+ [}${countedFileMarker}${countedFileMarker:+] [...]} ${WITHREMOVEDFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Execute COMMAND while FILE|DIR(s) are moved to a temp location; after the
+execution of COMMAND, FILE|DIR(s) are moved back again.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --ignore-missing|-i Don't fail if a FILE|DIR is already missing.
+    --parents|-p	Remove left-behind empty directories (and recursively
+			any empty parents), too.
+    --temp-dir|-T TEMP-DIR
+			Use TEMP-DIR for the temporary storage of FILE|DIR(s).
+    --file|-f FILE|DIR	Temporarily remove FILE|DIR.
+    --files FILE|DIR [...] ${WITHREMOVEDFILE_FILES_END}
+			Temporarily remove the following FILE|DIR(s); i.e. all
+			following arguments until an argument consisting of
+			'${WITHREMOVEDFILE_FILES_END}' is encountered.
+    --command|-c CMD	Execute CMD as a command-line.${fileMarker:+ The string $fileMarker is replaced
+			by the first FILE.${countedFileMarker:+ The string $countedFileMarker is replaced by FILE
+			number N.}}
+    --exec CMD [...] ${WITHREMOVEDFILE_EXEC_END}	Execute CMD; all following arguments are taken to be
+			arguments to the CMD until an argument consisting of
+			'${WITHREMOVEDFILE_EXEC_END}' is encountered.${fileMarker:+ The string $fileMarker is replaced by the
+			first FILE.}${countedFileMarker:+ The string $countedFileMarker is replaced by FILE number N.}
+EXIT STATUS:
+    0	Complete success.
+    2	Bad invocation, wrong or missing command-line arguments.
+    3	Failed to remove a FILE|DIR; no COMMAND(s) executed.
+    4	A FILE|DIR could not be restored after execution of COMMAND(s).
+    *   any exit status from COMMAND(s)
+HELPTEXT
+}
+
+isIgnoreMissing=
+tempDir=
+typeset -a filespecs=()
+isParents=
+commands=
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--ignore-missing|-i)
+			shift; isIgnoreMissing=t;;
+	--parents|-p)	isParents=t; shift;;
+	--temp-dir|-T)	shift; tempDir="${1:?}"; shift;;
+
+	--file|-f)
+			shift; filespecs+=("${1:?}"); shift;;
+	--files)	shift
+			while [ $# -gt 0 -a "$1" != "$WITHREMOVEDFILE_FILES_END" ]
+			do
+			    filespecs+=("$1")
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --files must be concluded with '${WITHREMOVEDFILE_FILES_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			if [ ${#filespecs[@]} -eq 0 ]; then
+			    echo 'ERROR: --files must be followed by at least one FILE|DIR.'; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			;;
+
+	--command|-c)	shift; commands+="${commands:+ $WITHREMOVEDFILE_COMMAND_JOINER }$1"; shift;;
+	--exec)		shift
+			cmd=
+			printf -v escapedFileMarker %q "$fileMarker"
+			printf -v escapedCountedfileMarker %q "$countedFileMarker"
+			while [ $# -gt 0 -a "$1" != "$WITHREMOVEDFILE_EXEC_END" ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    quotedArg="${quotedArg//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    # XXX: --exec can only consider already encountered filespecs, not those that follow. Unescaping with a glob for the number would be much more complex, however.
+			    for ((n = 1; n <= ${#filespecs[@]}; n++))
+			    do
+				quotedArg="${quotedArg//"${escapedCountedfileMarker/N/$n}"/${countedFileMarker/N/$n}}"	# %q escapes {N}, we don't want that to have it interpolated later.
+			    done
+			    cmd+="${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${WITHREMOVEDFILE_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			commands+="${commands:+ $WITHREMOVEDFILE_COMMAND_JOINER }${cmd}"
+			;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    printf -v escapedFileMarker %q "$fileMarker"
+    printf -v escapedCountedfileMarker %q "$countedFileMarker"
+    quotedSimpleCommand="${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+    for ((n = 1; n <= ${#filespecs[@]}; n++))
+    do
+	quotedSimpleCommand="${quotedSimpleCommand//"${escapedCountedfileMarker/N/$n}"/${countedFileMarker/N/$n}}"	# %q escapes {N}, we don't want that to have it interpolated later.
+    done
+    commands+="${commands:+ $WITHREMOVEDFILE_COMMAND_JOINER }${quotedSimpleCommand}"
+fi
+if [ -z "$commands" ]; then
+    echo "ERROR: No COMMAND(s) specified; need to pass -c|--command \"COMMANDLINE\", or --exec SIMPLECOMMAND [...] $WITHREMOVEDFILE_EXEC_END or SIMPLECOMMAND."
+    echo
+    printUsage "$0"
+    exit 2
+elif [ ${#filespecs[@]} -eq 0 ]; then
+    echo "ERROR: No FILE|DIR specified; need to pass -f|--file FILE|DIR [-f ...] or --files FILE|DIR [...] ${WITHREMOVEDFILE_FILES_END}"
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+status=
+typeset -A tempLocations=()
+tempDirspec="$(mktemp --directory --tmpdir${tempDir:+=}"${tempDir}" "$(basename -- "$0")-XXXXXX" 2>/dev/null || { dirspec="${tempDir:-${TMPDIR:-/tmp}}/$(basename -- "$0")$$$RANDOM"; mkdir --parents -- "$dirspec" && printf %s "$dirspec"; })" || exit 3
+
+finally()
+{
+    # Always restore the directories of the original files, not just when --parents
+    # is given. The COMMAND(s) may have removed a directory on their own.
+    touch-p --no-create --no-update -- "${!tempLocations[@]}" || : ${status:=4}
+
+    local filespec; for filespec in "${!tempLocations[@]}"
+    do
+	mv --force --no-target-directory -- "${tempLocations["$filespec"]}" "$filespec" || : ${status:=4}
+    done
+    rmdir --ignore-fail-on-non-empty -- "$tempDirspec" || : ${status:=4}
+    exit ${status:-0}
+}
+trap finally EXIT
+
+for filespec in "${filespecs[@]}"
+do
+    if [ ! -e "$filespec" ]; then
+	if [ "$isIgnoreMissing" ]; then
+	    continue
+	else
+	    printf >&2 'ERROR: File is already missing: %s\n' "$filespec"
+	    status=3
+	    break
+	fi
+    fi
+
+    encodedFilespec="$(pathAsFilename --encode -- "$filespec")" || exit 3
+    targetFilespec="${tempDirspec%/}/${encodedFilespec}"
+    if mv --force --no-target-directory -- "$filespec" "$targetFilespec"; then
+	tempLocations["$filespec"]="$targetFilespec"
+	[ ! "$isParents" ] || rmemptydir --parents -- "$(dirname -- "$filespec")" || status=3
+    else
+	status=3
+	break
+    fi
+done
+if [ -z "$status" ]; then
+    interpolatedCommands="$commands"
+    interpolatedCommands="${interpolatedCommands//"$fileMarker"/${filespecs[0]}}"
+    for ((n = 1; n <= ${#filespecs[@]}; n++))
+    do
+	interpolatedCommands="${interpolatedCommands//"${countedFileMarker/N/$n}"/${filespecs[n-1]}}"
+    done
+
+    eval "$interpolatedCommands" || status=$?
+fi
