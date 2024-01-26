@@ -22,9 +22,10 @@ printLongUsage()
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
 Execute COMMAND while enabling debugging diagnostics for it. This is done by
-adding the COMMAND's name to the \$DEBUG environment variable. If
-DEBUG_<command-name>[_<module>]_WRAPPER environment variables exist, its contents are
-prepended before the corresponding COMMAND and that executed instead.
+adding the COMMAND's name to the \$DEBUG environment variable.
+If DEBUG_<command-name>[_<module>]_WRAPPER environment variables exist, their
+contents are prepended before the corresponding COMMAND and that executed
+instead.
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
@@ -86,7 +87,7 @@ addCommand()
     local wrappers=''
     local module; for module in "${modules[@]}"
     do
-	local wrapperConfigName="DEBUG_${commandName:?}${module:+_}${module}_WRAPPER"
+	local wrapperConfigName="DEBUG_${commandName//[^[:alnum:]]/_}${module:+_}${module//[^[:alnum:]]/_}_WRAPPER"
 	if [ -n "${!wrapperConfigName}" ]; then
 	    # Prepend the wrapper command to the executed command.
 	    wrappers+="${!wrapperConfigName} "
