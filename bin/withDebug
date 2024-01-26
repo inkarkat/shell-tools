@@ -7,7 +7,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[-v|--verbose] [-m|--module MODULE|'' [-m ...]|-M|--only-module MODULE|'' [-M ...]] --for COMMANDNAME [--for ...]|-c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${WITHDEBUG_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[-v|--verbose] [-m|--module MODULE|'' [-m ...]|-M|--only-module MODULE|'' [-M ...]] --for COMMANDNAME [--for ...] | -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${WITHDEBUG_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
 }
 printUsage()
 {
@@ -47,13 +47,13 @@ HELPDESCRIPTION
 HELPTEXT
 }
 
-typeset -a modules=()
+isOnly=
+typeset -a modules=('')
 addModule()
 {
     [ -n "$1" ] && modules+=("$1")
 }
 
-isOnly=
 add()
 {
     DEBUG+="${DEBUG:+,}${1:?}"
@@ -62,11 +62,10 @@ commandName=
 addDebug()
 {
     commandName="${1:?}"; shift
-    [ "$isOnly" ] || add "$commandName"
 
-    for module in "${modules[@]}"
+    local module; for module in "${modules[@]}"
     do
-	add "${commandName}:${module}"
+	add "${commandName}${module:+:}${module}"
     done
 }
 addDebugCommand()
@@ -105,15 +104,15 @@ do
 			addDebug "${1:?}"; shift
 			;;
 	--module|-m)	shift
-			[ "$isOnly" ] && modules=()
-			addModule "${1?}"; shift
+			[ "$isOnly" ] && modules=('')
 			isOnly=
+			addModule "${1?}"; shift
 			;;
 	--only-module|-M)
 			shift
 			[ "$isOnly" ] || modules=()
-			addModule "${1?}"; shift
 			isOnly=t
+			addModule "${1?}"; shift
 			;;
 	--command|-c)	shift
 			addDebugCommand "${1:?}" || exit 2
