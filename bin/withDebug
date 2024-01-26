@@ -22,8 +22,8 @@ printLongUsage()
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
 Execute COMMAND while enabling debugging diagnostics for it. This is done by
-adding the COMMAND's name to the \$DEBUG environment variable. If a
-DEBUG_<command-name>_WRAPPER environment variable exists, its contents are
+adding the COMMAND's name to the \$DEBUG environment variable. If
+DEBUG_<command-name>[_<module>]_WRAPPER environment variables exist, its contents are
 prepended before the corresponding COMMAND and that executed instead.
 HELPDESCRIPTION
     echo
@@ -83,13 +83,17 @@ addCommand()
 {
     local cmd="${1:?}"; shift
 
-    local wrapperConfigName="DEBUG_${commandName:?}_WRAPPER"
-    if [ -n "${!wrapperConfigName}" ]; then
-	# Prepend the wrapper command to the executed command.
-	cmd="${!wrapperConfigName} $cmd"
-    fi
+    local wrappers=''
+    local module; for module in "${modules[@]}"
+    do
+	local wrapperConfigName="DEBUG_${commandName:?}${module:+_}${module}_WRAPPER"
+	if [ -n "${!wrapperConfigName}" ]; then
+	    # Prepend the wrapper command to the executed command.
+	    wrappers+="${!wrapperConfigName} "
+	fi
+    done
 
-    commands+="${commands:+ $WITHDEBUG_COMMAND_JOINER }${cmd}"
+    commands+="${commands:+ $WITHDEBUG_COMMAND_JOINER }${wrappers}${cmd}"
 }
 
 isVerbose=
