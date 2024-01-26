@@ -12,7 +12,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[-i|--ignore-missing] [-T|--temp-dir TEMP-DIR] -f|--file FILE|DIR [-f ...]|--files FILE|DIR [...] ${WITHREMOVEDFILE_FILES_END} -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...]${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]}${countedFileMarker:+ [}${countedFileMarker}${countedFileMarker:+] [...]} ${WITHREMOVEDFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[-i|--ignore-missing] [-p|--parents] [-T|--temp-dir TEMP-DIR] -f|--file FILE|DIR [-f ...]|--files FILE|DIR [...] ${WITHREMOVEDFILE_FILES_END} -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...]${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]}${countedFileMarker:+ [}${countedFileMarker}${countedFileMarker:+] [...]} ${WITHREMOVEDFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
 }
 printUsage()
 {
@@ -34,6 +34,8 @@ HELPDESCRIPTION
     echo
     cat <<HELPTEXT
     --ignore-missing|-i Don't fail if a FILE|DIR is already missing.
+    --parents|-p	Remove left-behind empty directories (and recursively
+			any empty parents), too.
     --temp-dir|-T TEMP-DIR
 			Use TEMP-DIR for the temporary storage of FILE|DIR(s).
     --file|-f FILE|DIR	Temporarily remove FILE|DIR.
@@ -60,6 +62,7 @@ HELPTEXT
 isIgnoreMissing=
 tempDir=
 typeset -a filespecs=()
+isParents=
 commands=
 while [ $# -ne 0 ]
 do
@@ -67,6 +70,7 @@ do
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 	--ignore-missing|-i)
 			shift; isIgnoreMissing=t;;
+	--parents|-p)	isParents=t; shift;;
 	--temp-dir|-T)	shift; tempDir="${1:?}"; shift;;
 
 	--file|-f)
@@ -148,6 +152,10 @@ tempDirspec="$(mktemp --directory --tmpdir${tempDir:+=}"${tempDir}" "$(basename 
 
 finally()
 {
+    # Always restore the directories of the original files, not just when --parents
+    # is given. The COMMAND(s) may have removed a directory on their own.
+    touch-p --no-create --no-update -- "${!tempLocations[@]}" || : ${status:=4}
+
     local filespec; for filespec in "${!tempLocations[@]}"
     do
 	mv --force --no-target-directory -- "${tempLocations["$filespec"]}" "$filespec" || : ${status:=4}
@@ -173,6 +181,7 @@ do
     targetFilespec="${tempDirspec%/}/${encodedFilespec}"
     if mv --force --no-target-directory -- "$filespec" "$targetFilespec"; then
 	tempLocations["$filespec"]="$targetFilespec"
+	[ ! "$isParents" ] || rmemptydir --parents -- "$(dirname -- "$filespec")" || status=3
     else
 	status=3
 	break
