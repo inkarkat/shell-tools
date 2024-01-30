@@ -14,7 +14,7 @@ Execute ${commands:-COMMAND} on the last modified file(s) (which ${fileMarker:+e
 replace any $fileMarker marker} inside COMMANDLINE) in ${dirspecs:-DIR}.
 HELPTEXT
     echo
-    local commonArgs="[-t|--newer-than EPOCH|-N|--newer FILE|'FILE-GLOB' [...]|-n|--count N] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHNEWESTFILES_EXEC_END} [--exec ...] | SIMPLECOMMAND [...]"
+    local commonArgs="[-d|--include-directories|-r|--recursive] [-t|--newer-than EPOCH|-N|--newer FILE|'FILE-GLOB' [...]|-n|--count N] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHNEWESTFILES_EXEC_END} [--exec ...] | SIMPLECOMMAND [...]"
     [ -z "$commands" ] || commonArgs=''
     if [ -n "$dirspecs" ]; then
 	printf 'Usage: %q %s\n' "${WITHNEWESTFILES_WRAPPER:-$(basename "$1")}" "${commonArgs}${commonArgs:+ }[-?|-h|--help]"
@@ -34,6 +34,9 @@ do
     case "$1" in
 	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
 
+	-[dr])		newestFilesArgs+=("$1"); shift;;
+	--@(include-directories|recursive))
+			newestFilesArgs+=("$1"); shift;;
 	-[tN])		newestFilesArgs+=("$1" "${2?}"); shift; shift;;
 	-n)		newestFilesArgs+=(--count "${2?}"); shift; shift;;  # -c N clashes with -c COMMANDLINE; rename to -n
 	--@(newer-than|newer|count))
