@@ -1,0 +1,3 @@
+#!/bin/sh
+
+exec withNewestVideo --exec xdg-open \; "$@"

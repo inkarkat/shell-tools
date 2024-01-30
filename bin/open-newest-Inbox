@@ -1,0 +1,3 @@
+#!/bin/sh
+
+exec withNewestInbox --exec xdg-open \; "$@"

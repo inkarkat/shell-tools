@@ -9,21 +9,23 @@ fileMarker="$WITHNEWESTFILE_FILE_MARKER"; unset WITHNEWESTFILE_FILE_MARKER
 printUsage()
 {
     cat <<HELPTEXT
-Execute COMMAND on the last modified file (which ${fileMarker:+either }is appended${fileMarker:+ or replaces
+Execute ${commands:-COMMAND} on the last modified file (which ${fileMarker:+either }is appended${fileMarker:+ or replaces
 any $fileMarker marker} inside COMMANDLINE) in ${dirspecs:-DIR}.
 HELPTEXT
     echo
     local commonArgs="-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHNEWESTFILE_EXEC_END} [--exec ...] | SIMPLECOMMAND [...]"
+    [ -z "$commands" ] || commonArgs=''
     if [ -n "$dirspecs" ]; then
-	printf 'Usage: %q %s\n' "${WITHNEWESTFILE_WRAPPER:-$(basename "$1")}" "${commonArgs} [-?|-h|--help]"
+	printf 'Usage: %q %s\n' "${WITHNEWESTFILE_WRAPPER:-$(basename "$1")}" "${commonArgs}${commonArgs:+ }[-?|-h|--help]"
     else
-	printf 'Usage: %q %s\n' "$(basename "$1")" "${commonArgs} [--] DIR [...] [-?|-h|--help]"
+	printf 'Usage: %q %s\n' "${WITHNEWESTFILE_WRAPPER:-$(basename "$1")}" "${commonArgs}${commonArgs:+ }[--] DIR [...] [-?|-h|--help]"
 	echo
-	printf 'Usage: %q %s\n' "$(basename "$1")" "-f|--files DIR [...] ${WITHNEWESTFILE_FILES_END} [-f ...] ${commonArgs} [-?|-h|--help]"
+	printf 'Usage: %q %s\n' "${WITHNEWESTFILE_WRAPPER:-$(basename "$1")}" "-f|--files DIR [...] ${WITHNEWESTFILE_FILES_END} [-f ...] ${commonArgs}${commonArgs:+ }[-?|-h|--help]"
     fi
 }
 
 dirspecs=
+commands=
 typeset -a allargs=()
 while [ $# -ne 0 ]
 do
@@ -36,6 +38,16 @@ do
 			    allargs+=("$1"); shift
 			done
 			allargs+=("$1"); shift
+			;;
+	--exec)		allargs+=("$1"); shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != "$WITHNEWESTFILE_EXEC_END" ]
+			do
+			    cmd="${cmd}${cmd:+ }${1}"
+			    allargs+=("$1"); shift
+			done
+			allargs+=("$1"); shift
+			commands+="${commands:+ $WITHNEWESTFILE_COMMAND_JOINER }${cmd}"
 			;;
 	--)		allargs+=("$1"); shift; break;;
 	*)		allargs+=("$1"); shift;;
