@@ -1,0 +1,4 @@
+#!/bin/sh
+
+WITHNEWESTFILE_WRAPPER="$(basename "$0")" \
+    exec withNewestFile --exec xdg-open \; "$@"

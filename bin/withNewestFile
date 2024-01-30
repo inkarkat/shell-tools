@@ -18,9 +18,9 @@ HELPTEXT
     if [ -n "$dirspecs" ]; then
 	printf 'Usage: %q %s\n' "${WITHNEWESTFILE_WRAPPER:-$(basename "$1")}" "${commonArgs}${commonArgs:+ }[-?|-h|--help]"
     else
-	printf 'Usage: %q %s\n' "$(basename "$1")" "${commonArgs}${commonArgs:+ }[--] DIR [...] [-?|-h|--help]"
+	printf 'Usage: %q %s\n' "${WITHNEWESTFILE_WRAPPER:-$(basename "$1")}" "${commonArgs}${commonArgs:+ }[--] DIR [...] [-?|-h|--help]"
 	echo
-	printf 'Usage: %q %s\n' "$(basename "$1")" "-f|--files DIR [...] ${WITHNEWESTFILE_FILES_END} [-f ...] ${commonArgs}${commonArgs:+ }[-?|-h|--help]"
+	printf 'Usage: %q %s\n' "${WITHNEWESTFILE_WRAPPER:-$(basename "$1")}" "-f|--files DIR [...] ${WITHNEWESTFILE_FILES_END} [-f ...] ${commonArgs}${commonArgs:+ }[-?|-h|--help]"
     fi
 }
 
