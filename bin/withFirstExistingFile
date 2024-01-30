@@ -1,6 +1,7 @@
 #!/bin/bash
 set -o pipefail
 
+: ${WITHFIRSTEXISTINGFILE_COMMAND_JOINER=;}
 : ${WITHFIRSTEXISTINGFILE_EXEC_END=;}
 : ${WITHFIRSTEXISTINGFILE_FILES_END=;}
 : ${WITHFIRSTEXISTINGFILE_FILE_MARKER='{}'}
@@ -96,9 +97,9 @@ do
 			    exit 2
 			fi >&2
 			shift
-			commands+="${commands:+ ; }${cmd}"
+			commands+="${commands:+ $WITHFIRSTEXISTINGFILE_COMMAND_JOINER }${cmd}"
 			;;
-	--command|-c)	shift; commands+="${commands:+ ; }$1"; shift;;
+	--command|-c)	shift; commands+="${commands:+ $WITHFIRSTEXISTINGFILE_COMMAND_JOINER }$1"; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		typeset -a files=()
@@ -134,7 +135,7 @@ do
 			    # undo the effects of eval.
 			    printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
 			    printf -v escapedFileMarker %q "$fileMarker"
-			    commands+="${commands:+ ; }${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    commands+="${commands:+ $WITHFIRSTEXISTINGFILE_COMMAND_JOINER }${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 			fi
 
 			if [ ${#files[@]} -gt 0 ]; then

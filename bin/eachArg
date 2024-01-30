@@ -1,5 +1,6 @@
 #!/bin/bash
 
+: ${EACHARG_COMMAND_JOINER=;}
 : ${EACHARG_EXEC_END=;}
 : ${EACHARG_ARG_WHAT=arg}
 : ${EACHARG_ARG_MARKER='{}'}
@@ -86,9 +87,9 @@ do
 			    exit 2
 			fi >&2
 			shift
-			commands+="${commands:+ ; }${cmd}"
+			commands+="${commands:+ $EACHARG_COMMAND_JOINER }${cmd}"
 			;;
-	--command|-c)	shift; commands+="${commands:+ ; }$1"; shift;;
+	--command|-c)	shift; commands+="${commands:+ $EACHARG_COMMAND_JOINER }$1"; shift;;
 	--progress)	shift; progressSink="$1"; shift;;
 	--with-header)	shift; with=header;;
 	--with-prompt)	shift; with=runWithPrompt;;
@@ -114,7 +115,7 @@ do
 			# undo the effects of eval.
 			printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
 			printf -v escapedArgMarker %q "$argMarker"
-			commands+="${commands:+ ; }${quotedSimpleCommand//"$escapedArgMarker"/$argMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			commands+="${commands:+ $EACHARG_COMMAND_JOINER }${quotedSimpleCommand//"$escapedArgMarker"/$argMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 			;;
     esac
 done

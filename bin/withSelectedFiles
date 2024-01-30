@@ -1,6 +1,7 @@
 #!/bin/bash
 set -o pipefail
 
+: ${WITHSELECTEDFILES_COMMAND_JOINER=;}
 : ${WITHSELECTEDFILES_EXEC_END=;}
 : ${WITHSELECTEDFILES_FILES_END=;}
 : ${WITHSELECTEDFILES_FILE_MARKER='{}'}
@@ -126,7 +127,7 @@ do
 			generatorCommands+="${generatorCommands:+ ; }${cmd}"
 			;;
 	--generator-command)
-			shift; commands+="${generatorCommands:+ ; }$1"; shift;;
+			shift; commands+="${generatorCommands:+ $WITHSELECTEDFILES_COMMAND_JOINER }$1"; shift;;
 
 	--exec)		shift
 			cmd=
@@ -142,9 +143,9 @@ do
 			    exit 2
 			fi >&2
 			shift
-			commands+="${commands:+ ; }${cmd}"
+			commands+="${commands:+ $WITHSELECTEDFILES_COMMAND_JOINER }${cmd}"
 			;;
-	--command|-c)	shift; commands+="${commands:+ ; }$1"; shift;;
+	--command|-c)	shift; commands+="${commands:+ $WITHSELECTEDFILES_COMMAND_JOINER }$1"; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		typeset -a files=()
@@ -169,7 +170,7 @@ do
 			    # undo the effects of eval.
 			    printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
 			    printf -v escapedFileMarker %q "$fileMarker"
-			    commands+="${commands:+ ; }${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    commands+="${commands:+ $WITHSELECTEDFILES_COMMAND_JOINER }${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 			fi
 
 			if [ ${#files[@]} -gt 0 ]; then

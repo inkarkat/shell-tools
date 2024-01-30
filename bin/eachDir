@@ -2,6 +2,7 @@
 set -o pipefail
 shopt -qs extglob
 
+: ${EACHDIR_COMMAND_JOINER=;}
 : ${EACHDIR_EXEC_END=;}
 : ${EACHDIR_DIR_WHAT=dir}
 : ${EACHDIR_DIR_MARKER='{}'}
@@ -134,9 +135,9 @@ do
 			    exit 2
 			fi >&2
 			shift
-			commands+="${commands:+ ; }${cmd}"
+			commands+="${commands:+ $EACHDIR_COMMAND_JOINER }${cmd}"
 			;;
-	--command|-c)	shift; commands+="${commands:+ ; }$1"; shift;;
+	--command|-c)	shift; commands+="${commands:+ $EACHDIR_COMMAND_JOINER }$1"; shift;;
 	--progress)	shift; progressSink="$1"; shift;;
 	--with-header)	shift; with=header;;
 	--with-basename-header)
@@ -181,7 +182,7 @@ do
 			    # undo the effects of eval.
 			    printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
 			    printf -v escapedDirMarker %q "$dirMarker"
-			    commands+="${commands:+ ; }${quotedSimpleCommand//"$escapedDirMarker"/$dirMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    commands+="${commands:+ $EACHDIR_COMMAND_JOINER }${quotedSimpleCommand//"$escapedDirMarker"/$dirMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 			fi
 
 			if [ ${#dirspecs[@]} -gt 0 ]; then

@@ -2,6 +2,7 @@
 set -o pipefail
 shopt -qs extglob
 
+: ${EACHFILE_COMMAND_JOINER=;}
 : ${EACHFILE_EXEC_END=;}
 : ${EACHFILE_FILE_WHAT=file}
 : ${EACHFILE_FILE_MARKER='{}'}
@@ -138,9 +139,9 @@ do
 			    exit 2
 			fi >&2
 			shift
-			commands+="${commands:+ ; }${cmd}"
+			commands+="${commands:+ $EACHFILE_COMMAND_JOINER }${cmd}"
 			;;
-	--command|-c)	shift; commands+="${commands:+ ; }$1"; shift;;
+	--command|-c)	shift; commands+="${commands:+ $EACHFILE_COMMAND_JOINER }$1"; shift;;
 	--progress)	shift; progressSink="$1"; shift;;
 	--with-header)	shift; with=header;;
 	--with-basename-header)
@@ -185,7 +186,7 @@ do
 			    # undo the effects of eval.
 			    printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
 			    printf -v escapedFileMarker %q "$fileMarker"
-			    commands+="${commands:+ ; }${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    commands+="${commands:+ $EACHFILE_COMMAND_JOINER }${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 			fi
 
 			if [ ${#files[@]} -gt 0 ]; then
