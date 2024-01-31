@@ -14,14 +14,15 @@ Execute ${commands:-COMMAND} on the last modified file(s) (which ${fileMarker:+e
 replace any $fileMarker marker} inside COMMANDLINE) in ${dirspecs:-DIR}.
 HELPTEXT
     echo
-    local commonArgs="[-d|--include-directories|-r|--recursive] [-t|--newer-than EPOCH|-N|--newer FILE|'FILE-GLOB' [...]|-n|--count N] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHNEWESTFILES_EXEC_END} [--exec ...] | SIMPLECOMMAND [...]"
-    [ -z "$commands" ] || commonArgs=''
+    local commonArgs="[-d|--include-directories|-r|--recursive] [-t|--newer-than EPOCH|-N|--newer FILE|'FILE-GLOB' [...]|-n|--count N]"
+    local commonCommandArgs="-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHNEWESTFILES_EXEC_END} [--exec ...] | SIMPLECOMMAND [...]"
+    [ -z "$commands" ] || commonCommandArgs=''
     if [ -n "$dirspecs" ]; then
-	printf 'Usage: %q %s\n' "${WITHNEWESTFILES_WRAPPER:-$(basename "$1")}" "${commonArgs}${commonArgs:+ }[-?|-h|--help]"
+	printf 'Usage: %q %s\n' "${WITHNEWESTFILES_WRAPPER:-$(basename "$1")}" "${commonArgs}${commonArgs:+ }${commonCommandArgs}${commonCommandArgs:+ }[-?|-h|--help]"
     else
-	printf 'Usage: %q %s\n' "${WITHNEWESTFILES_WRAPPER:-$(basename "$1")}" "${commonArgs}${commonArgs:+ }[--] DIR [...] [-?|-h|--help]"
+	printf 'Usage: %q %s\n' "${WITHNEWESTFILES_WRAPPER:-$(basename "$1")}" "${commonArgs}${commonArgs:+ }${commonCommandArgs}${commonCommandArgs:+ }[--] DIR [...] [-?|-h|--help]"
 	echo
-	printf 'Usage: %q %s\n' "${WITHNEWESTFILES_WRAPPER:-$(basename "$1")}" "-f|--files DIR [...] ${WITHNEWESTFILES_FILES_END} [-f ...] ${commonArgs}${commonArgs:+ }[-?|-h|--help]"
+	printf 'Usage: %q %s\n' "${WITHNEWESTFILES_WRAPPER:-$(basename "$1")}" "-f|--files DIR [...] ${WITHNEWESTFILES_FILES_END} [-f ...] ${commonArgs}${commonArgs:+ }${commonCommandArgs}${commonCommandArgs:+ }[-?|-h|--help]"
     fi
 }
 
