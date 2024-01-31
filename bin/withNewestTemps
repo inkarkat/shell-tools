@@ -1,6 +1,8 @@
 #!/bin/bash
 
 : ${TMPDIR:=~/tmp}
+[ -d "$TMPDIR" ] || TMPDIR=/tmp
+[ -d "$TMPDIR" ] || { echo 'ERROR: No temp dir found; please set TMPDIR.' >&2; exit 5 ; }
 
 WITHNEWESTFILES_WRAPPER="$(basename "$0")" \
     exec withNewestFiles --files "$TMPDIR" \; "$@"
