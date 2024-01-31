@@ -13,7 +13,7 @@ Execute ${commands:-COMMAND} on the last modified file (which ${fileMarker:+eith
 any $fileMarker marker} inside COMMANDLINE) in ${dirspecs:-DIR}.
 HELPTEXT
     echo
-    local commonArgs=
+    local commonArgs='[-r|--recursive]'
     local commonCommandArgs="-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHNEWESTFILE_EXEC_END} [--exec ...] | SIMPLECOMMAND [...]"
     [ -z "$commands" ] || commonCommandArgs=''
     if [ -n "$dirspecs" ]; then
@@ -28,10 +28,12 @@ HELPTEXT
 dirspecs=
 commands=
 typeset -a allargs=()
+typeset -a newestFileFindArgs=(-maxdepth 1)
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+	--recursive|-r)	shift; newestFileFindArgs=();;
 	--files|-f)	allargs+=("$1"); shift
 			while [ $# -gt 0 -a "$1" != "$WITHNEWESTFILE_FILES_END" ]
 			do
@@ -61,4 +63,4 @@ WITHSELECTEDFILES_COMMAND_JOINER="$WITHNEWESTFILE_COMMAND_JOINER" \
 WITHSELECTEDFILES_EXEC_END="$WITHNEWESTFILE_EXEC_END" \
 WITHSELECTEDFILES_FILES_END="$WITHNEWESTFILE_FILES_END" \
 WITHSELECTEDFILES_FILE_MARKER="$fileMarker" \
-    exec withSelectedFiles --select-exec newestFile --name-only -- {} \; "$@"
+    exec withSelectedFiles --select-exec newestFile --name-only -- {} "${newestFileFindArgs[@]}" \; "$@"
