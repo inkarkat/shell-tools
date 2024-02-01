@@ -47,7 +47,6 @@ HELPDESCRIPTION
     --bare		Do not print a status line before and after launching
 			the COMMAND.
 HELPTEXT
-HELPTEXT
     runWithPrompt --get-long-usage 2>/dev/null
     cat <<HELPTEXT
 
