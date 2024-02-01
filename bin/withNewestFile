@@ -1,4 +1,5 @@
 #!/bin/bash
+shopt -qs extglob
 
 : ${WITHNEWESTFILE_COMMAND_JOINER=;}
 : ${WITHNEWESTFILE_EXEC_END=;}
@@ -9,11 +10,11 @@ fileMarker="$WITHNEWESTFILE_FILE_MARKER"; unset WITHNEWESTFILE_FILE_MARKER
 printUsage()
 {
     cat <<HELPTEXT
-Execute ${commands:-COMMAND} on the last modified file (which ${fileMarker:+either }is appended${fileMarker:+ or replaces
-any $fileMarker marker} inside COMMANDLINE) in ${dirspecs:-DIR}.
+Execute ${commands:-COMMAND} on the last modified file(s) (which ${fileMarker:+either }are appended${fileMarker:+ or
+replace any $fileMarker marker} inside COMMANDLINE) in ${dirspecs:-DIR}.
 HELPTEXT
     echo
-    local commonArgs='[-r|--recursive]'
+    local commonArgs="[-d|--include-directories|-r|--recursive] [-t|--newer-than EPOCH|-N|--newer FILE|'FILE-GLOB' [...]|-n|--count N]"
     local commonCommandArgs="-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHNEWESTFILE_EXEC_END} [--exec ...] | SIMPLECOMMAND [...]"
     [ -z "$commands" ] || commonCommandArgs=''
     if [ -n "$dirspecs" ]; then
@@ -33,7 +34,14 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
-	--recursive|-r)	shift; newestFileFindArgs=();;
+	--recursive|-r)	newestFilesArgs+=("$1"); shift; newestFileFindArgs=();;
+	--include-directories|-d)
+			newestFilesArgs+=("$1"); shift;;
+	-[tN])		newestFilesArgs+=("$1" "${2?}"); shift; shift;;
+	-n)		newestFilesArgs+=(--count "${2?}"); shift; shift;;  # -c N clashes with -c COMMANDLINE; rename to -n
+	--@(newer-than|newer|count))
+			newestFilesArgs+=("$1" "${2?}"); shift; shift;;
+
 	--files|-f)	allargs+=("$1"); shift
 			while [ $# -gt 0 -a "$1" != "$WITHNEWESTFILE_FILES_END" ]
 			do
@@ -58,9 +66,16 @@ do
 done
 set -- "${allargs[@]}" "$@"
 
+if [ ${#newestFilesArgs[@]} -eq 0 ]; then
+    # Default: Only single file.
+    typeset -a selector=(newestFile --name-only -- {} "${newestFileFindArgs[@]}")
+else
+    # Multiple / flexible number of files requested.
+    typeset -a selector=(newestFiles "${newestFilesArgs[@]}" -- {})
+fi
 
 WITHSELECTEDFILES_COMMAND_JOINER="$WITHNEWESTFILE_COMMAND_JOINER" \
 WITHSELECTEDFILES_EXEC_END="$WITHNEWESTFILE_EXEC_END" \
 WITHSELECTEDFILES_FILES_END="$WITHNEWESTFILE_FILES_END" \
 WITHSELECTEDFILES_FILE_MARKER="$fileMarker" \
-    exec withSelectedFiles --select-exec newestFile --name-only -- {} "${newestFileFindArgs[@]}" \; "$@"
+    exec withSelectedFiles --select-exec "${selector[@]}" \; "$@"

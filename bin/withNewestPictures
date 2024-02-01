@@ -1,6 +1,0 @@
-#!/bin/bash
-
-: ${WITHNEWESTPICTURE_DIR:=~/Pictures}
-
-WITHNEWESTFILES_WRAPPER="$(basename "$0")" \
-    exec withNewestFiles --files "$WITHNEWESTPICTURE_DIR" \; "$@"

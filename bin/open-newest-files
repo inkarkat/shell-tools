@@ -1,4 +1,0 @@
-#!/bin/sh
-
-WITHNEWESTFILES_WRAPPER="$(basename "$0")" \
-    exec withNewestFiles --exec eachArg xdg-open -- \; "$@"

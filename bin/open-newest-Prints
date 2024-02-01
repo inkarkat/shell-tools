@@ -1,3 +1,0 @@
-#!/bin/sh
-
-exec withNewestPrints --exec eachArg xdg-open -- \; "$@"

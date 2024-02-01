@@ -1,6 +1,0 @@
-#!/bin/bash
-
-: ${INBOX_DIR:=~/inbox}
-
-WITHNEWESTFILES_WRAPPER="$(basename "$0")" \
-    exec withNewestFiles --recursive --files "$INBOX_DIR" \; "$@"

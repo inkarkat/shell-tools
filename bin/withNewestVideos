@@ -1,6 +1,0 @@
-#!/bin/bash
-
-: ${WITHNEWESTVIDEO_DIR:=~/Videos}
-
-WITHNEWESTFILES_WRAPPER="$(basename "$0")" \
-    exec withNewestFiles --files "$WITHNEWESTVIDEO_DIR" \; "$@"

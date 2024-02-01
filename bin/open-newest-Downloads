@@ -1,3 +1,0 @@
-#!/bin/sh
-
-exec withNewestDownloads --exec eachArg xdg-open -- \; "$@"
