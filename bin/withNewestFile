@@ -10,8 +10,8 @@ fileMarker="$WITHNEWESTFILE_FILE_MARKER"; unset WITHNEWESTFILE_FILE_MARKER
 printUsage()
 {
     cat <<HELPTEXT
-Execute ${commands:-COMMAND} on the last modified file(s) (which ${fileMarker:+either }are appended${fileMarker:+ or
-replace any $fileMarker marker} inside COMMANDLINE) in ${dirspecs:-DIR}.
+Execute ${commands:-COMMAND} on / print the last modified file(s) (which ${fileMarker:+either }are appended${fileMarker:+
+or replace any $fileMarker marker} inside COMMANDLINE) in ${dirspecs:-DIR}.
 HELPTEXT
     echo
     local commonArgs="[-d|--include-directories|-r|--recursive] [-t|--newer-than EPOCH|-N|--newer FILE|'FILE-GLOB' [...]|-n|--count N]"

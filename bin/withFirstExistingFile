@@ -1,6 +1,7 @@
 #!/bin/bash
 set -o pipefail
 
+: ${WITHFIRSTEXISTINGFILE_DEFAULT_COMMAND='printf %s\\n'}
 : ${WITHFIRSTEXISTINGFILE_COMMAND_JOINER=;}
 : ${WITHFIRSTEXISTINGFILE_EXEC_END=;}
 : ${WITHFIRSTEXISTINGFILE_FILES_END=;}
@@ -28,8 +29,8 @@ printLongUsage()
     # This is the long "man page" when launched with the help argument.
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
-Execute COMMAND on the first FILE (which ${fileMarker:+either }is appended${fileMarker:+ or replaces any
-$fileMarker marker} inside COMMANDLINE) that exists.
+Execute COMMAND on / print the first FILE (which ${fileMarker:+either }is appended${fileMarker:+ or replaces
+any $fileMarker marker} inside COMMANDLINE) that exists.
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
@@ -146,7 +147,7 @@ do
     esac
 done
 filespecs+=("$@")
-if [ -z "$commands" ]; then
+if [ -z "${commands:=$WITHFIRSTEXISTINGFILE_DEFAULT_COMMAND}" ]; then
     echo "ERROR: No COMMAND(s) specified; need to pass -c|--command \"COMMANDLINE\", or --exec SIMPLECOMMAND [...] ${WITHFIRSTEXISTINGFILE_EXEC_END} or SIMPLECOMMAND."
     echo
     printUsage "$0"
