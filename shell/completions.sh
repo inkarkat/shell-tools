@@ -5,4 +5,6 @@ completeAsCommand commandlineToShellCommand \
     exitsWith onfile \
     processAddedFiles replify reverseFileArgs slowcommand sortedFileArgs \
     tempdir tempedit tempfileAndEdit tempfile \
-    withAccessibleFile withAliasedCommand withDir withFirstExistingFile withHome withLoggingTo withOutputToSink withPath withPid withTempfile withVisualizedStatus
+    withAccessibleFile withAliasedCommand withDir withFirstExistingFile withHome withLoggingTo \
+    withNewestAblage withNewestDownload withNewestFile withNewestInbox withNewestPicture withNewestPrint withNewestTemp withNewestVideo \
+    withOutputToSink withPath withPid withSelectedFiles withTempfile withVisualizedStatus
