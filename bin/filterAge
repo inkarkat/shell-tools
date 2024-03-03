@@ -1,16 +1,18 @@
 #!/bin/bash
 shopt -qs extglob
 
+DATE=dateex; type -t "$DATE" >/dev/null || DATE=date	# Use extended date parsing via dateex if available.
+
 printUsage()
 {
     cat <<HELPDESCRIPTION
-Only print lines where the age (Unix epoch) in the first column is greater /
-smaller than AGE.
+Only print lines where the date (Unix epoch) in the first column is greater /
+smaller than AGE / DATE.
 SUFFIX may be 's' for seconds (the default), 'm' for minutes, 'h' for hours, 'd'
 for days, 'w' for weeks, 'mo' for months, 'y' for years, 'g' for generations.
 HELPDESCRIPTION
     echo
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-k|--keep-date] -n|--newer|-o|--older|-lt|-le|-eq|-ne|-ge|-gt AGE[SUFFIX]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-k|--keep-date] -n|--newer|-o|--older|-lt|-le|-eq|-ne|-ge|-gt AGE[SUFFIX]|DATE'
     cat <<HELPTEXT
     --field-separator|-F FS
 			Use FS for splitting the data into columns (instead of
@@ -25,20 +27,30 @@ EXIT STATUS:
 HELPTEXT
 }
 
-timeToSeconds()
+now="$(date +%s)"
+adjustment=
+timeToEpoch()
 {
+    if [ -n "$referenceEpoch" ]; then
+	echo 'ERROR: Only one AGE[SUFFIX]|DATE allowed.'
+	echo
+	printUsage "$0"
+	exit 2
+    fi >&2
+
     case "$1" in
-	+([0-9])?(s))   age="${1%s}";;
-	+([0-9])m)	age=$((${1%m} * 60));;
-	+([0-9])h)	age=$((${1%h} * 3600));;
-	+([0-9])d)	age=$((${1%d} * 86400));;
-	+([0-9])w)	age=$((${1%w} * 86400 * 7));;
-	+([0-9])mo)	age=$((${1%mo} * 86400 * 30));;
-	+([0-9])y)	age=$((${1%y} * 86400 * 365));;
-	+([0-9])g)	age=$((${1%g} * 86400 * 9131));;
-	*)		printf >&2 'ERROR: Illegal age: %s\n' "$1"; exit 2;;
+	+([0-9])?(s))   referenceEpoch=$((now - ${1%s}));;
+	+([0-9])m)	referenceEpoch=$((now - ${1%m} * 60));;
+	+([0-9])h)	referenceEpoch=$((now - ${1%h} * 3600));;
+	+([0-9])d)	referenceEpoch=$((now - ${1%d} * 86400));;
+	+([0-9])w)	referenceEpoch=$((now - ${1%w} * 86400 * 7));;
+	+([0-9])mo)	referenceEpoch=$((now - ${1%mo} * 86400 * 30));;
+	+([0-9])y)	referenceEpoch=$((now - ${1%y} * 86400 * 365));;
+	+([0-9])g)	referenceEpoch=$((now - ${1%g} * 86400 * 9131));;
+	*)		referenceEpoch=$("$DATE" --date="$1" +%s) || exit 2
+			adjustment=0	# Don't adjust an absolute date; only relative ages should be time-adjusted.
+			;;
     esac
-    printf %s "$age"
 }
 
 isKeepDate=
@@ -50,10 +62,10 @@ do
 	--field-separator|-F)
 			shift; IFS="$1"; shift;;
 	--keep-date|-k)	shift; isKeepDate=t;;
-	--newer|-n)	shift; age="$(timeToSeconds "$1")" || exit $?; shift; compareOp=-lt;;
-	--older|-o)	shift; age="$(timeToSeconds "$1")" || exit $?; shift; compareOp=-gt;;
+	--newer|-n)	shift; timeToEpoch "$1"; shift; compareOp=-lt;;
+	--older|-o)	shift; timeToEpoch "$1"; shift; compareOp=-gt;;
 	-lt|-le|-eq|-ne|-ge|-gt)
-			compareOp="$1"; shift; age="$(timeToSeconds "$1")" || exit $?; shift;;
+			compareOp="$1"; shift; timeToEpoch "$1"; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
@@ -66,7 +78,6 @@ fi
 
 status=
 SECONDS=0
-now="$(date +%s)"
 isEOL=t
 while read -r dateField remainder || { isEOL=; [ -n "$line" ]; }
 do
@@ -78,7 +89,7 @@ do
 	continue
     fi
 
-    [ $((now + SECONDS - epoch)) $compareOp $age ] || continue
+    [ $((referenceEpoch + ${adjustment:-SECONDS})) $compareOp $epoch ] || continue
     printf "%s${isEOL:+\\n}" "${isKeepDate:+${dateField}${IFS:0:1}}$remainder"
     : ${status:=0}
 done
