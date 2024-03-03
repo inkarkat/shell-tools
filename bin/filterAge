@@ -28,18 +28,24 @@ HELPTEXT
 now="$(date +%s)"
 timeToEpoch()
 {
+    if [ -n "$referenceEpoch" ]; then
+	echo 'ERROR: Only one AGE[SUFFIX]|DATE allowed.'
+	echo
+	printUsage "$0"
+	exit 2
+    fi >&2
+
     case "$1" in
-	+([0-9])?(s))   epoch=$((now - ${1%s}));;
-	+([0-9])m)	epoch=$((now - ${1%m} * 60));;
-	+([0-9])h)	epoch=$((now - ${1%h} * 3600));;
-	+([0-9])d)	epoch=$((now - ${1%d} * 86400));;
-	+([0-9])w)	epoch=$((now - ${1%w} * 86400 * 7));;
-	+([0-9])mo)	epoch=$((now - ${1%mo} * 86400 * 30));;
-	+([0-9])y)	epoch=$((now - ${1%y} * 86400 * 365));;
-	+([0-9])g)	epoch=$((now - ${1%g} * 86400 * 9131));;
+	+([0-9])?(s))   referenceEpoch=$((now - ${1%s}));;
+	+([0-9])m)	referenceEpoch=$((now - ${1%m} * 60));;
+	+([0-9])h)	referenceEpoch=$((now - ${1%h} * 3600));;
+	+([0-9])d)	referenceEpoch=$((now - ${1%d} * 86400));;
+	+([0-9])w)	referenceEpoch=$((now - ${1%w} * 86400 * 7));;
+	+([0-9])mo)	referenceEpoch=$((now - ${1%mo} * 86400 * 30));;
+	+([0-9])y)	referenceEpoch=$((now - ${1%y} * 86400 * 365));;
+	+([0-9])g)	referenceEpoch=$((now - ${1%g} * 86400 * 9131));;
 	*)		printf >&2 'ERROR: Illegal age: %s\n' "$1"; exit 2;;
     esac
-    printf %s "$epoch"
 }
 
 isKeepDate=
@@ -51,10 +57,10 @@ do
 	--field-separator|-F)
 			shift; IFS="$1"; shift;;
 	--keep-date|-k)	shift; isKeepDate=t;;
-	--newer|-n)	shift; referenceEpoch="$(timeToEpoch "$1")" || exit $?; shift; compareOp=-lt;;
-	--older|-o)	shift; referenceEpoch="$(timeToEpoch "$1")" || exit $?; shift; compareOp=-gt;;
+	--newer|-n)	shift; timeToEpoch "$1"; shift; compareOp=-lt;;
+	--older|-o)	shift; timeToEpoch "$1"; shift; compareOp=-gt;;
 	-lt|-le|-eq|-ne|-ge|-gt)
-			compareOp="$1"; shift; referenceEpoch="$(timeToEpoch "$1")" || exit $?; shift;;
+			compareOp="$1"; shift; timeToEpoch "$1"; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
