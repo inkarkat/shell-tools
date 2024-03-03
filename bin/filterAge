@@ -1,16 +1,18 @@
 #!/bin/bash
 shopt -qs extglob
 
+DATE=dateex; type -t "$DATE" >/dev/null || DATE=date	# Use extended date parsing via dateex if available.
+
 printUsage()
 {
     cat <<HELPDESCRIPTION
-Only print lines where the age (Unix epoch) in the first column is greater /
-smaller than AGE.
+Only print lines where the date (Unix epoch) in the first column is greater /
+smaller than AGE / DATE.
 SUFFIX may be 's' for seconds (the default), 'm' for minutes, 'h' for hours, 'd'
 for days, 'w' for weeks, 'mo' for months, 'y' for years, 'g' for generations.
 HELPDESCRIPTION
     echo
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-k|--keep-date] -n|--newer|-o|--older|-lt|-le|-eq|-ne|-ge|-gt AGE[SUFFIX]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-k|--keep-date] -n|--newer|-o|--older|-lt|-le|-eq|-ne|-ge|-gt AGE[SUFFIX]|DATE'
     cat <<HELPTEXT
     --field-separator|-F FS
 			Use FS for splitting the data into columns (instead of
@@ -26,6 +28,7 @@ HELPTEXT
 }
 
 now="$(date +%s)"
+adjustment=
 timeToEpoch()
 {
     if [ -n "$referenceEpoch" ]; then
@@ -44,7 +47,9 @@ timeToEpoch()
 	+([0-9])mo)	referenceEpoch=$((now - ${1%mo} * 86400 * 30));;
 	+([0-9])y)	referenceEpoch=$((now - ${1%y} * 86400 * 365));;
 	+([0-9])g)	referenceEpoch=$((now - ${1%g} * 86400 * 9131));;
-	*)		printf >&2 'ERROR: Illegal age: %s\n' "$1"; exit 2;;
+	*)		referenceEpoch=$("$DATE" --date="$1" +%s) || exit 2
+			adjustment=0	# Don't adjust an absolute date; only relative ages should be time-adjusted.
+			;;
     esac
 }
 
@@ -84,7 +89,7 @@ do
 	continue
     fi
 
-    [ $((referenceEpoch + SECONDS)) $compareOp $epoch ] || continue
+    [ $((referenceEpoch + ${adjustment:-SECONDS})) $compareOp $epoch ] || continue
     printf "%s${isEOL:+\\n}" "${isKeepDate:+${dateField}${IFS:0:1}}$remainder"
     : ${status:=0}
 done
