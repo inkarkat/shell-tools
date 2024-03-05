@@ -1,0 +1,165 @@
+#!/bin/bash
+
+: ${COMBINATIONS_COMMAND_JOINER=;}
+: ${COMBINATIONS_EXEC_END=;}
+: ${COMBINATIONS_ITEM_MARKER='{}'}
+: ${COMBINATIONS_COUNTED_ITEM_MARKER='{N}'}
+itemMarker="$COMBINATIONS_ITEM_MARKER"; unset COMBINATIONS_ITEM_MARKER
+countedItemMarker="$COMBINATIONS_COUNTED_ITEM_MARKER"; unset COMBINATIONS_COUNTED_ITEM_MARKER
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[-n|--length N] [-s|--separator SEP | -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...]${itemMarker:+ [}${itemMarker}${itemMarker:+] [...]}${countedItemMarker:+ [}${countedItemMarker}${countedItemMarker:+] [...]} ${COMBINATIONS_EXEC_END} [--exec ...]] [--] ARG1 ARG2 [...] [-?|-h|--help]"
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Print N-length subsequences (pairs by default) of the passed ARGs.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --length|-n N	Print subsequences of length N.
+    --separator|-s SEP	Use SEP between items instead of a tab character.
+    --command|-c CMD	Execute CMD as a command-line.${itemMarker:+ The string $itemMarker is replaced
+			by all items.${countedItemMarker:+ The string $countedItemMarker is replaced by item
+			number N.}}
+    --exec CMD [...] ${COMBINATIONS_EXEC_END}	Execute CMD; all following arguments are taken to be
+			arguments to the CMD until an argument consisting of
+			'${COMBINATIONS_EXEC_END}' is encountered.${itemMarker:+ The string $itemMarker is replaced by all
+			items.}${countedItemMarker:+ The string $countedItemMarker is replaced by item number N.}
+EXIT STATUS:
+    0	Complete success.
+    2	Bad invocation, wrong or missing command-line arguments.
+    *   any exit status from COMMAND(s); this aborts the enumeration
+HELPTEXT
+}
+
+length=2
+separator=$'\t'
+action=printCombination
+commands=
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--separator|-s)	shift; separator="${1?}"; shift;;
+	--length|-n)	shift; length="${1:?}"; shift;;
+
+	--command|-c)	shift; commands+="${commands:+ $COMBINATIONS_COMMAND_JOINER }$1"; shift; action=executeCombination;;
+	--exec)		shift
+			cmd=
+			printf -v escapedItemMarker %q "$itemMarker"
+			printf -v escapedCountedItemMarker %q "$countedItemMarker"
+			while [ $# -gt 0 -a "$1" != "$COMBINATIONS_EXEC_END" ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    quotedArg="${quotedArg//"$escapedItemMarker"/$itemMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    # XXX: --exec can only consider already encountered --length.
+			    for ((n = 1; n <= length; n++))
+			    do
+				quotedArg="${quotedArg//"${escapedCountedItemMarker/N/$n}"/${countedItemMarker/N/$n}}"	# %q escapes {N}, we don't want that to have it interpolated later.
+			    done
+			    cmd+="${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${COMBINATIONS_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			commands+="${commands:+ $COMBINATIONS_COMMAND_JOINER }${cmd}"
+			action=executeCombination
+			;;
+
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -lt 2 ]; then
+    printUsage "$0" >&2
+    exit 2
+fi
+
+printCombination()
+{
+    local s=''
+    local item; for item
+    do
+	printf %s%s "$s" "$item"
+	s="$separator"
+    done
+    echo
+}
+
+executeCombination()
+{
+    local interpolatedCommands="$commands"
+
+    printf -v quotedItems '%q ' "$@"; quotedItems="${quotedItems% }"
+    typeset -a a=("$@")
+    interpolatedCommands="${commands//"$itemMarker"/$quotedItems}"
+
+    local item n
+    for ((n = 1; n <= length; n++))
+    do
+    	eval "item=\$$n"
+	interpolatedCommands="${interpolatedCommands//"${countedItemMarker/N/$n}"/$item}"
+    done
+
+    [ "$interpolatedCommands" = "$commands" ] || a=()
+    eval "$interpolatedCommands" '"${a[@]}"' || exit $?
+}
+
+
+typeset -a items=("$@")
+n=${#items[@]}
+
+# Generate the initial indices.
+eval "indices=({0..$((length - 1))})"
+
+while :
+do
+    # Process the current combination.
+    typeset -a current=()
+    for i in "${indices[@]}"
+    do
+	current+=("${items[i]}")
+    done
+    $action "${current[@]}"
+
+    # Find the first index that can be incremented.
+    for ((i = $((length - 1)); i >= 0; i--))
+    do
+	if ((indices[i] < n - length + i)); then
+	    break
+	fi
+    done
+
+    # Increment the index found.
+    ((indices[i]++))
+
+    # Adjust the following indices.
+    for ((j = i + 1; j < length; j++))
+    do
+	((indices[j] = indices[j - 1] + 1))
+    done
+
+    # If we've gone past the end, we're done.
+    if ((indices[0] > n - length)); then
+	break
+    fi
+done
