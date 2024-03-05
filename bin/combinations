@@ -11,6 +11,7 @@ HELPTEXT
 
 length=2
 separator=$'\t'
+action=printCombination
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -27,8 +28,18 @@ if [ $# -lt 2 ]; then
     exit 2
 fi
 
+printCombination()
+{
+    local s=''
+    local item; for item
+    do
+	printf %s%s "$s" "$item"
+	s="$separator"
+    done
+    echo
+}
 
-items=("$@")
+typeset -a items=("$@")
 n=${#items[@]}
 
 # Generate the initial indices.
@@ -36,14 +47,13 @@ eval "indices=({0..$((length - 1))})"
 
 while :
 do
-    # Output the current combination.
-    s=''
+    # Process the current combination.
+    typeset -a current=()
     for i in "${indices[@]}"
     do
-	printf %s%s "$s" "${items[i]}"
-	s="$separator"
+	current+=("${items[i]}")
     done
-    echo
+    $action "${current[@]}"
 
     # Find the first index that can be incremented.
     for ((i = $((length - 1)); i >= 0; i--))
