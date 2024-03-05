@@ -1,0 +1,69 @@
+#!/bin/bash
+
+printUsage()
+{
+    cat <<HELPTEXT
+Print N-length subsequences (pairs by default) of the passed ARGs.
+HELPTEXT
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[-n|--length N] [-s|--separator SEP] [--] ARG1 ARG2 [...] [-?|-h|--help]'
+}
+
+length=2
+separator=$'\t'
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+	--separator|-s)	shift; separator="${1?}"; shift;;
+	--length|-n)	shift; length="${1:?}"; shift;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -lt 2 ]; then
+    printUsage "$0" >&2
+    exit 2
+fi
+
+
+items=("$@")
+n=${#items[@]}
+
+# Generate the initial indices.
+eval "indices=({0..$((length - 1))})"
+
+while :
+do
+    # Output the current combination.
+    s=''
+    for i in "${indices[@]}"
+    do
+	printf %s%s "$s" "${items[i]}"
+	s="$separator"
+    done
+    echo
+
+    # Find the first index that can be incremented.
+    for ((i = $((length - 1)); i >= 0; i--))
+    do
+	if ((indices[i] < n - length + i)); then
+	    break
+	fi
+    done
+
+    # Increment the index found.
+    ((indices[i]++))
+
+    # Adjust the following indices.
+    for ((j = i + 1; j < length; j++))
+    do
+	((indices[j] = indices[j - 1] + 1))
+    done
+
+    # If we've gone past the end, we're done.
+    if ((indices[0] > n - length)); then
+	break
+    fi
+done
