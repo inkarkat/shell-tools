@@ -96,9 +96,12 @@ do
     esac
 done
 if [ $# -lt 2 ]; then
-    printUsage "$0" >&2
+    printUsage "$0"
     exit 2
-fi
+elif [ $length -gt $# ]; then
+    printf >&2 'ERROR: Fewer ARGs (%s) than length (%d).\n' $# $length
+    exit 2
+fi >&2
 
 printCombination()
 {
