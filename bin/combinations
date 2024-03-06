@@ -11,7 +11,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[-n|--length N] [-s|--separator SEP | -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...]${itemMarker:+ [}${itemMarker}${itemMarker:+] [...]}${countedItemMarker:+ [}${countedItemMarker}${countedItemMarker:+] [...]} ${COMBINATIONS_EXEC_END} [--exec ...]] [--] ARG1 ARG2 [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[-P|--permutations] [-n|--length N] [-s|--separator SEP | -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...]${itemMarker:+ [}${itemMarker}${itemMarker:+] [...]}${countedItemMarker:+ [}${countedItemMarker}${countedItemMarker:+] [...]} ${COMBINATIONS_EXEC_END} [--exec ...]] [--] ARG1 ARG2 [...] [-?|-h|--help]"
 }
 printUsage()
 {
@@ -31,6 +31,9 @@ HELPDESCRIPTION
     printShortUsage "$1"
     echo
     cat <<HELPTEXT
+    --permutations|-P	Print N-length permutations (where order matters, so
+			later ARGs will also appear before earlier ones; it's
+			not just in-order subsequences).
     --length|-n N	Print subsequences of length N.
     --separator|-s SEP	Use SEP between items instead of a tab character.
     --command|-c CMD	Execute CMD as a command-line.${itemMarker:+ The string $itemMarker is replaced
@@ -56,6 +59,8 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--permutations|-P)
+			shift; algorithm=generatePermutations;;
 	--separator|-s)	shift; separator="${1?}"; shift;;
 	--length|-n)	shift; length="${1:?}"; shift;;
 
@@ -117,7 +122,7 @@ executeCombination()
     local item n
     for ((n = 1; n <= length; n++))
     do
-    	eval "item=\$$n"
+	eval "item=\$$n"
 	interpolatedCommands="${interpolatedCommands//"${countedItemMarker/N/$n}"/$item}"
     done
 
@@ -166,6 +171,28 @@ generateCombinations()
 	    break
 	fi
     done
+}
+
+permute()
+{
+    local length=$1; shift
+    local itemNum=$1; shift
+    typeset -a args=("$@")
+    typeset -a items=("${args[@]:0:itemNum}")
+    typeset -a prefix=("${args[@]:itemNum}")
+    if ((length == 0)); then
+	$action "${prefix[@]}"
+	return
+    fi
+
+    local i
+    for ((i = 0; i < ${#items[@]}; i++)); do
+	permute $((length - 1)) $((itemNum - 1)) "${items[@]:0:i}" "${items[@]:i+1}" "${prefix[@]}" "${items[i]}"
+    done
+}
+generatePermutations()
+{
+    permute $length $# "$@"
 }
 
 $algorithm "$@"
