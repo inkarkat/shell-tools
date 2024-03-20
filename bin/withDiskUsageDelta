@@ -11,7 +11,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[-a|--include-absolute] [--for FILESPEC [--for ...]] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHDISKUSAGEDELTA_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[-a|--include-absolute] [--for FILE [--for ...]] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHDISKUSAGEDELTA_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
     echo
     printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" "[...] [--bare|$(runWithPrompt --get-short-usage 2>/dev/null)]"
     echo
@@ -30,7 +30,7 @@ printLongUsage()
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
 Execute COMMAND and print the disk usage delta (for the current working
-directory / passed FILESPEC(s)) afterwards.
+directory / passed FILE(s)) afterwards.
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
@@ -38,7 +38,7 @@ HELPDESCRIPTION
     cat <<HELPTEXT
     --include-absolute|-a
 			Include the absolute disk usages before and after.
-    --for FILESPEC	Consider the disk usage of FILESPEC.
+    --for FILE		Consider the disk usage of FILE.
     --command|-c CMD	The command line to be executed. When this is a simple
 			command, it can also be passed as such.
     --exec CMD [...] ${WITHDISKUSAGEDELTA_EXEC_END}	Execute CMD; all following arguments are taken to be
