@@ -1,10 +1,12 @@
 #!/bin/sh source-this-script
 
-completeAsCommand commandlineToShellCommand \
+completeAsCommand combinations commandlineToShellCommand \
     eachArg eachDir eachFile \
-    exitsWith onfile \
-    processAddedFiles replify reverseFileArgs slowcommand sortedFileArgs \
-    tempdir tempedit tempfileAndEdit tempfile \
-    withAccessibleFile withAliasedCommand withDir withFirstExistingFile withHome withLoggingTo \
+    exitsWith launchWithIcon noecho onfile \
+    processAddedFiles processFilesAndDeleteEmpty processPassedMonths processPassedYears replify reverseFileArgs \
+    sameScreenPosition slowcommand sortedFileArgs \
+    tempdir tempedit tempfile tempfileAndEdit \
+    withAccessibleFile withAliasedCommand withDebug withDeltaCommand withDir withDiskUsageDelta withEphemeralFile withFallbackPath withFirstExistingFile withHome withLoggingTo \
     withNewestAblage withNewestDownload withNewestFile withNewestInbox withNewestPicture withNewestPrint withNewestTemp withNewestVideo \
-    withOutputToSink withPath withPid withSelectedFiles withTempfile withVisualizedStatus
+    withOutputToSink withOutputToSinkBasedOnMatch withOutputToSinkBasedOnStatus withPath withPid withPipedArgs withRemovedFile withRestoredFile withSelectedFiles \
+    withTempdir withTempfile withVisualizedStatus
