@@ -75,16 +75,21 @@ do
 	--calculate-delta)
 			shift
 			[ $# -eq 2 ] || { printf >&2 'ASSERT: Expected 2 arguments, got %d\n' $#; exit 3; }
+			unset percentage
 			if [ $1 -eq $2 ]; then
 			    [ "$isIncludeAbsolute" ] \
 				&& printf '%s did not change: %s\n' "$WITHDISKUSAGEDELTA_WHAT" "$(formatSize $1)" \
 				|| printf '%s did not change.\n' "$WITHDISKUSAGEDELTA_WHAT"
 			    exit 0
+			elif [ $1 -eq 0 ]; then
+			    trend='has built up to'
+			    delta=$2
+			    percentage=''
 			elif [ $1 -lt $2 ]; then
-			    trend='increased'
+			    trend='increased by'
 			    delta=$(($2 - $1))
 			else
-			    trend='decreased'
+			    trend='decreased by'
 			    delta=$(($1 - $2))
 			fi
 
@@ -92,7 +97,8 @@ do
 			    && printf -v diff '%s%s%s%s%s' "$WITHDISKUSAGEDELTA_OUTPUT_END_PREFIX" "$(formatSize $1)" "$WITHDISKUSAGEDELTA_OUTPUT_END_SEPARATOR" "$(formatSize $2)" "$WITHDISKUSAGEDELTA_OUTPUT_END_SUFFIX" \
 			    || diff=''
 
-			printf '%s %s by %s (%s%%)%s\n' "$WITHDISKUSAGEDELTA_WHAT" "$trend" "$(formatSize $delta)" "$(divround $((10000 * delta / $1)) 2)" "${diff:+: }${diff:-.}"
+			: ${percentage=$(divround $((10000 * delta / $1)) 2)}
+			printf "%s %s %s${percentage:+ (}%s${percentage:+%%)}%s\\n" "$WITHDISKUSAGEDELTA_WHAT" "$trend" "$(formatSize $delta)" "$percentage" "${diff:+: }${diff:-.}"
 			exit 0
 			;;
 	--)		withDeltaCommandArgs+=("$1"); shift; break;;
