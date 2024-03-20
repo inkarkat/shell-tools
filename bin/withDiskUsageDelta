@@ -97,7 +97,7 @@ do
 			    && printf -v diff '%s%s%s%s%s' "$WITHDISKUSAGEDELTA_OUTPUT_END_PREFIX" "$(formatSize $1)" "$WITHDISKUSAGEDELTA_OUTPUT_END_SEPARATOR" "$(formatSize $2)" "$WITHDISKUSAGEDELTA_OUTPUT_END_SUFFIX" \
 			    || diff=''
 
-			: ${percentage=$(divround $((10000 * delta / $1)) 2)}
+			: ${percentage=$(divround $((100000 * delta / $1)) 2)}
 			printf "%s %s %s${percentage:+ (}%s${percentage:+%%)}%s\\n" "$WITHDISKUSAGEDELTA_WHAT" "$trend" "$(formatSize $delta)" "$percentage" "${diff:+: }${diff:-.}"
 			exit 0
 			;;
