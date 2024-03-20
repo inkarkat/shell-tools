@@ -6,12 +6,14 @@
 : ${WITHDISKUSAGEDELTA_OUTPUT_END_PREFIX=}
 : ${WITHDISKUSAGEDELTA_OUTPUT_END_SUFFIX=}
 : ${WITHDISKUSAGEDELTA_OUTPUT_END_SEPARATOR= → }
+: ${WITHDISKUSAGEDELTA_FILE_MARKER='{}'}
+fileMarker="$WITHDISKUSAGEDELTA_FILE_MARKER"; unset WITHDISKUSAGEDELTA_FILE_MARKER
 
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[-a|--include-absolute] [--for FILESPEC [--for ...]] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHDISKUSAGEDELTA_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[-a|--include-absolute] [--for FILE [--for ...]] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHDISKUSAGEDELTA_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
     echo
     printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" "[...] [--bare|$(runWithPrompt --get-short-usage 2>/dev/null)]"
     echo
@@ -30,7 +32,7 @@ printLongUsage()
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
 Execute COMMAND and print the disk usage delta (for the current working
-directory / passed FILESPEC(s)) afterwards.
+directory / passed FILE(s)) afterwards.
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
@@ -38,12 +40,14 @@ HELPDESCRIPTION
     cat <<HELPTEXT
     --include-absolute|-a
 			Include the absolute disk usages before and after.
-    --for FILESPEC	Consider the disk usage of FILESPEC.
+    --for FILE		Consider the disk usage of FILE.
     --command|-c CMD	The command line to be executed. When this is a simple
-			command, it can also be passed as such.
+			command, it can also be passed as such. ${fileMarker:+ The string
+			$fileMarker is replaced by the FILE(s) passed with --for.}
     --exec CMD [...] ${WITHDISKUSAGEDELTA_EXEC_END}	Execute CMD; all following arguments are taken to be
 			arguments to the CMD until an argument consisting of
-			'${WITHDISKUSAGEDELTA_EXEC_END}' is encountered.
+			'${WITHDISKUSAGEDELTA_EXEC_END}' is encountered. ${fileMarker:+ The string $fileMarker is replaced by the
+			FILE(s) passed with --for.}
     --bare		Do not print a status line before and after launching
 			the COMMAND.
 HELPTEXT
@@ -75,16 +79,21 @@ do
 	--calculate-delta)
 			shift
 			[ $# -eq 2 ] || { printf >&2 'ASSERT: Expected 2 arguments, got %d\n' $#; exit 3; }
+			unset percentage
 			if [ $1 -eq $2 ]; then
 			    [ "$isIncludeAbsolute" ] \
 				&& printf '%s did not change: %s\n' "$WITHDISKUSAGEDELTA_WHAT" "$(formatSize $1)" \
 				|| printf '%s did not change.\n' "$WITHDISKUSAGEDELTA_WHAT"
 			    exit 0
+			elif [ $1 -eq 0 ]; then
+			    trend='has built up to'
+			    delta=$2
+			    percentage=''
 			elif [ $1 -lt $2 ]; then
-			    trend='increased'
+			    trend='increased by'
 			    delta=$(($2 - $1))
 			else
-			    trend='decreased'
+			    trend='decreased by'
 			    delta=$(($1 - $2))
 			fi
 
@@ -92,18 +101,44 @@ do
 			    && printf -v diff '%s%s%s%s%s' "$WITHDISKUSAGEDELTA_OUTPUT_END_PREFIX" "$(formatSize $1)" "$WITHDISKUSAGEDELTA_OUTPUT_END_SEPARATOR" "$(formatSize $2)" "$WITHDISKUSAGEDELTA_OUTPUT_END_SUFFIX" \
 			    || diff=''
 
-			printf '%s %s by %s (%s%%)%s\n' "$WITHDISKUSAGEDELTA_WHAT" "$trend" "$(formatSize $delta)" "$(divround $((10000 * delta / $1)) 2)" "${diff:+: }${diff:-.}"
+			: ${percentage=$(divround $((100000 * delta / $1)) 2)}
+			printf "%s %s %s${percentage:+ (}%s${percentage:+%%)}%s\\n" "$WITHDISKUSAGEDELTA_WHAT" "$trend" "$(formatSize $delta)" "$percentage" "${diff:+: }${diff:-.}"
 			exit 0
 			;;
+
+	--exec)		shift
+			cmd=
+			printf -v escapedFileMarker %q "$fileMarker"
+			while [ $# -gt 0 -a "$1" != "$WITHDISKUSAGEDELTA_EXEC_END" ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd+="${cmd:+ }${quotedArg//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${WITHDISKUSAGEDELTA_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			withDeltaCommandArgs+=(--command "$cmd")    # Convert --exec to --command so that we can simply replace $fileMarker with $quotedFilespecs. Otherwise, we'd have to separate the --exec argments and do injection of the ${filespecs[@]}, or require that --for FILE must be passed before --exec.
+			;;
+
 	--)		withDeltaCommandArgs+=("$1"); shift; break;;
 	*)		withDeltaCommandArgs+=("$1"); shift;;
     esac
 done
+set -- "${withDeltaCommandArgs[@]}" "$@"
 
-quotedFilespecs=; [ ${#filespecs[@]} -eq 0 ] || printf -v quotedFilespecs ' %q' "${filespecs[@]}"
+quotedFilespecs=
+if [ ${#filespecs[@]} -gt 0 ]; then
+    printf -v quotedFilespecs '%q ' "${filespecs[@]}"; quotedFilespecs="${quotedFilespecs% }"
+    if [ -n "$fileMarker" ]; then
+	set -- "${@//"$fileMarker"/$quotedFilespecs}"
+    fi
+fi
 WITHDELTACOMMAND_EXEC_END="$WITHDISKUSAGEDELTA_EXEC_END" \
 WITHDELTACOMMAND_COMMAND_JOINER="$WITHDISKUSAGEDELTA_COMMAND_JOINER" \
 	exec withDeltaCommand \
-		--delta-command "du --bytes --summarize --total --${quotedFilespecs} 2>/dev/null | tail -n 1 | field 1" \
+		--delta-command "du --bytes --summarize --total -- ${quotedFilespecs} 2>/dev/null | tail -n 1 | field 1" \
 		--sink-exec "${BASH_SOURCE[0]}" ${isIncludeAbsolute:+--include-absolute} --calculate-delta \; \
-		"${withDeltaCommandArgs[@]}" "$@"
+		"$@"
