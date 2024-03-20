@@ -6,6 +6,8 @@
 : ${WITHDISKUSAGEDELTA_OUTPUT_END_PREFIX=}
 : ${WITHDISKUSAGEDELTA_OUTPUT_END_SUFFIX=}
 : ${WITHDISKUSAGEDELTA_OUTPUT_END_SEPARATOR= → }
+: ${WITHDISKUSAGEDELTA_FILE_MARKER='{}'}
+fileMarker="$WITHDISKUSAGEDELTA_FILE_MARKER"; unset WITHDISKUSAGEDELTA_FILE_MARKER
 
 printShortUsage()
 {
@@ -40,10 +42,12 @@ HELPDESCRIPTION
 			Include the absolute disk usages before and after.
     --for FILE		Consider the disk usage of FILE.
     --command|-c CMD	The command line to be executed. When this is a simple
-			command, it can also be passed as such.
+			command, it can also be passed as such. ${fileMarker:+ The string
+			$fileMarker is replaced by the FILE(s) passed with --for.}
     --exec CMD [...] ${WITHDISKUSAGEDELTA_EXEC_END}	Execute CMD; all following arguments are taken to be
 			arguments to the CMD until an argument consisting of
-			'${WITHDISKUSAGEDELTA_EXEC_END}' is encountered.
+			'${WITHDISKUSAGEDELTA_EXEC_END}' is encountered. ${fileMarker:+ The string $fileMarker is replaced by the
+			FILE(s) passed with --for.}
     --bare		Do not print a status line before and after launching
 			the COMMAND.
 HELPTEXT
@@ -101,15 +105,40 @@ do
 			printf "%s %s %s${percentage:+ (}%s${percentage:+%%)}%s\\n" "$WITHDISKUSAGEDELTA_WHAT" "$trend" "$(formatSize $delta)" "$percentage" "${diff:+: }${diff:-.}"
 			exit 0
 			;;
+
+	--exec)		shift
+			cmd=
+			printf -v escapedFileMarker %q "$fileMarker"
+			while [ $# -gt 0 -a "$1" != "$WITHDISKUSAGEDELTA_EXEC_END" ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd+="${cmd:+ }${quotedArg//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${WITHDISKUSAGEDELTA_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			withDeltaCommandArgs+=(--command "$cmd")    # Convert --exec to --command so that we can simply replace $fileMarker with $quotedFilespecs. Otherwise, we'd have to separate the --exec argments and do injection of the ${filespecs[@]}, or require that --for FILE must be passed before --exec.
+			;;
+
 	--)		withDeltaCommandArgs+=("$1"); shift; break;;
 	*)		withDeltaCommandArgs+=("$1"); shift;;
     esac
 done
+set -- "${withDeltaCommandArgs[@]}" "$@"
 
-quotedFilespecs=; [ ${#filespecs[@]} -eq 0 ] || printf -v quotedFilespecs ' %q' "${filespecs[@]}"
+quotedFilespecs=
+if [ ${#filespecs[@]} -gt 0 ]; then
+    printf -v quotedFilespecs '%q ' "${filespecs[@]}"; quotedFilespecs="${quotedFilespecs% }"
+    if [ -n "$fileMarker" ]; then
+	set -- "${@//"$fileMarker"/$quotedFilespecs}"
+    fi
+fi
 WITHDELTACOMMAND_EXEC_END="$WITHDISKUSAGEDELTA_EXEC_END" \
 WITHDELTACOMMAND_COMMAND_JOINER="$WITHDISKUSAGEDELTA_COMMAND_JOINER" \
 	exec withDeltaCommand \
-		--delta-command "du --bytes --summarize --total --${quotedFilespecs} 2>/dev/null | tail -n 1 | field 1" \
+		--delta-command "du --bytes --summarize --total -- ${quotedFilespecs} 2>/dev/null | tail -n 1 | field 1" \
 		--sink-exec "${BASH_SOURCE[0]}" ${isIncludeAbsolute:+--include-absolute} --calculate-delta \; \
-		"${withDeltaCommandArgs[@]}" "$@"
+		"$@"
