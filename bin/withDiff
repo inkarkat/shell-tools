@@ -61,6 +61,7 @@ EXIT STATUS:
 HELPTEXT
 }
 
+isColor=; [ -t 1 ] && isColor=t
 typeset -a filespecs=()
 commands=
 isBare=
@@ -74,9 +75,24 @@ do
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 	--for)		shift; filespecs+=("${1:?}"); shift;;
 
+	--no-color|--color=never)
+			isColor=; shift;;
+	--color=always)	isColor=t; shift;;
+	--color=auto)	shift;;
+	--color)	shift
+			case "$1" in
+			    always) shift; isColor=t;;
+			    never)  shift; isColor=;;
+			    auto)   shift; ;;
+			    *)	    # Take a no-param --color as diff's --color flag and disable colordiff.
+				    diffArgs+=(--color); isColor=
+				    ;;
+			esac
+			;;
+
 	-+([aBbdEeIinqsTtuwyZ]))
 			diffArgs+=("$1"); shift;;
-	--@(brief|color|context|ed|expand-tabs|ignore-all-space|ignore-blank-lines|ignore-case|ignore-file-name-case|ignore-space-change|ignore-tab-expansion|ignore-trailing-space|initial-tab|left-column|minimal|no-dereference|no-ignore-file-name-case|normal|rcs|report-identical-files|side-by-side|speed-large-files|strip-trailing-cr|suppress-blank-empty|suppress-common-lines|text|unidirectional-new-file|unified))
+	--@(brief|context|ed|expand-tabs|ignore-all-space|ignore-blank-lines|ignore-case|ignore-file-name-case|ignore-space-change|ignore-tab-expansion|ignore-trailing-space|initial-tab|left-column|minimal|no-dereference|no-ignore-file-name-case|normal|rcs|report-identical-files|side-by-side|speed-large-files|strip-trailing-cr|suppress-blank-empty|suppress-common-lines|text|unidirectional-new-file|unified))
 			diffArgs+=("$1"); shift;;
 	-[CDFlNprSUWXx])
 			diffArgs+=("$1" "${2?}"); shift; shift;;
@@ -171,10 +187,11 @@ execute()
 
 execute || exit $?
 
+diffCommand=diff; [ "$isColor" ] && type -t colordiff >/dev/null && diffCommand=colordiff
 status=0
 for file in "${filespecs[@]}"
 do
     label="${tempLabelsFor["$file"]}"
-    diff "${diffRecursiveArg[@]}" "${diffArgs[@]}" ${label:+--label "$label"}  -- "${tempFilesFor["$file"]}" "$file" || status=$?
+    $diffCommand "${diffRecursiveArg[@]}" "${diffArgs[@]}" ${label:+--label "$label"}  -- "${tempFilesFor["$file"]}" "$file" || status=$?
 done
 exit $status
