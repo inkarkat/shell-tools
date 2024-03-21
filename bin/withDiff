@@ -1,0 +1,180 @@
+#!/bin/bash
+set -o pipefail
+shopt -qs dotglob extglob nullglob
+
+: ${WITHDIFF_EXEC_END=;}
+: ${WITHDIFF_COMMAND_JOINER=;}
+: ${WITHDIFF_FILE_MARKER='{}'}
+fileMarker="$WITHDIFF_FILE_MARKER"; unset WITHDIFF_FILE_MARKER
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" "--for FILE|DIR [--for ...] [DIFF-ARGS ...] [-?|-h|--help]"
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHDIFF_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]"
+    echo
+    printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" "... [--bare|$(runWithPrompt --get-short-usage 2>/dev/null)]"
+    echo
+    printf 'Usage: %q %s <<EOF\n  COMMANDLINE\n...\nEOF\n' "$(basename "$1")" '...'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Save temp copies of FILE|DIR(s), execute COMMAND and (if it succeeds) show the
+diff(s) afterwards.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --for FILE|DIR	Consider FILE / all files in DIR recursively.
+    --command|-c CMD	The command line to be executed. When this is a simple
+			command, it can also be passed as such. ${fileMarker:+ The string
+			$fileMarker is replaced by the FILE(s) passed with --for.}
+    --exec CMD [...] ${WITHDIFF_EXEC_END}	Execute CMD; all following arguments are taken to be
+			arguments to the CMD until an argument consisting of
+			'${WITHDIFF_EXEC_END}' is encountered. ${fileMarker:+ The string $fileMarker is replaced by the
+			FILE(s) passed with --for.}
+    --bare		Do not print a status line before and after launching
+			the COMMAND.
+HELPTEXT
+    runWithPrompt --get-long-usage 2>/dev/null
+    cat <<HELPTEXT
+
+EXIT STATUS:
+    0	No changes to FILE(s) (and COMMAND(s) succeeded).
+    1	At least one FILE(s) has changed (and COMMAND(s) succeeded).
+    2	Bad invocation, wrong or missing command-line arguments.
+    3	Temp copies failed, internal error or failed assertion.
+    *   any exit status from COMMAND(s)
+HELPTEXT
+}
+
+typeset -a filespecs=()
+commands=
+isBare=
+typeset -a bashArgs=()
+runWithCommand=runWithPrompt
+typeset -a runWithPromptArgs=()
+typeset -a diffArgs=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--for)		shift; filespecs+=("${1:?}"); shift;;
+
+	-+([aBbdEeIinqsTtuwyZ]))
+			diffArgs+=("$1"); shift;;
+	--@(brief|color|context|ed|expand-tabs|ignore-all-space|ignore-blank-lines|ignore-case|ignore-file-name-case|ignore-space-change|ignore-tab-expansion|ignore-trailing-space|initial-tab|left-column|minimal|no-dereference|no-ignore-file-name-case|normal|rcs|report-identical-files|side-by-side|speed-large-files|strip-trailing-cr|suppress-blank-empty|suppress-common-lines|text|unidirectional-new-file|unified))
+			diffArgs+=("$1"); shift;;
+	-[CDFlNprSUWXx])
+			diffArgs+=("$1" "${2?}"); shift; shift;;
+	--@(color|context|exclude-from|exclude|from-file|GTYPE-group-format|horizon-lines|ifdef|ignore-matching-lines|label LABEL|line-format|LTYPE-line-format|new-file|paginate|palette|recursive|show-c-function|show-function-line|starting-file|tabsize|to-file|unified|width)=*)
+			diffArgs+=("$1"); shift;;
+	--@(exclude-from|exclude|from-file|GTYPE-group-format|horizon-lines|ifdef|ignore-matching-lines|label LABEL|line-format|LTYPE-line-format|new-file|paginate|palette|recursive|show-c-function|show-function-line|starting-file|tabsize|to-file|width))
+			diffArgs+=("$1" "${2?}"); shift; shift;;
+
+	--command|-c)	shift; commands+="${commands:+ $WITHDIFF_COMMAND_JOINER }$1"; shift;;
+	--exec)		shift
+			cmd=
+			printf -v escapedFileMarker %q "$fileMarker"
+			while [ $# -gt 0 -a "$1" != "$WITHDIFF_EXEC_END" ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd+="${cmd:+ }${quotedArg//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${WITHDIFF_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			commands+="${commands:+ $WITHDIFF_COMMAND_JOINER }${cmd}"
+			;;
+	--bare)		shift; isBare=t; runWithCommand=runWith;;
+	--exit-on-failure)
+			bashArgs+=(-e); runWithPromptArgs+=("$1"); shift;;
+	--trailing-prompt|--no-trailing-prompt|--no-output-no-prompt|--no-output-no-error|--no-success-no-count|--exit-on-success|--emulate-prompt|--worst-status)
+			runWithPromptArgs+=("$1"); shift;;
+	--initial-status|--no-count-on|--exit-on|--exit-unless|--comment|--summarize-failed|--summarize-failed-separator)
+			runWithPromptArgs+=("$1" "$2"); shift; shift;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ ${#filespecs[@]} -eq 0 ]; then
+    echo 'ERROR: No --for FILE|DIR passed.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+if [ $# -ne 0 ]; then
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    printf -v escapedFileMarker %q "$fileMarker"
+    commands+="${commands:+ $WITHDIFF_COMMAND_JOINER }${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+fi
+
+[ "${DEBUG:-}" ] || trap 'rm -rf -- "${tempFilespecs[@]}" 2>/dev/null' EXIT
+typeset -A tempFilesFor=()
+typeset -A tempLabelsFor=()
+typeset -a tempFilespecs=()
+typeset -a diffRecursiveArg=()
+for file in "${filespecs[@]}"
+do
+    if [ -d "$file" ]; then
+	tempFilespec="$(mktemp --directory --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || { dirspec="${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM"; mkdir --parents -- "$dirspec" && printf %s "$dirspec"; })" || exit 3
+	containedFiles=("$file"/*)
+	[ ${#containedFiles[@]} -eq 0 ] || cp --dereference --preserve=mode,timestamps --recursive --target-directory "$tempFilespec" -- "${containedFiles[@]}" || exit 3
+	diffRecursiveArg=(--recursive)
+	# Don't use labels for recursive diffs, as the label is also shown in the diff
+	# line, and it would just cover the base directory, not the individual file,
+	# which is confusing.
+	# Instead, we copy the temp files with the original timestamps so that the
+	# information is in the file itself (but of course the "wrong" temp dir location
+	# is listed).
+    else
+	tempFilespec="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM")"
+	cp --dereference -- "$file" "$tempFilespec" || exit 3
+	tempLabelsFor["$file"]="${file} $(stat --format=%y -- "$file" 2>/dev/null || printf '%s (original)' "$file")"
+    fi
+    tempFilespecs+=("$tempFilespec")
+    tempFilesFor["$file"]="$tempFilespec"
+done
+
+execute()
+{
+    if [ -z "$commands" ]; then
+	if [ "$isBare" ] && [ ${#runWithPromptArgs[@]} -eq 0 -o "${#runWithPromptArgs[*]}" = --exit-on-failure ]; then
+	    bash "${bashArgs[@]}" -
+	else
+	    ${runWithCommand:?} "${runWithPromptArgs[@]}"
+	fi
+    else
+	printf -v quotedFiles '%q ' "${filespecs[@]}"; quotedFiles="${quotedFiles% }"
+	eval "${commands//"$fileMarker"/$quotedFiles}"
+    fi
+}
+
+execute || exit $?
+
+status=0
+for file in "${filespecs[@]}"
+do
+    label="${tempLabelsFor["$file"]}"
+    diff "${diffRecursiveArg[@]}" "${diffArgs[@]}" ${label:+--label "$label"}  -- "${tempFilesFor["$file"]}" "$file" || status=$?
+done
+exit $status
