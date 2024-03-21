@@ -69,6 +69,7 @@ typeset -a bashArgs=()
 runWithCommand=runWithPrompt
 typeset -a runWithPromptArgs=()
 typeset -a diffArgs=()
+hasLabel=
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -96,10 +97,12 @@ do
 			diffArgs+=("$1"); shift;;
 	-[CDFlNprSUWXx])
 			diffArgs+=("$1" "${2?}"); shift; shift;;
-	--@(color|context|exclude-from|exclude|from-file|GTYPE-group-format|horizon-lines|ifdef|ignore-matching-lines|label LABEL|line-format|LTYPE-line-format|new-file|paginate|palette|recursive|show-c-function|show-function-line|starting-file|tabsize|to-file|unified|width)=*)
+	--@(color|context|exclude-from|exclude|from-file|GTYPE-group-format|horizon-lines|ifdef|ignore-matching-lines|line-format|LTYPE-line-format|new-file|paginate|palette|recursive|show-c-function|show-function-line|starting-file|tabsize|to-file|unified|width)=*)
 			diffArgs+=("$1"); shift;;
-	--@(exclude-from|exclude|from-file|GTYPE-group-format|horizon-lines|ifdef|ignore-matching-lines|label LABEL|line-format|LTYPE-line-format|new-file|paginate|palette|recursive|show-c-function|show-function-line|starting-file|tabsize|to-file|width))
+	--label=*)	diffArgs+=("$1"); shift; hasLabel=t;;
+	--@(exclude-from|exclude|from-file|GTYPE-group-format|horizon-lines|ifdef|ignore-matching-lines|label|line-format|LTYPE-line-format|new-file|paginate|palette|recursive|show-c-function|show-function-line|starting-file|tabsize|to-file|width))
 			diffArgs+=("$1" "${2?}"); shift; shift;;
+	--label)	diffArgs+=("$1" "${2?}"); shift; shift; hasLabel=t;;
 
 	--command|-c)	shift; commands+="${commands:+ $WITHDIFF_COMMAND_JOINER }$1"; shift;;
 	--exec)		shift
@@ -191,7 +194,7 @@ diffCommand=diff; [ "$isColor" ] && type -t colordiff >/dev/null && diffCommand=
 status=0
 for file in "${filespecs[@]}"
 do
-    label="${tempLabelsFor["$file"]}"
+    [ "$hasLabel" ] && label='' || label="${tempLabelsFor["$file"]}"
     $diffCommand "${diffRecursiveArg[@]}" "${diffArgs[@]}" ${label:+--label "$label"}  -- "${tempFilesFor["$file"]}" "$file" || status=$?
 done
 exit $status
