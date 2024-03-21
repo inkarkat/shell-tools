@@ -11,7 +11,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "--for FILE|DIR [--for ...] [DIFF-ARGS ...] [-?|-h|--help]"
+    printf 'Usage: [WITHDIFF_DIFF_COMMAND=diff] %q %s\n' "$(basename "$1")" "--for FILE|DIR [--for ...] [DIFF-ARGS ...] [-?|-h|--help]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "... -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHDIFF_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]"
     echo
@@ -190,7 +190,7 @@ execute()
 
 execute || exit $?
 
-diffCommand=diff; [ "$isColor" ] && type -t colordiff >/dev/null && diffCommand=colordiff
+diffCommand="${WITHDIFF_DIFF_COMMAND:-diff}"; [ "$isColor" ] && type -t colordiff >/dev/null && diffCommand=colordiff
 status=0
 for file in "${filespecs[@]}"
 do
