@@ -1,0 +1,222 @@
+#!/bin/bash
+set -o pipefail
+
+: ${WITHBACKGROUNDPROCESS_COMMAND_JOINER=;}
+: ${WITHBACKGROUNDPROCESS_EXEC_END=;}
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[-v|--verbose] [-p|--pidfile FILE [-p ...]] -b|--background-command \"COMMANDLINE ... exec PARALLEL-COMMAND\" [...]|-B|--background-exec PARALLEL-SIMPLECOMMAND [...] ${WITHBACKGROUNDPROCESS_EXEC_END}|-d|--daemon-command \"COMMANDLINE ... exec PARALLEL-COMMAND\" [...]|-D|--daemon-exec PARALLEL-SIMPLECOMMAND [...] ${WITHBACKGROUNDPROCESS_EXEC_END} -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${WITHBACKGROUNDPROCESS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Execute COMMAND(s) while the PARALLEL-COMMAND(s) are running. First, the
+PARALLEL-COMMAND(s) are launched (a daemon puts itself into the background, a
+background command is started as a job), then the COMMAND(s) are executed, and
+after that the PARALLEL-COMMAND(s) are killed.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --verbose|-v	Print information about parallel processes.
+    --pidfile FILE	Use the PID from the FILE (that PARALLEL-COMMAND is
+			supposed to write on startup) to kill it.
+    --background-exec|-B CMD [...] ${WITHBACKGROUNDPROCESS_EXEC_END}
+			Execute CMD as a background job, then kill it. All
+			following arguments are taken to be arguments to the CMD
+			until an argument consisting of
+			'${WITHBACKGROUNDPROCESS_EXEC_END}' is encountered.
+    --background-command|-b CMD
+			Execute CMD as a background job, then kill it.
+			Note: You need to use exec or alternatively pass
+			--pidfile.
+    --daemon-exec|-D CMD [...] ${WITHBACKGROUNDPROCESS_EXEC_END}
+			Execute the daemon CMD (it's supposed to put itself into
+			the background), then kill it. All following arguments
+			are taken to be arguments to the CMD until an argument
+			consisting of '${WITHBACKGROUNDPROCESS_EXEC_END}' is
+			encountered.
+    --daemon-command|-d CMD
+			Execute the daemon CMD (it's supposed to put itself into
+			the background), then kill it.
+			Note: You need to use exec or alternatively pass
+			--pidfile.
+    --command|-c CMD	Execute CMD as a command-line.
+    --exec CMD [...] ${WITHBACKGROUNDPROCESS_EXEC_END}	Execute CMD; all following arguments are taken to be
+			arguments to the CMD until an argument consisting of
+			'${WITHBACKGROUNDPROCESS_EXEC_END}' is encountered.
+
+EXIT STATUS:
+    0	Complete success.
+    2	Bad invocation, wrong or missing command-line arguments.
+    3	Failed to invoke or kill PARALLEL-COMMAND(s).
+    *   any exit status from COMMAND(s)
+HELPTEXT
+}
+
+verbosePrintf() { :; }
+typeset -a pidFiles=()
+typeset -a backgroundCommands=()
+typeset -a daemonCommands=()
+commands=
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--verbose|-v)	shift; verbosePrintf() { printf "$@"; };;
+	--pidfile|-p)	shift; pidFiles+=("${1:?}"); shift;;
+
+	--background-command|-b)
+			shift; backgroundCommands+=("$1"); shift;;
+	--background-exec|-B)
+			shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != "$WITHBACKGROUNDPROCESS_EXEC_END" ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd+="${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${WITHBACKGROUNDPROCESS_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			backgroundCommands+=("exec $cmd")
+			;;
+	--daemon-command|-d)
+			shift; daemonCommands+=("$1"); shift;;
+	--daemon-exec|-D)
+			shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != "$WITHBACKGROUNDPROCESS_EXEC_END" ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd+="${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${WITHBACKGROUNDPROCESS_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			daemonCommands+=("exec $cmd")
+			;;
+	--command|-c)	shift; commands+="${commands:+ $WITHBACKGROUNDPROCESS_COMMAND_JOINER }$1"; shift;;
+	--exec)		shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != "$WITHBACKGROUNDPROCESS_EXEC_END" ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd+="${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${WITHBACKGROUNDPROCESS_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			commands+="${commands:+ $WITHBACKGROUNDPROCESS_COMMAND_JOINER }${cmd}"
+			;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    commands+="${commands:+ $WITHBACKGROUNDPROCESS_COMMAND_JOINER }${quotedSimpleCommand% }"
+fi
+if [ -z "$backgroundCommands" -a -z "$daemonCommands" ]; then
+    echo "ERROR: No background / daemon COMMAND(s) specified; need to pass -b|--background-command|-d|--daemon-command \"COMMANDLINE\", or -B|--background-command|-D|--daemon-exec SIMPLECOMMAND [...] $WITHBACKGROUNDPROCESS_EXEC_END or SIMPLECOMMAND."
+    echo
+    printUsage "$0"
+    exit 2
+elif [ -z "$commands" ]; then
+    echo "ERROR: No COMMAND(s) specified; need to pass -c|--command \"COMMANDLINE\", or --exec SIMPLECOMMAND [...] $WITHBACKGROUNDPROCESS_EXEC_END or SIMPLECOMMAND."
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+isBackgroundFailure=
+typeset -a pids=()
+if [ ! "$isBackgroundFailure" ]; then
+    for backgroundCommand in "${backgroundCommands[@]}"
+    do
+	if eval "{ $backgroundCommand; } &"; then
+	    pid=$!
+	    [ ${#pidFiles[@]} -gt 0 ] || pids+=($pid)
+	    verbosePrintf 'Backgrounding %d: %s\n' "$pid" "$backgroundCommand"
+	else
+	    verbosePrintf >&2 'ERROR: Failed to background %d: %s\n' "$pid" "$backgroundCommand"
+	    isBackgroundFailure=t
+	    break
+	fi
+    done
+fi
+if [ ! "$isBackgroundFailure" ]; then
+    for daemonCommand in "${daemonCommands[@]}"
+    do
+	if eval "$daemonCommand"; then
+	    pid=$!
+	    [ ${#pidFiles[@]} -gt 0 ] || pids+=($pid)
+	    verbosePrintf 'Daemon %d started: %s\n' "$pid" "$daemonCommand"
+	else
+	    verbosePrintf >&2 'ERROR: Failed to start daemon %d: %s\n' "$pid" "$daemonCommand"
+	    isBackgroundFailure=t
+	    break
+	fi
+    done
+fi
+
+for filespec in "${pidFiles[@]}"
+do
+    if [ ! -r "$filespec" ]; then
+	printf >&2 'ERROR: PID file does not exist: %s\n' "$filespec"
+	exit 3
+    fi
+    < "$filespec" IFS=$'\n' read -r pid
+    if [ -z "$pid" ]; then
+	printf >&2 'ERROR: No PID in file: %s\n' "$filespec"
+	isBackgroundFailure=t
+	continue
+    elif ! [[ "$pid" =~ ^[0-9]+$ ]]; then
+	printf >&2 'ERROR: Not a PID: %s\n' "$pid"
+	isBackgroundFailure=t
+	continue
+    fi
+    verbosePrintf 'PID file %s gave %d\n' "$filespec" "$pid"
+    pids+=("$pid")
+done
+
+typeset -a activePids=()
+for pid in "${pids[@]}"
+do
+    if ps --pid $pid >/dev/null 2>&1; then
+	activePids+=($pid)
+    else
+	printf >&2 'ERROR: Process with PID %d is not running.\n' "$pid"
+	isBackgroundFailure=t
+    fi
+done
+
+trap 'verbosePrintf "Killing %d.\\n" "${activePids[@]}"; kill "${activePids[@]}" || exit 3' EXIT
+[ "$isBackgroundFailure" ] && exit 3
+
+eval "$commands"
