@@ -8,7 +8,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[-p|--pidfile FILE [-p ...]] -b|--background-command \"COMMANDLINE ... exec PARALLEL-COMMAND\" [...]|-B|--background-exec PARALLEL-SIMPLECOMMAND [...] ${WITHBACKGROUNDPROCESS_EXEC_END}|-d|--daemon-command \"COMMANDLINE ... exec PARALLEL-COMMAND\" [...]|-D|--daemon-exec PARALLEL-SIMPLECOMMAND [...] ${WITHBACKGROUNDPROCESS_EXEC_END} -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${WITHBACKGROUNDPROCESS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[-v|--verbose] [-p|--pidfile FILE [-p ...]] -b|--background-command \"COMMANDLINE ... exec PARALLEL-COMMAND\" [...]|-B|--background-exec PARALLEL-SIMPLECOMMAND [...] ${WITHBACKGROUNDPROCESS_EXEC_END}|-d|--daemon-command \"COMMANDLINE ... exec PARALLEL-COMMAND\" [...]|-D|--daemon-exec PARALLEL-SIMPLECOMMAND [...] ${WITHBACKGROUNDPROCESS_EXEC_END} -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${WITHBACKGROUNDPROCESS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
 }
 printUsage()
 {
@@ -31,6 +31,7 @@ HELPDESCRIPTION
     printShortUsage "$1"
     echo
     cat <<HELPTEXT
+    --verbose|-v	Print information about parallel processes.
     --pidfile FILE	Use the PID from the FILE (that PARALLEL-COMMAND is
 			supposed to write on startup) to kill it.
     --background-exec|-B CMD [...] ${WITHBACKGROUNDPROCESS_EXEC_END}
@@ -66,6 +67,7 @@ EXIT STATUS:
 HELPTEXT
 }
 
+verbosePrintf() { :; }
 typeset -a pidFiles=()
 typeset -a backgroundCommands=()
 typeset -a daemonCommands=()
@@ -74,6 +76,7 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--verbose|-v)	shift; verbosePrintf() { printf "$@"; };;
 	--pidfile|-p)	shift; pidFiles+=("${1:?}"); shift;;
 
 	--background-command|-b)
@@ -159,7 +162,9 @@ if [ ! "$isBackgroundFailure" ]; then
 	if eval "{ $backgroundCommand; } &"; then
 	    pid=$!
 	    [ ${#pidFiles[@]} -gt 0 ] || pids+=($pid)
+	    verbosePrintf 'Backgrounding %d: %s\n' "$pid" "$backgroundCommand"
 	else
+	    verbosePrintf >&2 'ERROR: Failed to background %d: %s\n' "$pid" "$backgroundCommand"
 	    isBackgroundFailure=t
 	    break
 	fi
@@ -171,7 +176,9 @@ if [ ! "$isBackgroundFailure" ]; then
 	if eval "$daemonCommand"; then
 	    pid=$!
 	    [ ${#pidFiles[@]} -gt 0 ] || pids+=($pid)
+	    verbosePrintf 'Daemon %d started: %s\n' "$pid" "$daemonCommand"
 	else
+	    verbosePrintf >&2 'ERROR: Failed to start daemon %d: %s\n' "$pid" "$daemonCommand"
 	    isBackgroundFailure=t
 	    break
 	fi
@@ -194,6 +201,7 @@ do
 	isBackgroundFailure=t
 	continue
     fi
+    verbosePrintf 'PID file %s gave %d\n' "$filespec" "$pid"
     pids+=("$pid")
 done
 
@@ -208,7 +216,7 @@ do
     fi
 done
 
-trap 'kill "${activePids[@]}" || exit 3' EXIT
+trap 'verbosePrintf "Killing %d.\\n" "${activePids[@]}"; kill "${activePids[@]}" || exit 3' EXIT
 [ "$isBackgroundFailure" ] && exit 3
 
 eval "$commands"
