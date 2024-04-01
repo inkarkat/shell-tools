@@ -1,0 +1,29 @@
+#!/bin/bash
+set -o pipefail
+
+printUsage()
+{
+    cat <<HELPTEXT
+List exported environment variables that are custom to the current shell, not
+global exports for my user.
+HELPTEXT
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[-?|-h|--help]'
+}
+
+case "$1" in
+    --help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+esac
+if [ $# -ne 0 ]; then
+    printUsage "$0" >&2
+    exit 2
+fi
+
+readonly EXPORTPATTERNS_FILESPEC="${XDG_RUNTIME_DIR:?}/exportpatterns"
+if [ ! -s "$EXPORTPATTERNS_FILESPEC" ]; then
+    printf >&2 'ERROR: No exportpatterns found at %s\n' "$EXPORTPATTERNS_FILESPEC"
+    exit 3
+fi
+
+declare -xp \
+    | grep --invert-match --file "$EXPORTPATTERNS_FILESPEC"
