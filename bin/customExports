@@ -8,7 +8,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" '[-p|--prefix PREFIX] [-U|--ignore-undefined] [-n|--by-name] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[-p|--prefix PREFIX] [-U|--ignore-undefined] [-n|--by-name] [-P|--include-private] [-?|-h|--help]'
 }
 printUsage()
 {
@@ -37,11 +37,15 @@ HELPDESCRIPTION
 			changed from the original value in the current shell.
 			By default, both name and value have to be identical to
 			be ignored.
+    --include-private|-P
+			Also include variables that begin with an underscore
+			(and by convention therefore are treated as non-public).
 HELPTEXT
 }
 
 sourceFilespec="$EXPORTVALUES_FILESPEC"
 typeset -a grepArgs=(--fixed-strings --line-regexp)
+typeset -a privateFilter=(-e '^declare -x _')
 typeset -a prefixer=()
 typeset -a skipper=()
 while [ $# -ne 0 ]
@@ -58,6 +62,8 @@ do
 	--ignore-undefined|-U)
 			shift; skipper=(grep --invert-match -e '^declare -x [^=]\+$');;
 	--by-name|-n)	shift; sourceFilespec="$EXPORTPATTERNS_FILESPEC"; grepArgs=();;
+	--include-private|-P)
+			shift; privateFilter=();;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
@@ -80,7 +86,7 @@ filter()
     # Drop HOSTTYPE and MACHTYPE, as these may be overwritten by the user.
     typeset -a builtinsFilter=(-e '^declare -x (BASH|BASHOPTS|BASHPID|BASH_ALIASES|BASH_ARGC|BASH_ARGV|BASH_ARGV0|BASH_CMDS|BASH_COMMAND|BASH_EXECUTION_STRING|BASH_LINENO|BASH_LOADABLES_PATH|BASH_REMATCH|BASH_SOURCE|BASH_SUBSHELL|BASH_VERSINFO|BASH_VERSION|COMP_CWORD|COMP_KEY|COMP_LINE|COMP_POINT|COMP_TYPE|COMP_WORDBREAKS|COMP_WORDS|COPROC|DIRSTACK|EPOCHREALTIME|EPOCHSECONDS|EUID|FUNCNAME|GROUPS|HISTCMD|HOSTTYPE|LINENO|MAPFILE|OLDPWD|OPTARG|OPTIND|OSTYPE|PIPESTATUS|PPID|PWD|RANDOM|READLINE_LINE|READLINE_POINT|REPLY|SECONDS|SHELLOPTS|SHLVL|UID)=')
 
-    grep --invert-match --extended-regexp "${builtinsFilter[@]}"
+    grep --invert-match --extended-regexp "${builtinsFilter[@]}" "${privateFilter[@]}"
 }
 
 declare -xp \
