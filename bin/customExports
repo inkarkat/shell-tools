@@ -1,0 +1,96 @@
+#!/bin/bash
+set -o pipefail
+
+readonly EXPORTVALUES_FILESPEC="${XDG_RUNTIME_DIR:?}/exported-values"
+readonly EXPORTPATTERNS_FILESPEC="${XDG_RUNTIME_DIR:?}/exported-patterns"
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[-p|--prefix PREFIX] [-U|--ignore-undefined] [-n|--by-name] [-P|--include-private] [-?|-h|--help]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+List exported environment variables that are custom to the current shell, not
+global exports for my user.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --prefix|-p PREFIX	Use PREFIX instead of "declare -x" before each variable.
+    --ignore-undefined|-U
+			Don't print variables that are exported, but not defined
+			(not even empty) in the current shell.
+    --by-name|-n	Ignore exported variables even if their value has
+			changed from the original value in the current shell.
+			By default, both name and value have to be identical to
+			be ignored.
+    --include-private|-P
+			Also include variables that begin with an underscore
+			(and by convention therefore are treated as non-public).
+HELPTEXT
+}
+
+sourceFilespec="$EXPORTVALUES_FILESPEC"
+typeset -a grepArgs=(--fixed-strings --line-regexp)
+typeset -a privateFilter=(-e '^declare -x _')
+typeset -a prefixer=()
+typeset -a skipper=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--prefix|-p)	shift
+			literalPrefix="${1?}"
+			literalPrefix="${literalPrefix//\\/\\\\}"
+			literalPrefix="${literalPrefix//&/\\&}"
+			prefixer=(sed -e "s#^declare -x #${literalPrefix//#/\\#}#")
+			shift
+			;;
+	--ignore-undefined|-U)
+			shift; skipper=(grep --invert-match -e '^declare -x [^=]\+$');;
+	--by-name|-n)	shift; sourceFilespec="$EXPORTPATTERNS_FILESPEC"; grepArgs=();;
+	--include-private|-P)
+			shift; privateFilter=();;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+
+if [ $# -ne 0 ]; then
+    printUsage "$0" >&2
+    exit 2
+fi
+
+if [ ! -s "$sourceFilespec" ]; then
+    printf >&2 'ERROR: No export list found at %s\n' "$sourceFilespec"
+    exit 3
+fi
+
+filter()
+{
+    # Source: man bash, Shell Variables, The following variables are set by the shell:
+    # Drop HOSTTYPE and MACHTYPE, as these may be overwritten by the user.
+    typeset -a builtinsFilter=(-e '^declare -x (BASH|BASHOPTS|BASHPID|BASH_ALIASES|BASH_ARGC|BASH_ARGV|BASH_ARGV0|BASH_CMDS|BASH_COMMAND|BASH_EXECUTION_STRING|BASH_LINENO|BASH_LOADABLES_PATH|BASH_REMATCH|BASH_SOURCE|BASH_SUBSHELL|BASH_VERSINFO|BASH_VERSION|COMP_CWORD|COMP_KEY|COMP_LINE|COMP_POINT|COMP_TYPE|COMP_WORDBREAKS|COMP_WORDS|COPROC|DIRSTACK|EPOCHREALTIME|EPOCHSECONDS|EUID|FUNCNAME|GROUPS|HISTCMD|HOSTTYPE|LINENO|MAPFILE|OLDPWD|OPTARG|OPTIND|OSTYPE|PIPESTATUS|PPID|PWD|RANDOM|READLINE_LINE|READLINE_POINT|REPLY|SECONDS|SHELLOPTS|SHLVL|UID)=')
+
+    grep --invert-match --extended-regexp "${builtinsFilter[@]}" "${privateFilter[@]}"
+}
+
+declare -xp \
+    | grep --invert-match "${grepArgs[@]}" --file "$sourceFilespec" \
+    | eval filter \
+    "${skipper:+|}" '"${skipper[@]}"' \
+    "${prefixer:+|}" '"${prefixer[@]}"'
