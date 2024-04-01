@@ -74,7 +74,15 @@ if [ ! -s "$sourceFilespec" ]; then
     exit 3
 fi
 
+filterOutBuiltIns()
+{
+    # Source: man bash, Shell Variables, The following variables are set by the shell:
+    # Drop HOSTTYPE and MACHTYPE, as these may be overwritten by the user.
+    grep --invert-match --extended-regexp -e '^declare -x (BASH|BASHOPTS|BASHPID|BASH_ALIASES|BASH_ARGC|BASH_ARGV|BASH_ARGV0|BASH_CMDS|BASH_COMMAND|BASH_EXECUTION_STRING|BASH_LINENO|BASH_LOADABLES_PATH|BASH_REMATCH|BASH_SOURCE|BASH_SUBSHELL|BASH_VERSINFO|BASH_VERSION|COMP_CWORD|COMP_KEY|COMP_LINE|COMP_POINT|COMP_TYPE|COMP_WORDBREAKS|COMP_WORDS|COPROC|DIRSTACK|EPOCHREALTIME|EPOCHSECONDS|EUID|FUNCNAME|GROUPS|HISTCMD|HOSTTYPE|LINENO|MAPFILE|OLDPWD|OPTARG|OPTIND|OSTYPE|PIPESTATUS|PPID|PWD|RANDOM|READLINE_LINE|READLINE_POINT|REPLY|SECONDS|SHELLOPTS|SHLVL|UID)='
+}
+
 declare -xp \
-    | eval 'grep --invert-match "${grepArgs[@]}" --file "$sourceFilespec"' \
+    | grep --invert-match "${grepArgs[@]}" --file "$sourceFilespec" \
+    | eval filterOutBuiltIns \
     "${skipper:+|}" '"${skipper[@]}"' \
     "${prefixer:+|}" '"${prefixer[@]}"'
