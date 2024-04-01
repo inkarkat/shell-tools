@@ -59,9 +59,9 @@ if [ $# -ne 0 ]; then
     exit 2
 fi
 
-readonly EXPORTPATTERNS_FILESPEC="${XDG_RUNTIME_DIR:?}/exportpatterns"
+readonly EXPORTPATTERNS_FILESPEC="${XDG_RUNTIME_DIR:?}/exported-patterns"
 if [ ! -s "$EXPORTPATTERNS_FILESPEC" ]; then
-    printf >&2 'ERROR: No exportpatterns found at %s\n' "$EXPORTPATTERNS_FILESPEC"
+    printf >&2 'ERROR: No export list found at %s\n' "$EXPORTPATTERNS_FILESPEC"
     exit 3
 fi
 
