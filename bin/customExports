@@ -1,11 +1,14 @@
 #!/bin/bash
 set -o pipefail
 
+readonly EXPORTVALUES_FILESPEC="${XDG_RUNTIME_DIR:?}/exported-values"
+readonly EXPORTPATTERNS_FILESPEC="${XDG_RUNTIME_DIR:?}/exported-patterns"
+
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" '[-p|--prefix PREFIX] [-U|--ignore-undefined] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[-p|--prefix PREFIX] [-U|--ignore-undefined] [-n|--by-name] [-?|-h|--help]'
 }
 printUsage()
 {
@@ -30,9 +33,15 @@ HELPDESCRIPTION
     --ignore-undefined|-U
 			Don't print variables that are exported, but not defined
 			(not even empty) in the current shell.
+    --by-name|-n	Ignore exported variables even if their value has
+			changed from the original value in the current shell.
+			By default, both name and value have to be identical to
+			be ignored.
 HELPTEXT
 }
 
+sourceFilespec="$EXPORTVALUES_FILESPEC"
+typeset -a grepArgs=(--fixed-strings --line-regexp)
 typeset -a prefixer=()
 typeset -a skipper=()
 while [ $# -ne 0 ]
@@ -48,6 +57,7 @@ do
 			;;
 	--ignore-undefined|-U)
 			shift; skipper=(grep --invert-match -e '^declare -x [^=]\+$');;
+	--by-name|-n)	shift; sourceFilespec="$EXPORTPATTERNS_FILESPEC"; grepArgs=();;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
@@ -59,13 +69,12 @@ if [ $# -ne 0 ]; then
     exit 2
 fi
 
-readonly EXPORTPATTERNS_FILESPEC="${XDG_RUNTIME_DIR:?}/exported-patterns"
-if [ ! -s "$EXPORTPATTERNS_FILESPEC" ]; then
-    printf >&2 'ERROR: No export list found at %s\n' "$EXPORTPATTERNS_FILESPEC"
+if [ ! -s "$sourceFilespec" ]; then
+    printf >&2 'ERROR: No export list found at %s\n' "$sourceFilespec"
     exit 3
 fi
 
 declare -xp \
-    | eval 'grep --invert-match --file "$EXPORTPATTERNS_FILESPEC"' \
+    | eval 'grep --invert-match "${grepArgs[@]}" --file "$sourceFilespec"' \
     "${skipper:+|}" '"${skipper[@]}"' \
     "${prefixer:+|}" '"${prefixer[@]}"'
