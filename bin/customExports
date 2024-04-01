@@ -1,19 +1,53 @@
 #!/bin/bash
 set -o pipefail
 
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[-p|--prefix PREFIX] [-?|-h|--help]'
+}
 printUsage()
 {
-    cat <<HELPTEXT
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
 List exported environment variables that are custom to the current shell, not
 global exports for my user.
-HELPTEXT
+HELPDESCRIPTION
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" '[-?|-h|--help]'
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --prefix|-p PREFIX	Use PREFIX instead of "declare -x" before each variable.
+HELPTEXT
 }
 
-case "$1" in
-    --help|-h|-\?)	shift; printUsage "$0"; exit 0;;
-esac
+typeset -a prefixer=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--prefix|-p)	shift
+			literalPrefix="${1?}"
+			literalPrefix="${literalPrefix//\\/\\\\}"
+			literalPrefix="${literalPrefix//&/\\&}"
+			prefixer=(sed -e "s#^declare -x #${literalPrefix//#/\\#}#")
+			shift
+			;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+
 if [ $# -ne 0 ]; then
     printUsage "$0" >&2
     exit 2
@@ -26,4 +60,5 @@ if [ ! -s "$EXPORTPATTERNS_FILESPEC" ]; then
 fi
 
 declare -xp \
-    | grep --invert-match --file "$EXPORTPATTERNS_FILESPEC"
+    | eval 'grep --invert-match --file "$EXPORTPATTERNS_FILESPEC"' \
+    "${prefixer:+|}" '"${prefixer[@]}"'
