@@ -52,6 +52,12 @@ addAliasSupport tempfile \
     'dbesS' \
     'directory|basename|extension|sink-command|sink-exec'
 
+addAliasSupport withDebug \
+    'v' \
+    'verbose' \
+    'mM' \
+    'module|only-module|for'
+
 
 # Use my own ~/tmp instead of the system default temp directory.
 if [ -d ~/tmp ]; then
