@@ -43,7 +43,8 @@ HELPDESCRIPTION
 			itself.
     --[only-]module ''	Reset modules; following COMMAND(s) just print the over
 			debugging diagnostics.
-    --for COMMANDNAME	Also enable debugging diagnostics for COMMANDNAME.
+    --for COMMANDNAME	Also enable debugging diagnostics and wrapper commands
+			for COMMANDNAME.
     --command|-c CMD	Execute CMD as a command-line.
     --exec CMD [...] ${WITHDEBUG_EXEC_END}	Execute CMD; all following arguments are taken to be arguments to the CMD until an argument consisting of '${WITHDEBUG_EXEC_END}' is encountered.
 HELPTEXT
@@ -60,10 +61,11 @@ add()
 {
     DEBUG+="${DEBUG:+,}${1:?}"
 }
-commandName=
+typeset -a commandNames=()
 addDebug()
 {
     commandName="${1:?}"; shift
+    commandNames+=("$commandName")
 
     local module; for module in "${modules[@]}"
     do
@@ -85,14 +87,17 @@ addCommand()
 {
     local cmd="${1:?}"; shift
 
-    local wrappers=''
-    local module; for module in "${modules[@]}"
+    local wrappers='' commandName
+    for commandName in "${commandNames[@]}"
     do
-	local wrapperConfigName="DEBUG_${commandName//[^[:alnum:]]/_}${module:+_}${module//[^[:alnum:]]/_}_WRAPPER"
-	if [ -n "${!wrapperConfigName}" ]; then
-	    # Prepend the wrapper command to the executed command.
-	    wrappers+="${!wrapperConfigName} "
-	fi
+	local module; for module in "${modules[@]}"
+	do
+	    local wrapperConfigName="DEBUG_${commandName//[^[:alnum:]]/_}${module:+_}${module//[^[:alnum:]]/_}_WRAPPER"
+	    if [ -n "${!wrapperConfigName}" ]; then
+		# Prepend the wrapper command to the executed command.
+		wrappers+="${!wrapperConfigName} "
+	    fi
+	done
     done
 
     commands+="${commands:+ $WITHDEBUG_COMMAND_JOINER }${wrappers}${cmd}"
