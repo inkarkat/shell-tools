@@ -1,0 +1,138 @@
+#!/bin/bash
+
+: ${WITHOUTPATH_COMMAND_JOINER=;}
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" 'PATH -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-p|--path PATH [-p ...]|-P|--path-file PATH-FILE|- [-P ...]|-m|--partial PARTIAL-PATH [-m ...] [-i|--ignore-noop] [-I|--invert] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...]'
+    echo
+    printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" "[...] [--bare|$(runWithPrompt --get-short-usage 2>/dev/null)]"
+    echo
+    printf 'Usage: %q %s <<EOF\n  COMMANDLINE\n...\nEOF\n' "$(basename "$1")" '[...]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Execute COMMAND while PATH(s) are removed from \$PATH.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+This can be used to check whether a particular dependency project is needed.
+    --path|-p PATH	The full PATH is removed from \$PATH.
+    --path-file|-P PATH-FILE|-
+			Each line from PATH-FILE (with -: standard input) is
+			taken as a full PATH entry to be removed.
+    --partial|-m PARTIAL-PATH
+			Any PATH that contains PARTIAL-PATH (anywhere,
+			unanchored) is removed from \$PATH.
+    --ignore-noop|-i	Execute COMMAND even if no PATH has been removed.
+			By default, the command aborts with status 99 in this
+			case.
+    --invert|-I		Remove all PATHs except those specified / matching.
+    --command|-c CMD	The command line to be executed. When this is a simple
+			command, it can also be passed as such.
+    --bare		Do not print a status line before and after launching
+			the COMMAND.
+HELPTEXT
+    runWithPrompt --get-long-usage 2>/dev/null
+}
+
+typeset -a strictPaths=()
+typeset -a partialPaths=()
+isFailOnNoop=t
+isInvert=
+isFirst=t
+isBare=
+commands=
+typeset -a bashArgs=()
+runWithCommand=runWithPrompt
+typeset -a runWithPromptArgs=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--path|-p)	shift; strictPaths+=("${1:?}"); shift;;
+	--path-file|-P)	shift
+			filespec="${1:?}"; [ "$filespec" = - ] && filespec=/dev/stdin
+			while IFS=$'\n' read -r line || [ -n "$line" ]
+			do
+			    strictPaths+=("$line")
+			done < "$filespec"
+			shift
+			;;
+	--partial|-m)	shift; partialPaths+=("${1:?}"); shift;;
+	--ignore-noop|-i)
+			shift; isFailOnNoop=;;
+	--invert|-I)	shift; isInvert=t;;
+	--command|-c)	shift; commands+="${commands:+ $WITHOUTPATH_COMMAND_JOINER }$1"; shift;;
+	--bare)		shift; isBare=t; runWithCommand=runWith;;
+	--exit-on-failure)
+			bashArgs+=(-e); runWithPromptArgs+=("$1"); shift;;
+	--trailing-prompt|--no-trailing-prompt|--no-output-no-prompt|--no-output-no-error|--no-success-no-count|--exit-on-success|--emulate-prompt|--worst-status)
+			runWithPromptArgs+=("$1"); shift;;
+	--initial-status|--no-count-on|--exit-on|--exit-unless|--comment|--summarize-failed|--summarize-failed-separator)
+			runWithPromptArgs+=("$1" "$2"); shift; shift;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		if [ "$isFirst" ]; then
+			    strictPaths+=("${1:?}"); shift
+			else
+			    break
+			fi
+			;;
+    esac
+    isFirst=
+done
+if [ $# -ne 0 ]; then
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    commands+="${commands:+ $WITHOUTPATH_COMMAND_JOINER }${quotedSimpleCommand% }"
+fi
+if [ ${#strictPaths[@]} -eq 0 -a ${#partialPaths[@]} -eq 0 ]; then
+    echo 'ERROR: No [PARTIAL-]PATH passed.'
+    echo
+    printUsage "$0"
+    exit 2
+elif [ "$isInvert" ] && [ ${#strictPaths[@]} -gt 0 -a ${#partialPaths[@]} -gt 0 ]; then
+    echo 'ERROR: Cannot combine partial and full matches with --invert.'
+    exit 2
+fi >&2
+if ! type -t pathdrop >/dev/null; then
+    echo >&2 'FATAL: pathdrop not found.'
+    exit 3
+fi
+
+originalPath="$PATH"
+[ ${#strictPaths[@]} -eq 0 ] || pathdrop strict -- ${isInvert:+!} "${strictPaths[@]}"
+[ ${#partialPaths[@]} -eq 0 ] || pathdrop -- ${isInvert:+!} "${partialPaths[@]}"
+[ "$originalPath" != "$PATH" ] || [ ! "$isFailOnNoop" ] || exit 99
+
+export PATH PATH_OVERRIDE=true
+
+if [ -z "$commands" ]; then
+    if [ "$isBare" ] && [ ${#runWithPromptArgs[@]} -eq 0 -o "${#runWithPromptArgs[*]}" = --exit-on-failure ]; then
+	bashCommand="$(PATH="$originalPath" which -- bash)"
+	exec "${bashCommand:?}" "${bashArgs[@]}" -
+    else
+	runWithCommand="$(PATH="$originalPath" which -- "$runWithCommand")"
+	exec "${runWithCommand:?}" "${runWithPromptArgs[@]}"
+    fi
+else
+    eval "$commands"
+fi
