@@ -11,11 +11,13 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: [TMPDIR=DIR] %q %s\n' "$(basename "$1")" "[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] -P|--no-print [-C|--cleanup] [--edit-empty] [-s|--sink-command \"COMMANDLINE\" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $TEMPEDIT_EXEC_END [-S ...] [-p|--print]] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${TEMPEDIT_EXEC_END} [--exec ...] [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    printf '[TMPDIR=DIR] %q %s\n' "$(basename "$1")" "[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-P|--no-print|-p|--print]] [-C|--cleanup] [--edit-empty] [-s|--sink-command \"COMMANDLINE\" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $TEMPEDIT_EXEC_END [-S ...] ... [-?|-h|--help]"
     echo
-    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" "[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] -P|--no-print [-C|--cleanup] [--edit-empty] [-s|--sink-command \"COMMANDLINE\" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $TEMPEDIT_EXEC_END [-S ...] [-p|--print]]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${TEMPEDIT_EXEC_END} [--exec ...] [--] SIMPLECOMMAND [...]"
     echo
-    printf 'Usage: cat FILE [...] | result=$([TMPDIR=DIR] %q %s)\n' "$(basename "$1")" "[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-P|--no-print [-C|--cleanup]] [--edit-empty] [-s|--sink-command \"COMMANDLINE\" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $TEMPEDIT_EXEC_END [-S ...] [-p|--print]]"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '...'
+    echo
+    printf 'Usage: cat FILE [...] | result=$([TMPDIR=DIR] %q %s)\n' "$(basename "$1")" '...'
 }
 printUsage()
 {
