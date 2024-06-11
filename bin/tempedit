@@ -172,6 +172,7 @@ if [ -n "$subdir" ]; then
 else
     readonly tempFilespec="$(mktemp --tmpdir "${basename}-XXXXXX${extension:+.}${extension}" 2>/dev/null || echo "${TMPDIR:-/tmp}/${basename}.$$${RANDOM}${extension:+.}${extension}")"
 fi
+
 cleanup()
 {
     [ ! -e "$tempFilespec" ] || rm -f -- "$tempFilespec" 2>/dev/null

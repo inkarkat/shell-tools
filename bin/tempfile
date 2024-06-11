@@ -130,6 +130,11 @@ else
     readonly tempFilespec="$(mktemp --tmpdir "${basename}-XXXXXX${extension:+.}${extension}" 2>/dev/null || echo "${TMPDIR:-/tmp}/${basename}.$$${RANDOM}${extension:+.}${extension}")"
 fi
 
+cleanup()
+{
+    [ ! -e "$tempFilespec" ] || rm -f -- "$tempFilespec" 2>/dev/null
+}
+
 if [ -z "$commands" ]; then
     cat
 else
@@ -145,6 +150,7 @@ printf >&2 '%d line%s, %d word%s, %d byte%s read\n' "$lineCnt" "$lineCntPlural" 
 if [ -z "$sinkCommands" ]; then
     printf '%s\n' "$tempFilespec"
 else
+    [ "${DEBUG:-}" ] || trap 'cleanup' EXIT
     typeset -a f=("$tempFilespec")
     printf -v quotedTempFilespec '%q' "$tempFilespec"
     interpolatedCommands="${sinkCommands//"$fileMarker"/$quotedTempFilespec}"
