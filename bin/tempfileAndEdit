@@ -1,6 +1,7 @@
 #!/bin/bash
 
 : ${EDITOR:=vi}
+: ${TEMPEDIT_EDITORARGS_END=;}
 
 printUsage()
 {
@@ -8,9 +9,14 @@ printUsage()
 Capture output from stdin / emitted by COMMAND into a temp file that is then
 opened in $(basename -- "${EDITOR}") for editing.
 HELPTEXT
-    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-C|--cleanup] [--edit-empty] -c|--command "COMMANDLINE" [-c ...] [--] SIMPLECOMMAND [...] [-?|-h|--help]'
     echo
-    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" '[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-C|--cleanup] [--edit-empty]'
+    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" "[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-C|--cleanup] [--edit-empty] [--editor-args EDITORARGS [...] ${TEMPEDIT_EDITORARGS_END} [--editor-args ...]]"
+    echo
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '... -c|--command "COMMANDLINE" [-c ...] [--] SIMPLECOMMAND [...]'
 }
+
+case "$1" in
+    --help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+esac
 
 exec tempedit --no-print "$@"

@@ -4,6 +4,7 @@
 : ${TEMPEDIT_COMMAND_JOINER=;}
 : ${TEMPEDIT_SINKCOMMAND_JOINER=|}
 : ${TEMPEDIT_EXEC_END=;}
+: ${TEMPEDIT_EDITORARGS_END=;}
 : ${TEMPEDIT_FILE_MARKER='{}'}
 fileMarker="$TEMPEDIT_FILE_MARKER"; unset TEMPEDIT_FILE_MARKER
 
@@ -11,7 +12,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf '[TMPDIR=DIR] %q %s\n' "$(basename "$1")" "[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-P|--no-print|-p|--print]] [-C|--cleanup] [--edit-empty] [-s|--sink-command \"COMMANDLINE\" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $TEMPEDIT_EXEC_END [-S ...] ... [-?|-h|--help]"
+    printf '[TMPDIR=DIR] %q %s\n' "$(basename "$1")" "[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-P|--no-print|-p|--print]] [-C|--cleanup] [--edit-empty] [-s|--sink-command \"COMMANDLINE\" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $TEMPEDIT_EXEC_END [-S ...] [--editor-args EDITORARGS [...] ${TEMPEDIT_EDITORARGS_END} [--editor-args ...]] ... [-?|-h|--help]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "... -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${TEMPEDIT_EXEC_END} [--exec ...] [--] SIMPLECOMMAND [...]"
     echo
@@ -67,6 +68,10 @@ HELPDESCRIPTION
     --exec CMD [...] ${TEMPEDIT_EXEC_END}	The command whose output is captured; all following
 			arguments are taken to be arguments to the CMD until an
 			argument consisting of '${TEMPEDIT_EXEC_END}' is encountered.
+    --editor-args EDITORARGS [...] ${TEMPEDIT_EDITORARGS_END}
+			Pass EDITORARGS(s) along to $(basename -- "${EDITOR}"); i.e. all
+			following arguments until an argument consisting of '${TEMPEDIT_EDITORARGS_END}'
+			is encountered.
 HELPTEXT
 }
 
@@ -79,6 +84,7 @@ isEditEmpty=
 isPrint=t
 sinkCommands=
 commands=
+typeset -a editorArgs=()
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -125,6 +131,23 @@ do
 			shift
 			commands+="${commands:+ $TEMPEDIT_COMMAND_JOINER }${cmd}"
 			;;
+	--editor-args)	shift
+			while [ $# -gt 0 -a "$1" != "$TEMPEDIT_EDITORARGS_END" ]
+			do
+			    editorArgs+=("$1")
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --editor-args must be concluded with '${TEMPEDIT_EDITORARGS_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			if [ ${#editorArgs[@]} -eq 0 ]; then
+			    echo 'ERROR: --editor-args must be followed by at least one EDITORARG.'; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			;;
+
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
@@ -168,7 +191,7 @@ if [ "$isPrint" ] || [ -n "$sinkCommands" ]; then
     [ "${DEBUG:-}" ] || trap 'cleanup' EXIT
 
     tmpModTime=$(stat -c %Y "$tempFilespec")
-    "$EDITOR" "$tempFilespec" || { status=$?; echo >&2 'Unclean exit of editor; aborting!'; exit $status; }
+    "$EDITOR" "${editorArgs[@]}" "$tempFilespec" || { status=$?; echo >&2 'Unclean exit of editor; aborting!'; exit $status; }
     newModTime=$(stat -c %Y "$tempFilespec") || { echo >&2 'The tempfile disappeared; aborting!'; exit 4; }
 
     exec 1>&3	# Restore original stdout.
@@ -183,6 +206,6 @@ if [ "$isPrint" ] || [ -n "$sinkCommands" ]; then
 	eval "$interpolatedCommands" '"${f[@]}"'
     fi
 else
-    $EXEC "$EDITOR" "$tempFilespec"
+    $EXEC "$EDITOR" "${editorArgs[@]}" "$tempFilespec"
     exit $?
 fi
