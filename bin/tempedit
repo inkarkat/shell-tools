@@ -174,7 +174,7 @@ else
 fi
 cleanup()
 {
-    [ ! -e "$tempFilespec" ] || rm --force "$tempFilespec" 2>/dev/null
+    [ ! -e "$tempFilespec" ] || rm -f -- "$tempFilespec" 2>/dev/null
 }
 
 if [ -z "$commands" ]; then
