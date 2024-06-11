@@ -43,6 +43,7 @@ HELPDESCRIPTION
     --basename|-b BASE	Use BASE as the prefix of the temp file name.
     --extension|-e EXT	Use EXT as the temp file extension.
     --no-print|-P	Just edit, but don't check or print the results.
+    --print|-p		Even print when a SINK-COMMAND is given.
     --cleanup|-C	When just editing, don't keep the temp file after the
 			editor exits; the contents will be gone.
     --edit-empty	Also launch the (empty) editor if nothing got read from
