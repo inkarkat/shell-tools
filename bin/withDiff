@@ -165,10 +165,13 @@ do
 	# Instead, we copy the temp files with the original timestamps so that the
 	# information is in the file itself (but of course the "wrong" temp dir location
 	# is listed).
-    else
+    elif [ -r "$file" ]; then
 	tempFilespec="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM")"
 	cp --dereference -- "$file" "$tempFilespec" || exit 3
 	tempLabelsFor["$file"]="${file} $(stat --format=%y -- "$file" 2>/dev/null || printf '%s (original)' "$file")"
+    else
+	tempFilespec=/dev/null
+	tempLabelsFor["$file"]="$tempFilespec"
     fi
     tempFilespecs+=("$tempFilespec")
     tempFilesFor["$file"]="$tempFilespec"
