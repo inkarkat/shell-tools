@@ -1,0 +1,263 @@
+#!/bin/bash
+
+shopt -qs nullglob
+
+: ${EACHSPLIT_COMMAND_JOINER=;}
+: ${EACHSPLIT_EXEC_END=;}
+: ${EACHSPLIT_FILE_MARKER='{}'}
+fileMarker="$EACHSPLIT_FILE_MARKER"; unset EACHSPLIT_FILE_MARKER
+: ${EACHSPLIT_EXTRACTOR_MARKER='{}'}
+extractorMarker="$EACHSPLIT_EXTRACTOR_MARKER"; unset EACHSPLIT_EXTRACTOR_MARKER
+: ${EACHSPLIT_EXTRACTOR_END=;}
+: ${EACHSPLIT_SPLITTER_END=;}
+: ${EACHSPLIT_FILE_PREFIX=section-}
+
+hasProgressNotification=; type -t progressNotification >/dev/null && hasProgressNotification=t
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, they can
+    # skim the long one.
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}] [SPLIT-OPTIONS ...]${hasProgressNotification:+ [--progress SINK]} [--with-header|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] --section-info-extractor CMD [...]${extractorMarker:+ [}${extractorMarker}${extractorMarker:+] [...]} ${EACHSPLIT_EXTRACTOR_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...]${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--exec ...] | -- SIMPLECOMMAND [...] [-?|-h|--help]"
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-i|--input FILE ...'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Split standard input into sections and execute COMMAND with each section file
+(which ${fileMarker:+either }is appended${fileMarker:+ or replaces any $fileMarker marker} inside COMMANDLINE).
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}
+			Use a different split command; OPTIONS, FILE, PREFIX,
+			and ARGS are replaced by the passed SPLIT-OPTIONS, input
+			file, output directory + file prefix, and trailing ARGS
+			respectively.
+${hasProgressNotification:+    --progress SINK Report the current section through one of the SINKs of the
+		    progressNotification command.
+}    --with-header   Print a header (containing the current ARGUMENT) before each
+		    execution.
+    --with-prompt   Emulate a full prompt (as if invoking COMMAND) before each
+		    execution.
+HELPTEXT
+    runWithPrompt --get-long-usage 2>/dev/null
+    cat <<HELPTEXT
+    --section-info-extractor CMD [...] ${EACHSPLIT_EXTRACTOR_END}
+			Use CMD to extract the section identifier (from the
+			section contents); all following arguments are taken to
+			be arguments to the CMD until an argument consisting of
+			'${EACHSPLIT_EXTRACTOR_END}' is encountered. FILEs ${fileMarker:+either }are appended${extractorMarker:+ or replace
+			any $extractorMarker marker} inside COMMANDLINE.
+    --input|-i FILE	Split sections from FILE instead of standard input.
+    --command|-c CMD	Execute CMD as a command-line. FILEs ${fileMarker:+either }are appended
+			${fileMarker:+or replace any $fileMarker marker }inside COMMANDLINE.
+    --exec CMD [...] ${EACHSPLIT_EXEC_END}	Execute CMD; all following arguments are taken to be
+			arguments to the CMD until an argument consisting of
+			'${EACHSPLIT_EXEC_END}' is encountered. FILEs ${fileMarker:+either }are appended${fileMarker:+ or replace
+			any $fileMarker marker} inside COMMANDLINE.
+SEE ALSO:
+- separatedcat can be used to collate multiple section files with a proper
+  section separator in between.
+
+EXIT STATUS:
+Overall exit status is the highest status of all. If you specify any
+runWith[Prompt] argument, --worst-status needs to be explicitly passed.
+HELPTEXT
+}
+
+progressSink=
+with=
+inputFilespec=-
+commands=
+typeset -a splitCommand=(split OPTIONS ARGS FILE PREFIX)
+typeset -a splitOptions=()
+typeset -a splitArgs=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--splitter)	shift
+			splitCommand=()
+			while [ $# -gt 0 -a "$1" != "$EACHSPLIT_SPLITTER_END" ]
+			do
+			    splitCommand+=("$1")
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --splitter must be concluded with '${EACHSPLIT_SPLITTER_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			if [ ${#splitCommand[@]} -eq 0 ]; then
+			    echo 'ERROR: --splitter must be followed by at least one ARGUMENT.'; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			;;
+	--input|-i)	shift; inputFilespec="${1:?}"; shift;;
+	--progress)	shift; progressSink="$1"; shift;;
+	--with-header)	shift; with=header;;
+	--with-prompt)	shift; with=runWithPrompt;;
+
+	--trailing-prompt|--no-trailing-prompt|--no-output-no-prompt|--no-output-no-error|--no-success-no-count|--exit-on-success|--exit-on-failure|--emulate-prompt|--worst-status)
+			runWithPromptArgs+=("$1"); shift; : ${with:=runWith};;
+	--initial-status|--no-count-on|--exit-on|--exit-unless|--comment|--summarize-failed|--summarize-failed-separator)
+			runWithPromptArgs+=("$1" "$2"); shift; shift; : ${with:=runWith};;
+	--section-info-extractor)
+			shift
+			cmd=
+			printf -v escapedExtractorMarker %q "$extractorMarker"
+			while [ $# -gt 0 -a "$1" != "$EACHSPLIT_EXTRACTOR_END" ]
+			do
+			    printf -v quotedArg %q "$1"
+			    cmd+="${cmd:+ }${quotedArg}"
+			    #cmd+="${cmd:+ }${quotedArg//"$escapedExtractorMarker"/$extractorMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${EACHSPLIT_EXTRACTOR_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			sectionInfoExtractorCommand+="${sectionInfoExtractorCommand:+ $EACHSPLIT_COMMAND_JOINER }${cmd}"
+			;;
+	--command|-c)	shift; commands+="${commands:+ $EACHSPLIT_COMMAND_JOINER }$1"; shift;;
+	--exec)		shift
+			cmd=
+			printf -v escapedFileMarker %q "$fileMarker"
+			while [ $# -gt 0 -a "$1" != "$EACHSPLIT_EXEC_END" ]
+			do
+			    printf -v quotedArg %q "$1"
+			    cmd+="${cmd:+ }${quotedArg//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${EACHSPLIT_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			commands+="${commands:+ $EACHSPLIT_COMMAND_JOINER }${cmd}"
+			;;
+	--)		shift; break;;
+	-*)		splitOptions+=("$1"); shift;;
+	*)		splitArgs+=("$1"); shift;;
+    esac
+done
+
+if [ $# -ne 0 ]; then
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    printf -v escapedFileMarker %q "$fileMarker"
+    commands+="${commands:+ $EACHSPLIT_COMMAND_JOINER }${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+fi
+if [ -z "$commands" ]; then
+    echo "ERROR: No COMMAND(s) specified; need to pass -c|--command \"COMMANDLINE\", or --exec SIMPLECOMMAND [...] $EACHSPLIT_EXEC_END or SIMPLECOMMAND."
+    echo
+    printUsage "$0"
+    exit 2
+elif [ ${#runWithPromptArgs[@]} -gt 0 -a "$with" = 'header' ]; then
+    echo 'ERROR: Cannot combine runWith[Prompt] arguments with --with-header.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+tempDirspec="$(mktemp --directory --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || { dirspec="${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM"; mkdir --parents -- "$dirspec" && printf %s "$dirspec"; })" || exit 3
+[ "${DEBUG:-}" ] || trap 'rm -rf -- "$tempDirspec" 2>/dev/null' EXIT
+
+typeset -a tempArray=()
+for c in "${splitCommand[@]}"
+do
+    case "$c" in
+	ARGS)	    tempArray+=("${splitArgs[@]}");;
+	OPTIONS)    tempArray+=("${splitOptions[@]}");;
+	*)	    tempArray+=("$c");;
+    esac
+done
+splitCommand=("${tempArray[@]}")
+splitCommand=("${splitCommand[@]//FILE/"$inputFilespec"}")
+splitCommand=("${splitCommand[@]//PREFIX/"${tempDirspec}/${EACHSPLIT_FILE_PREFIX}"}")
+
+"${splitCommand[@]}" || exit $?
+
+
+if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
+    exec 4> >(progressNotification --to "$progressSink" ${EACHARG_ARG_WHAT:+--prepend-count "$EACHARG_ARG_WHAT"} --count-to $# 2>/dev/null)
+
+    reportProgress()
+    {
+	trap 'reportProgress() { :; }; trap PIPE' PIPE
+	printf '%s\n' "$*" >&4 2>/dev/null  # Silence "printf: write error: Broken pipe"
+    }
+else
+    reportProgress() { :; }
+fi
+
+getSectionInfo()
+{
+    if [ -z "$sectionInfoExtractorCommand" ]; then
+	printf %s "$sectionFile"
+	return 0
+    fi
+
+    typeset -a f=("$sectionFile")
+    printf -v sectionFile %q "$sectionFile"
+    interpolatedSectionInfoExtractorCommand="${sectionInfoExtractorCommand//"$extractorMarker"/$sectionFile}"
+    [ "$interpolatedSectionInfoExtractorCommand" = "$sectionInfoExtractorCommand" ] || f=()
+    eval "$interpolatedSectionInfoExtractorCommand" '"${f[@]}"'
+}
+
+isFirst=t
+isHeader=
+case "$with" in
+    runWith*)
+	[ ${#runWithPromptArgs[@]} -eq 0 ] && runWithPromptArgs=(--worst-status)
+	for sectionFile in "${tempDirspec}/${EACHSPLIT_FILE_PREFIX}"*
+	do
+	    printf -v quotedSectionFile '%q' "$sectionFile"
+	    interpolatedCommands="${commands//"$fileMarker"/$quotedSectionFile}"
+	    typeset -a f=("$quotedSectionFile")
+	    [ "$interpolatedCommands" = "$commands" ] || f=()
+
+	    reportProgress "$(getSectionInfo "$sectionFile")"
+	    printf '%s ' "$interpolatedCommands" "${f[@]}"
+	    printf '\n'
+	    isFirst=
+	done | ${with:?} "${runWithPromptArgs[@]}"
+	;;
+    header)
+	isHeader=t;&
+    '')
+	status=0
+	for sectionFile in "${tempDirspec}/${EACHSPLIT_FILE_PREFIX}"*
+	do
+	    sectionInfo="$(getSectionInfo "$sectionFile")"
+	    [ ! "$isHeader" ] || header ${isFirst:+--first} "$sectionInfo"
+
+	    typeset -f f=("$sectionFile")   # No quoting, as array provides separation.
+	    printf -v quotedSectionFile '%q' "$sectionFile"
+	    interpolatedCommands="${commands//"$fileMarker"/$quotedSectionFile}"
+	    [ "$interpolatedCommands" = "$commands" ] || f=()
+
+	    reportProgress "$sectionInfo"
+	    eval "$interpolatedCommands" '"${f[@]}"' \
+		|| { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
+	    isFirst=
+	done
+	exit $status
+	;;
+    *)	printf >&2 'ASSERT: Invalid strategy: %s\n' "$with"; exit 3;;
+esac
