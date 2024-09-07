@@ -11,6 +11,7 @@ extractorMarker="$EACHSPLIT_EXTRACTOR_MARKER"; unset EACHSPLIT_EXTRACTOR_MARKER
 : ${EACHSPLIT_EXTRACTOR_END=;}
 : ${EACHSPLIT_SPLITTER_END=;}
 : ${EACHSPLIT_FILE_PREFIX=section-}
+: ${EACHSPLIT_NO_SECTION_STATUS:=99}
 
 hasProgressNotification=; type -t progressNotification >/dev/null && hasProgressNotification=t
 
@@ -75,6 +76,7 @@ SEE ALSO:
 EXIT STATUS:
 Overall exit status is the highest status of all. If you specify any
 runWith[Prompt] argument, --worst-status needs to be explicitly passed.
+    $EACHSPLIT_NO_SECTION_STATUS: No sections were found.
 HELPTEXT
 }
 
@@ -192,7 +194,10 @@ splitCommand=("${splitCommand[@]//FILE/"$inputFilespec"}")
 splitCommand=("${splitCommand[@]//PREFIX/"${tempDirspec}/${EACHSPLIT_FILE_PREFIX}"}")
 
 "${splitCommand[@]}" || exit $?
-
+typeset -a sectionFiles=("${tempDirspec}/${EACHSPLIT_FILE_PREFIX}"*)
+if [ ${#sectionFiles[@]} -eq 0 ]; then
+    exit $EACHSPLIT_NO_SECTION_STATUS
+fi
 
 if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
     exec 4> >(progressNotification --to "$progressSink" ${EACHARG_ARG_WHAT:+--prepend-count "$EACHARG_ARG_WHAT"} --count-to $# 2>/dev/null)
@@ -225,7 +230,7 @@ isHeader=
 case "$with" in
     runWith*)
 	[ ${#runWithPromptArgs[@]} -eq 0 ] && runWithPromptArgs=(--worst-status)
-	for sectionFile in "${tempDirspec}/${EACHSPLIT_FILE_PREFIX}"*
+	for sectionFile in "${sectionFiles[@]}"
 	do
 	    printf -v quotedSectionFile '%q' "$sectionFile"
 	    interpolatedCommands="${commands//"$fileMarker"/$quotedSectionFile}"
@@ -242,7 +247,7 @@ case "$with" in
 	isHeader=t;&
     '')
 	status=0
-	for sectionFile in "${tempDirspec}/${EACHSPLIT_FILE_PREFIX}"*
+	for sectionFile in "${sectionFiles[@]}"
 	do
 	    sectionInfo="$(getSectionInfo "$sectionFile")"
 	    [ ! "$isHeader" ] || header ${isFirst:+--first} "$sectionInfo"
