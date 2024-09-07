@@ -73,6 +73,7 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--command|-c)	shift; commands+="${commands:+ $EACHARG_COMMAND_JOINER }$1"; shift;;
 	--exec)		shift
 			cmd=
 			printf -v escapedFileMarker %q "$argMarker"
@@ -89,7 +90,6 @@ do
 			shift
 			commands+="${commands:+ $EACHARG_COMMAND_JOINER }${cmd}"
 			;;
-	--command|-c)	shift; commands+="${commands:+ $EACHARG_COMMAND_JOINER }$1"; shift;;
 	--progress)	shift; progressSink="$1"; shift;;
 	--with-header)	shift; with=header;;
 	--with-prompt)	shift; with=runWithPrompt;;
@@ -120,7 +120,7 @@ do
     esac
 done
 if [ -z "$commands" ]; then
-    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
+    echo "ERROR: No COMMAND(s) specified; need to pass -c|--command \"COMMANDLINE\", or --exec SIMPLECOMMAND [...] $EACHARG_EXEC_END or SIMPLECOMMAND."
     echo
     printUsage "$0"
     exit 2
