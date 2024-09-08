@@ -6,7 +6,7 @@ printUsage()
 	-e 's/SPLIT-OPTIONS/C&/g' \
 	-e '/^SEE ALSO:/a\
 - separatedcat can be used to collate multiple section files with a proper\
-  section separator in between.'
+  section separator in between.' \
 	-e '/^ *--splitter/b removeOptionLoop' \
 	-e '/^Usage:$/N' -e '/\(^\|\n\)Usage: */{ s/\(^\|\n\)\(Usage: *\)\?\([^ ]\+ \)*eachSplit /\1\2'"$(basename "$1")"' /; s/\[--splitter SPLIT-COMMAND ARGS FILE PREFIX ;\] //; }' \
 	-e '/^Example:$/N' -e '/\(^\|\n\)Example: */{ s/\(^\|\n\)\(Example: *\)\?eachSplit /\1\2'"$(basename "$1") /; }" \
