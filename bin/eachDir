@@ -216,15 +216,7 @@ fi
 
 if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
     typeset progressCountToArgs=(--count-to $#); [ "$isFixedNumberOfDirs" ] || progressCountToArgs=()
-    exec 4> >(progressNotification --to "$progressSink" ${EACHDIR_DIR_WHAT:+--prepend-count "$EACHDIR_DIR_WHAT"} "${progressCountToArgs[@]}" 2>/dev/null)
-
-    reportProgress()
-    {
-	trap 'reportProgress() { :; }; trap PIPE' PIPE
-	printf '%s\n' "$*" >&4 2>/dev/null  # Silence "printf: write error: Broken pipe"
-    }
-else
-    reportProgress() { :; }
+    typeset -a progressNotificationCommand=(progressNotification --to "$progressSink" ${EACHDIR_DIR_WHAT:+--prepend-count "$EACHDIR_DIR_WHAT"} "${progressCountToArgs[@]}")
 fi
 
 setStatus()
@@ -237,38 +229,55 @@ isHeader=
 case "$with" in
     runWith*)
 	[ ${#runWithPromptArgs[@]} -eq 0 ] && runWithPromptArgs=(--worst-status)
-	eval '$dirSource "$@"' "${dirProcessor:+|}" "$dirProcessor" | while IFS=$'\n' read -r dirspec || [ -n "$dirspec" ]
-	do
-	    [ -d "$dirspec" ] || continue
+	{
+	    printf ' exec 4> >('
+	    printf '%q ' "${progressNotificationCommand[@]}"
+	    printf '2>/dev/null); reportProgress() { trap "reportProgress() { :; }; trap PIPE" PIPE; printf %%s\\\\n "$*" >&4 2>/dev/null; }\n'
 
-	    if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
-		if [ "${betweenCommand:$((${#betweenCommand} - 1))}" = ';' ]; then
-		    printf '%s ' "$betweenCommand"  # Prepend the BETWEEN-COMMAND to the next DIR's execution (so there's no separate prompt) if it ends with a semicolon. Its exit status is then ignored.
-		else
-		    printf '%s\n' "$betweenCommand" # Use a separate prompt (and with it consider its exit status).
+	    eval '$dirSource "$@"' "${dirProcessor:+|}" "$dirProcessor" | while IFS=$'\n' read -r dirspec || [ -n "$dirspec" ]
+	    do
+		[ -d "$dirspec" ] || continue
+
+		if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
+		    if [ "${betweenCommand:$((${#betweenCommand} - 1))}" = ';' ]; then
+			printf '%s ' "$betweenCommand"  # Prepend the BETWEEN-COMMAND to the next DIR's execution (so there's no separate prompt) if it ends with a semicolon. Its exit status is then ignored.
+		    else
+			printf '%s\n' "$betweenCommand" # Use a separate prompt (and with it consider its exit status).
+		    fi
 		fi
-	    fi
 
-	    printf -v quotedDirspec '%q' "$dirspec"
-	    if [ "$isLocalDir" ]; then
-		printf 'cd %q && ' "$dirspec"   # Previous COMMANDS may have changed the directory, so unconditionally do the chdir.
-		interpolatedCommands="${commands//"$dirMarker"/$quotedDirspec}"
-		f=()
-	    else
-		interpolatedCommands="${commands//"$dirMarker"/$quotedDirspec}"
-		typeset -a f=("$quotedDirspec")
-		[ "$interpolatedCommands" = "$commands" ] || f=()
-	    fi
+		printf -v quotedDirspec '%q' "$dirspec"
+		if [ "$isLocalDir" ]; then
+		    printf 'cd %q && ' "$dirspec"   # Previous COMMANDS may have changed the directory, so unconditionally do the chdir.
+		    interpolatedCommands="${commands//"$dirMarker"/$quotedDirspec}"
+		    f=()
+		else
+		    interpolatedCommands="${commands//"$dirMarker"/$quotedDirspec}"
+		    typeset -a f=("$quotedDirspec")
+		    [ "$interpolatedCommands" = "$commands" ] || f=()
+		fi
 
-	    reportProgress "$dirspec"
-	    printf '%s ' "$interpolatedCommands" "${f[@]}"
-	    printf '\n'
-	    isFirst=
-	done | ${with:?} "${runWithPromptArgs[@]}"
+		printf ' reportProgress %q || :\n' "$dirspec"
+		printf '%s ' "$interpolatedCommands" "${f[@]}"
+		printf '\n'
+		isFirst=
+	    done
+	} | ${with:?} "${runWithPromptArgs[@]}"
 	;;
     header)
 	isHeader=t;&
     '')
+	if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
+	    exec 4> >("${progressNotificationCommand[@]}" 2>/dev/null)
+	    reportProgress()
+	    {
+		trap 'reportProgress() { :; }; trap PIPE' PIPE
+		printf '%s\n' "$*" >&4 2>/dev/null  # Silence "printf: write error: Broken pipe"
+	    }
+	else
+	    reportProgress() { :; }
+	fi
+
 	status=0
 	exec 3<&0
 	: ${EACHDIR_HEADER_ID:="eachDir-$$-$RANDOM"}

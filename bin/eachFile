@@ -219,16 +219,8 @@ if [ $# -eq 0 -a ${#findArgs[@]} -eq 0 ]; then
 fi
 
 if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
-    typeset progressCountToArgs=(--count-to $#); [ "$isFixedNumberOfFiles" ] || progressCountToArgs=()
-    exec 4> >(progressNotification --to "$progressSink" ${EACHFILE_FILE_WHAT:+--prepend-count "$EACHFILE_FILE_WHAT"} "${progressCountToArgs[@]}" 2>/dev/null)
-
-    reportProgress()
-    {
-	trap 'reportProgress() { :; }; trap PIPE' PIPE
-	printf '%s\n' "$*" >&4 2>/dev/null  # Silence "printf: write error: Broken pipe"
-    }
-else
-    reportProgress() { :; }
+    typeset -a progressCountToArgs=(--count-to $#); [ "$isFixedNumberOfFiles" ] || progressCountToArgs=()
+    typeset -a progressNotificationCommand=(progressNotification --to "$progressSink" ${EACHFILE_FILE_WHAT:+--prepend-count "$EACHFILE_FILE_WHAT"} "${progressCountToArgs[@]}")
 fi
 
 setStatus()
@@ -241,36 +233,53 @@ isHeader=
 case "$with" in
     runWith*)
 	[ ${#runWithPromptArgs[@]} -eq 0 ] && runWithPromptArgs=(--worst-status)
-	eval '$fileSource "$@"' "${fileProcessor:+|}" "$fileProcessor" | while IFS=$'\n' read -r filespec || [ -n "$filespec" ]
-	do
-	    if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
-		if [ "${betweenCommand:$((${#betweenCommand} - 1))}" = ';' ]; then
-		    printf '%s ' "$betweenCommand"  # Prepend the BETWEEN-COMMAND to the next FILE's execution (so there's no separate prompt) if it ends with a semicolon. Its exit status is then ignored.
-		else
-		    printf '%s\n' "$betweenCommand" # Use a separate prompt (and with it consider its exit status).
+	{
+	    printf ' exec 4> >('
+	    printf '%q ' "${progressNotificationCommand[@]}"
+	    printf '2>/dev/null); reportProgress() { trap "reportProgress() { :; }; trap PIPE" PIPE; printf %%s\\\\n "$*" >&4 2>/dev/null; }\n'
+
+	    eval '$fileSource "$@"' "${fileProcessor:+|}" "$fileProcessor" | while IFS=$'\n' read -r filespec || [ -n "$filespec" ]
+	    do
+		if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
+		    if [ "${betweenCommand:$((${#betweenCommand} - 1))}" = ';' ]; then
+			printf '%s ' "$betweenCommand"  # Prepend the BETWEEN-COMMAND to the next FILE's execution (so there's no separate prompt) if it ends with a semicolon. Its exit status is then ignored.
+		    else
+			printf '%s\n' "$betweenCommand" # Use a separate prompt (and with it consider its exit status).
+		    fi
 		fi
-	    fi
 
-	    if [ "$isLocalDir" ]; then
-		dirspec="$(dirname -- "$filespec")"
-		filespec="$(basename -- "$filespec")"
-		printf 'cd %q && ' "$dirspec"   # Previous COMMANDS may have changed the directory, so unconditionally do the chdir.
-	    fi
+		if [ "$isLocalDir" ]; then
+		    dirspec="$(dirname -- "$filespec")"
+		    filespec="$(basename -- "$filespec")"
+		    printf 'cd %q && ' "$dirspec"   # Previous COMMANDS may have changed the directory, so unconditionally do the chdir.
+		fi
 
-	    printf -v quotedFilespec '%q' "$filespec"
-	    interpolatedCommands="${commands//"$fileMarker"/$quotedFilespec}"
-	    typeset -a f=("$quotedFilespec")
-	    [ "$interpolatedCommands" = "$commands" ] || f=()
+		printf -v quotedFilespec '%q' "$filespec"
+		interpolatedCommands="${commands//"$fileMarker"/$quotedFilespec}"
+		typeset -a f=("$quotedFilespec")
+		[ "$interpolatedCommands" = "$commands" ] || f=()
 
-	    reportProgress "$filespec"
-	    printf '%s ' "$interpolatedCommands" "${f[@]}"
-	    printf '\n'
-	    isFirst=
-	done | ${with:?} "${runWithPromptArgs[@]}"
+		printf ' reportProgress %q || :\n' "$filespec"
+		printf '%s ' "$interpolatedCommands" "${f[@]}"
+		printf '\n'
+		isFirst=
+	    done
+	} | ${with:?} "${runWithPromptArgs[@]}"
 	;;
     header)
 	isHeader=t;&
     '')
+	if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
+	    exec 4> >("${progressNotificationCommand[@]}" 2>/dev/null)
+	    reportProgress()
+	    {
+		trap 'reportProgress() { :; }; trap PIPE' PIPE
+		printf '%s\n' "$*" >&4 2>/dev/null  # Silence "printf: write error: Broken pipe"
+	    }
+	else
+	    reportProgress() { :; }
+	fi
+
 	status=0
 	: ${EACHFILE_HEADER_ID:="eachFile-$$-$RANDOM"}
 	exec 3<&0

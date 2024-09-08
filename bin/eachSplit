@@ -199,15 +199,7 @@ if [ ${#sectionFiles[@]} -eq 0 ]; then
 fi
 
 if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
-    exec 4> >(progressNotification --to "$progressSink" ${EACHARG_ARG_WHAT:+--prepend-count "$EACHARG_ARG_WHAT"} --count-to $# 2>/dev/null)
-
-    reportProgress()
-    {
-	trap 'reportProgress() { :; }; trap PIPE' PIPE
-	printf '%s\n' "$*" >&4 2>/dev/null  # Silence "printf: write error: Broken pipe"
-    }
-else
-    reportProgress() { :; }
+    typeset -a progressNotificationCommand=(progressNotification --to "$progressSink" ${EACHARG_ARG_WHAT:+--prepend-count "$EACHARG_ARG_WHAT"} --count-to $#)
 fi
 
 getSectionInfo()
@@ -229,22 +221,39 @@ isHeader=
 case "$with" in
     runWith*)
 	[ ${#runWithPromptArgs[@]} -eq 0 ] && runWithPromptArgs=(--worst-status)
-	for sectionFile in "${sectionFiles[@]}"
-	do
-	    printf -v quotedSectionFile '%q' "$sectionFile"
-	    interpolatedCommands="${commands//"$fileMarker"/$quotedSectionFile}"
-	    typeset -a f=("$quotedSectionFile")
-	    [ "$interpolatedCommands" = "$commands" ] || f=()
+	{
+	    printf ' exec 4> >('
+	    printf '%q ' "${progressNotificationCommand[@]}"
+	    printf '2>/dev/null); reportProgress() { trap "reportProgress() { :; }; trap PIPE" PIPE; printf %%s\\\\n "$*" >&4 2>/dev/null; }\n'
 
-	    reportProgress "$(getSectionInfo "$sectionFile")"
-	    printf '%s ' "$interpolatedCommands" "${f[@]}"
-	    printf '\n'
-	    isFirst=
-	done | ${with:?} "${runWithPromptArgs[@]}"
+	    for sectionFile in "${sectionFiles[@]}"
+	    do
+		printf -v quotedSectionFile '%q' "$sectionFile"
+		interpolatedCommands="${commands//"$fileMarker"/$quotedSectionFile}"
+		typeset -a f=("$quotedSectionFile")
+		[ "$interpolatedCommands" = "$commands" ] || f=()
+
+		printf ' reportProgress %q || :\n' "$(getSectionInfo "$sectionFile")"
+		printf '%s ' "$interpolatedCommands" "${f[@]}"
+		printf '\n'
+		isFirst=
+	    done
+	} | ${with:?} "${runWithPromptArgs[@]}"
 	;;
     header)
 	isHeader=t;&
     '')
+	if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
+	    exec 4> >("${progressNotificationCommand[@]}" 2>/dev/null)
+	    reportProgress()
+	    {
+		trap 'reportProgress() { :; }; trap PIPE' PIPE
+		printf '%s\n' "$*" >&4 2>/dev/null  # Silence "printf: write error: Broken pipe"
+	    }
+	else
+	    reportProgress() { :; }
+	fi
+
 	status=0
 	for sectionFile in "${sectionFiles[@]}"
 	do

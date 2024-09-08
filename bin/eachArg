@@ -142,15 +142,7 @@ if [ $# -eq 0 ]; then
 fi
 
 if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
-    exec 4> >(progressNotification --to "$progressSink" ${EACHARG_ARG_WHAT:+--prepend-count "$EACHARG_ARG_WHAT"} --count-to $# 2>/dev/null)
-
-    reportProgress()
-    {
-	trap 'reportProgress() { :; }; trap PIPE' PIPE
-	printf '%s\n' "$*" >&4 2>/dev/null  # Silence "printf: write error: Broken pipe"
-    }
-else
-    reportProgress() { :; }
+    typeset -a progressNotificationCommand=(progressNotification --to "$progressSink" ${EACHARG_ARG_WHAT:+--prepend-count "$EACHARG_ARG_WHAT"} --count-to $#)
 fi
 
 setStatus()
@@ -163,30 +155,47 @@ isHeader=
 case "$with" in
     runWith*)
 	[ ${#runWithPromptArgs[@]} -eq 0 ] && runWithPromptArgs=(--worst-status)
-	for arg
-	do
-	    if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
-		if [ "${betweenCommand:$((${#betweenCommand} - 1))}" = ';' ]; then
-		    printf '%s ' "$betweenCommand"  # Prepend the BETWEEN-COMMAND to the next ARGUMENT's execution (so there's no separate prompt) if it ends with a semicolon. Its exit status is then ignored.
-		else
-		    printf '%s\n' "$betweenCommand" # Use a separate prompt (and with it consider its exit status).
+	{
+	    printf ' exec 4> >('
+	    printf '%q ' "${progressNotificationCommand[@]}"
+	    printf '2>/dev/null); reportProgress() { trap "reportProgress() { :; }; trap PIPE" PIPE; printf %%s\\\\n "$*" >&4 2>/dev/null; }\n'
+
+	    for arg
+	    do
+		if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
+		    if [ "${betweenCommand:$((${#betweenCommand} - 1))}" = ';' ]; then
+			printf '%s ' "$betweenCommand"  # Prepend the BETWEEN-COMMAND to the next ARGUMENT's execution (so there's no separate prompt) if it ends with a semicolon. Its exit status is then ignored.
+		    else
+			printf '%s\n' "$betweenCommand" # Use a separate prompt (and with it consider its exit status).
+		    fi
 		fi
-	    fi
 
-	    printf -v quotedArg '%q' "$arg"
-	    interpolatedCommands="${commands//"$argMarker"/$quotedArg}"
-	    typeset -a a=("$quotedArg")
-	    [ "$interpolatedCommands" = "$commands" ] || a=()
+		printf -v quotedArg '%q' "$arg"
+		interpolatedCommands="${commands//"$argMarker"/$quotedArg}"
+		typeset -a a=("$quotedArg")
+		[ "$interpolatedCommands" = "$commands" ] || a=()
 
-	    reportProgress "$arg"
-	    printf '%s ' "$interpolatedCommands" "${a[@]}"
-	    printf '\n'
-	    isFirst=
-	done | ${with:?} "${runWithPromptArgs[@]}"
+		printf ' reportProgress %q || :\n' "$arg"
+		printf '%s ' "$interpolatedCommands" "${a[@]}"
+		printf '\n'
+		isFirst=
+	    done
+	} | ${with:?} "${runWithPromptArgs[@]}"
 	;;
     header)
 	isHeader=t;&
     '')
+	if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
+	    exec 4> >("${progressNotificationCommand[@]}" 2>/dev/null)
+	    reportProgress()
+	    {
+		trap 'reportProgress() { :; }; trap PIPE' PIPE
+		printf '%s\n' "$*" >&4 2>/dev/null  # Silence "printf: write error: Broken pipe"
+	    }
+	else
+	    reportProgress() { :; }
+	fi
+
 	status=0
 	for arg
 	do
