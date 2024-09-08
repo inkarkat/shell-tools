@@ -70,8 +70,7 @@ HELPTEXT
 			'${EACHSPLIT_EXEC_END}' is encountered. FILEs ${fileMarker:+either }are appended${fileMarker:+ or replace
 			any $fileMarker marker} inside COMMANDLINE.
 SEE ALSO:
-- separatedcat can be used to collate multiple section files with a proper
-  section separator in between.
+- eachFile directly operates on individual files.
 
 EXIT STATUS:
 Overall exit status is the highest status of all. If you specify any
