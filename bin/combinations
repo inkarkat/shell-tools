@@ -119,7 +119,6 @@ executeCombination()
     local interpolatedCommands="$commands"
 
     printf -v quotedItems '%q ' "$@"; quotedItems="${quotedItems% }"
-    typeset -a a=("$@")
     interpolatedCommands="${commands//"$itemMarker"/$quotedItems}"
 
     local item n
@@ -129,8 +128,8 @@ executeCombination()
 	interpolatedCommands="${interpolatedCommands//"${countedItemMarker/N/$n}"/$item}"
     done
 
-    [ "$interpolatedCommands" = "$commands" ] || a=()
-    eval "$interpolatedCommands" '"${a[@]}"' || exit $?
+    [ "$interpolatedCommands" = "$commands" ] || quotedItems=''
+    eval "$interpolatedCommands" "$quotedItems" || exit $?
 }
 
 
