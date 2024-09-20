@@ -19,7 +19,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, they can
     # skim the long one.
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}] [SPLIT-OPTIONS ...]${hasProgressNotification:+ [--progress SINK]} [--with-header|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] --section-info-extractor CMD [...]${extractorMarker:+ [}${extractorMarker}${extractorMarker:+] [...]} ${EACHSPLIT_EXTRACTOR_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...]${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--exec ...] | -- SIMPLECOMMAND [...] [-?|-h|--help]"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}] [SPLIT-OPTIONS ...]${hasProgressNotification:+ [--progress SINK]} [--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] --section-info-extractor CMD [...]${extractorMarker:+ [}${extractorMarker}${extractorMarker:+] [...]} ${EACHSPLIT_EXTRACTOR_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...]${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--exec ...] | -- SIMPLECOMMAND [...] [-?|-h|--help]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '-i|--input FILE ...'
 }
@@ -49,10 +49,16 @@ HELPDESCRIPTION
 			respectively.
 ${hasProgressNotification:+    --progress SINK Report the current section through one of the SINKs of the
 		    progressNotification command.
-}    --with-header   Print a header (containing the current ARGUMENT) before each
-		    execution.
-    --with-prompt   Emulate a full prompt (as if invoking COMMAND) before each
-		    execution.
+}    --with-header	Print a header (containing the current ARGUMENT) before each
+			execution if COMMAND produces output.
+    --separate-errors	Do not combine command output and command errors into
+			one (paged) stream. Commands that just cause error
+			output won't have a header then. Error output will
+			remain on its separate file descriptor and will not be
+			paged. Useful if you want to suppress errors or handle
+			them separately.
+    --with-prompt	Emulate a full prompt (as if invoking COMMAND) before
+			each execution.
 HELPTEXT
     runWithPrompt --get-long-usage 2>/dev/null
     cat <<HELPTEXT
@@ -81,6 +87,8 @@ HELPTEXT
 
 progressSink=
 with=
+errorRedir='2>&1'
+typeset -a colorArg=()
 inputFilespec=-
 commands=
 typeset -a splitCommand=(split OPTIONS ARGS FILE PREFIX)
@@ -110,6 +118,9 @@ do
 	--input|-i)	shift; inputFilespec="${1:?}"; shift;;
 	--progress)	shift; progressSink="$1"; shift;;
 	--with-header)	shift; with=header;;
+	--separate-errors)
+			shift; errorRedir='';;
+	--no-color|--color=*)	colorArg=("$1"); shift;;
 	--with-prompt)	shift; with=runWithPrompt;;
 
 	--trailing-prompt|--no-trailing-prompt|--no-output-no-prompt|--no-output-no-error|--no-success-no-count|--exit-on-success|--exit-on-failure|--emulate-prompt|--worst-status)
@@ -253,6 +264,8 @@ case "$with" in
 	fi
 
 	status=0
+	: ${EACHSPLIT_HEADER_ID:="eachSplit-$$-$RANDOM"}
+	exec 3<&0
 	for sectionFile in "${sectionFiles[@]}"
 	do
 	    printf -v quotedSectionFile '%q' "$sectionFile"
@@ -263,8 +276,8 @@ case "$with" in
 	    [ "$interpolatedCommands" = "$commands" ] || quotedSectionFile=''
 
 	    reportProgress "$sectionInfo"
-	    eval "$interpolatedCommands" "$quotedSectionFile" \
-		|| { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
+	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedSectionFile" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHSPLIT_HEADER_ID' -- '$sectionInfo'}") <&3 || \
+		{ exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
 	    isFirst=
 	done
 	exit $status
