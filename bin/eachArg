@@ -12,7 +12,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q%s %s\n' "$(basename "$1")" "${hasProgressNotification:+ [--progress SINK]}" "[--with-header|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [...] --exec SIMPLECOMMAND [...] ${EACHARG_EXEC_END} [--exec ...] | SIMPLECOMMAND [...] -- ARGUMENT [...] [-?|-h|--help]"
+    printf 'Usage: %q%s %s\n' "$(basename "$1")" "${hasProgressNotification:+ [--progress SINK]}" "[--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [...] --exec SIMPLECOMMAND [...] ${EACHARG_EXEC_END} [--exec ...] | SIMPLECOMMAND [...] -- ARGUMENT [...] [-?|-h|--help]"
 }
 printUsage()
 {
@@ -36,10 +36,16 @@ HELPDESCRIPTION
     cat <<HELPTEXT
 ${hasProgressNotification:+    --progress SINK Report the current ARGUMENT through one of the SINKs of the
 		    progressNotification command.
-}    --with-header   Print a header (containing the current ARGUMENT) before each
-		    execution.
-    --with-prompt   Emulate a full prompt (as if invoking COMMAND) before each
-		    execution.
+}    --with-header	Print a header (containing the current ARGUMENT) before
+			each execution if COMMAND produces output.
+    --separate-errors	Do not combine command output and command errors into
+			one (paged) stream. Commands that just cause error
+			output won't have a header then. Error output will
+			remain on its separate file descriptor and will not be
+			paged. Useful if you want to suppress errors or handle
+			them separately.
+    --with-prompt	Emulate a full prompt (as if invoking COMMAND) before
+			each execution.
 HELPTEXT
     runWithPrompt --get-long-usage 2>/dev/null
     cat <<HELPTEXT
@@ -65,6 +71,8 @@ HELPTEXT
 
 progressSink=
 with=
+errorRedir='2>&1'
+typeset -a colorArg=()
 commands=
 betweenCommand=
 usageRedirectCommand=
@@ -92,6 +100,10 @@ do
 			;;
 	--progress)	shift; progressSink="$1"; shift;;
 	--with-header)	shift; with=header;;
+	--separate-errors)
+			shift; errorRedir='';;
+	--no-color|--color=*)	colorArg=("$1"); shift;;
+	--color)		colorArg=("$1" "$2"); shift; shift;;
 	--with-prompt)	shift; with=runWithPrompt;;
 
 	--trailing-prompt|--no-trailing-prompt|--no-output-no-prompt|--no-output-no-error|--no-success-no-count|--exit-on-success|--exit-on-failure|--emulate-prompt|--worst-status)
@@ -197,13 +209,13 @@ case "$with" in
 	fi
 
 	status=0
+	: ${EACHARG_HEADER_ID:="eachArg-$$-$RANDOM"}
+	exec 3<&0
 	for arg
 	do
 	    if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
 		setStatus $exitStatus; eval "$betweenCommand" || { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
 	    fi
-
-	    [ ! "$isHeader" ] || header ${isFirst:+--first} "$arg"
 
 	    typeset -a a=("$arg")   # No quoting, as array provides separation.
 	    printf -v quotedArg '%q' "$arg"
@@ -211,8 +223,8 @@ case "$with" in
 	    [ "$interpolatedCommands" = "$commands" ] || a=()
 
 	    reportProgress "$arg"
-	    eval "$interpolatedCommands" '"${a[@]}"' \
-		|| { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
+	    (eval "${isHeader:+{}" "$interpolatedCommands" "${a[@]}" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHARG_HEADER_ID' -- '$arg'}") <&3 || \
+		{ exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
 	    isFirst=
 	done
 	exit $status
