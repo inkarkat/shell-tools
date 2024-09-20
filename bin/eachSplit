@@ -134,8 +134,7 @@ do
 			while [ $# -gt 0 -a "$1" != "$EACHSPLIT_EXTRACTOR_END" ]
 			do
 			    printf -v quotedArg %q "$1"
-			    cmd+="${cmd:+ }${quotedArg}"
-			    #cmd+="${cmd:+ }${quotedArg//"$escapedExtractorMarker"/$extractorMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    cmd+="${cmd:+ }${quotedArg//"$escapedExtractorMarker"/$extractorMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 			    shift
 			done
 			if [ $# -eq 0 ]; then
