@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -o pipefail
 shopt -qs nullglob
 
 : ${EACHSPLIT_COMMAND_JOINER=;}

@@ -1,4 +1,5 @@
 #!/bin/bash
+set -o pipefail
 
 : ${EACHARG_COMMAND_JOINER=;}
 : ${EACHARG_EXEC_END=;}
