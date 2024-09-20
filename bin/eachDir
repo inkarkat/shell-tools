@@ -44,7 +44,7 @@ HELPDESCRIPTION
     --progress SINK	Report the current DIR through one of the SINKs of the
 			progressNotification command.}
     --with-header	Print a header (containing the current DIR) before each
-			execution.
+			execution if COMMAND produces output.
     --with-basename-header
 			Print a header (containing just the current DIR's name
 			without any path) before each execution.

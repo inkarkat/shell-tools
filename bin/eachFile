@@ -43,7 +43,7 @@ HELPDESCRIPTION
     --progress SINK	Report the current FILE through one of the SINKs of the
 			progressNotification command.}
     --with-header	Print a header (containing the current FILE) before each
-			execution.
+			execution if COMMAND produces output.
     --with-basename-header
 			Print a header (containing just the current FILE's name
 			without any path) before each execution.
