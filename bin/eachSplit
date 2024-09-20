@@ -209,11 +209,9 @@ getSectionInfo()
 	return 0
     fi
 
-    typeset -a f=("$sectionFile")
-    printf -v sectionFile %q "$sectionFile"
-    interpolatedSectionInfoExtractorCommand="${sectionInfoExtractorCommand//"$extractorMarker"/$sectionFile}"
-    [ "$interpolatedSectionInfoExtractorCommand" = "$sectionInfoExtractorCommand" ] || f=()
-    eval "$interpolatedSectionInfoExtractorCommand" '"${f[@]}"'
+    interpolatedSectionInfoExtractorCommand="${sectionInfoExtractorCommand//"$extractorMarker"/$quotedSectionFile}"
+    [ "$interpolatedSectionInfoExtractorCommand" = "$sectionInfoExtractorCommand" ] || quotedSectionFile=''
+    eval "$interpolatedSectionInfoExtractorCommand" "$quotedSectionFile"
 }
 
 isFirst=t
@@ -233,7 +231,7 @@ case "$with" in
 		typeset -a f=("$quotedSectionFile")
 		[ "$interpolatedCommands" = "$commands" ] || f=()
 
-		printf ' reportProgress %q || :\n' "$(getSectionInfo "$sectionFile")"
+		printf ' reportProgress %q || :\n' "$(getSectionInfo)"
 		printf '%s ' "$interpolatedCommands" "${f[@]}"
 		printf '\n'
 		isFirst=
@@ -257,16 +255,15 @@ case "$with" in
 	status=0
 	for sectionFile in "${sectionFiles[@]}"
 	do
-	    sectionInfo="$(getSectionInfo "$sectionFile")"
+	    printf -v quotedSectionFile '%q' "$sectionFile"
+	    sectionInfo="$(getSectionInfo)"
 	    [ ! "$isHeader" ] || header ${isFirst:+--first} "$sectionInfo"
 
-	    typeset -f f=("$sectionFile")   # No quoting, as array provides separation.
-	    printf -v quotedSectionFile '%q' "$sectionFile"
 	    interpolatedCommands="${commands//"$fileMarker"/$quotedSectionFile}"
-	    [ "$interpolatedCommands" = "$commands" ] || f=()
+	    [ "$interpolatedCommands" = "$commands" ] || quotedSectionFile=''
 
 	    reportProgress "$sectionInfo"
-	    eval "$interpolatedCommands" '"${f[@]}"' \
+	    eval "$interpolatedCommands" "$quotedSectionFile" \
 		|| { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
 	    isFirst=
 	done

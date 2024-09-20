@@ -197,10 +197,9 @@ if [ -z "$commands" ]; then
 	    ${runWithCommand:?} "${runWithPromptArgs[@]}"
 	fi
 else
-    typeset -a f=("$tempFilespec")
-    printf -v tempFilespec '%q' "$tempFilespec"
-    interpolatedCommands="${commands//"$fileMarker"/$tempFilespec}"
-    [ "$interpolatedCommands" = "$commands" ] || f=()
+    printf -v quotedTempFilespec '%q' "$tempFilespec"
+    interpolatedCommands="${commands//"$fileMarker"/$quotedTempFilespec}"
+    [ "$interpolatedCommands" = "$commands" ] || quotedTempFilespec=''
 
-    eval "$interpolatedCommands" '"${f[@]}"'
+    eval "$interpolatedCommands" "$quotedTempFilespec"
 fi; status=$?

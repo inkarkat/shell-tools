@@ -217,13 +217,12 @@ case "$with" in
 		setStatus $exitStatus; eval "$betweenCommand" || { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
 	    fi
 
-	    typeset -a a=("$arg")   # No quoting, as array provides separation.
 	    printf -v quotedArg '%q' "$arg"
 	    interpolatedCommands="${commands//"$argMarker"/$quotedArg}"
-	    [ "$interpolatedCommands" = "$commands" ] || a=()
+	    [ "$interpolatedCommands" = "$commands" ] || quotedArg=''
 
 	    reportProgress "$arg"
-	    (eval "${isHeader:+{}" "$interpolatedCommands" "${a[@]}" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHARG_HEADER_ID' -- '$arg'}") <&3 || \
+	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedArg" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHARG_HEADER_ID' -- '$arg'}") <&3 || \
 		{ exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
 	    isFirst=
 	done

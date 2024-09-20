@@ -158,9 +158,8 @@ if [ -z "$sinkCommands" ]; then
     printf '%s\n' "$tempFilespec"
 else
     [ "${DEBUG:-}" ] || trap 'cleanup' EXIT
-    typeset -a f=("$tempFilespec")
     printf -v quotedTempFilespec '%q' "$tempFilespec"
     interpolatedCommands="${sinkCommands//"$fileMarker"/$quotedTempFilespec}"
-    [ "$interpolatedCommands" = "$sinkCommands" ] || f=()
-    eval "$interpolatedCommands" '"${f[@]}"'
+    [ "$interpolatedCommands" = "$sinkCommands" ] || quotedTempFilespec=''
+    eval "$interpolatedCommands" "$quotedTempFilespec"
 fi

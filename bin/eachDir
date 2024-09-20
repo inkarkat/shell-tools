@@ -40,7 +40,7 @@ HELPDESCRIPTION
     cat <<HELPTEXT
     --local-dir|-l	Change the directory to the current DIR before executing
 			COMMAND; nothing is appended to COMMAND then${dirMarker:+ (but $dirMarker is
-			still replaced)}.${hasProgressNotification:+
+			still replaced with the (now potentially invalid) DIR)}.${hasProgressNotification:+
     --progress SINK	Report the current DIR through one of the SINKs of the
 			progressNotification command.}
     --with-header	Print a header (containing the current DIR) before each
@@ -292,6 +292,7 @@ case "$with" in
 	    header="$dirspec"
 	    [ "$isHeaderBasename" ] && header="$(basename -- "$header")"
 
+	    printf -v quotedDirspec '%q' "$dirspec"
 	    if [ "$isLocalDir" ]; then
 		if [ "$dirspec" != . -a "$dirspec" != "$PWD" ]; then
 		    if ! cd "$dirspec" 2>/dev/null; then
@@ -300,16 +301,14 @@ case "$with" in
 		    fi
 		fi
 		interpolatedCommands="${commands//"$dirMarker"/$dirspec}"
-		f=()
+		quotedDirspec=''
 	    else
-		typeset -a f=("$dirspec")	# No quoting, as array provides separation.
-		printf -v quotedDirspec '%q' "$dirspec"
 		interpolatedCommands="${commands//"$dirMarker"/$quotedDirspec}"
-		[ "$interpolatedCommands" = "$commands" ] || f=()
+		[ "$interpolatedCommands" = "$commands" ] || quotedDirspec=''
 	    fi
 
 	    reportProgress "$header"
-	    (eval "${isHeader:+{}" "$interpolatedCommands" "${f[@]}" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHDIR_HEADER_ID' -- '$header'}") <&3 || \
+	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedDirspec" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHDIR_HEADER_ID' -- '$header'}") <&3 || \
 		{ exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
 	    isFirst=
 	done < <(eval '$dirSource "$@"' "${dirProcessor:+|}" "$dirProcessor")

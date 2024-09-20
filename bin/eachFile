@@ -303,13 +303,12 @@ case "$with" in
 		filespec="$(basename -- "$filespec")"
 	    fi
 
-	    typeset -a f=("$filespec")	# No quoting, as array provides separation.
 	    printf -v quotedFilespec '%q' "$filespec"
 	    interpolatedCommands="${commands//"$fileMarker"/$quotedFilespec}"
-	    [ "$interpolatedCommands" = "$commands" ] || f=()
+	    [ "$interpolatedCommands" = "$commands" ] || quotedFilespec=''
 
 	    reportProgress "$header"
-	    (eval "${isHeader:+{}" "$interpolatedCommands" "${f[@]}" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHFILE_HEADER_ID' -- '$header'}") <&3 || \
+	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedFilespec" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHFILE_HEADER_ID' -- '$header'}") <&3 || \
 		{ exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
 	    isFirst=
 	done < <(eval '$fileSource "$@"' "${fileProcessor:+|}" "$fileProcessor")

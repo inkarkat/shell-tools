@@ -200,11 +200,10 @@ if [ "$isPrint" ] || [ -n "$sinkCommands" ]; then
     [ $newModTime -eq $tmpModTime ] && exit 99
     [ ! "$isPrint" ] || cat -- "$tempFilespec"
     if [ -n "$sinkCommands" ]; then
-	typeset -a f=("$tempFilespec")
 	printf -v quotedTempFilespec '%q' "$tempFilespec"
 	interpolatedCommands="${sinkCommands//"$fileMarker"/$quotedTempFilespec}"
-	[ "$interpolatedCommands" = "$sinkCommands" ] || f=()
-	eval "$interpolatedCommands" '"${f[@]}"'
+	[ "$interpolatedCommands" = "$sinkCommands" ] || quotedTempFilespec=''
+	eval "$interpolatedCommands" "$quotedTempFilespec"
     fi
 else
     $EXEC "$EDITOR" "${editorArgs[@]}" "$tempFilespec"

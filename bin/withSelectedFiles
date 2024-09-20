@@ -219,7 +219,6 @@ if [ ${#selectedFiles[@]} -eq 0 ]; then
 fi
 
 printf -v quotedSelectedFiles '%q ' "${selectedFiles[@]}"; quotedSelectedFiles="${quotedSelectedFiles% }"
-typeset -a f=("${selectedFiles[@]}")
 interpolatedCommands="${commands//"$fileMarker"/$quotedSelectedFiles}"
-[ "$interpolatedCommands" = "$commands" ] || f=()
-eval "$interpolatedCommands" '"${f[@]}"'
+[ "$interpolatedCommands" = "$commands" ] || quotedSelectedFiles=''
+eval "$interpolatedCommands" "$quotedSelectedFiles"

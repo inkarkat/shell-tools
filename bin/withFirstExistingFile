@@ -175,12 +175,11 @@ do
 	filespec="$(basename -- "$filespec")"
     fi
 
-    typeset -a f=("$filespec")	# No quoting, as array provides separation.
     printf -v quotedFilespec '%q' "$filespec"
     interpolatedCommands="${commands//"$fileMarker"/$quotedFilespec}"
-    [ "$interpolatedCommands" = "$commands" ] || f=()
+    [ "$interpolatedCommands" = "$commands" ] || quotedFilespec=''
 
-    eval "$interpolatedCommands" "${f[@]}"
+    eval "$interpolatedCommands" "$quotedFilespec"
     exit $?
 done
 exit 4

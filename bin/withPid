@@ -102,9 +102,8 @@ if [ -z "$commands" ]; then
 	    ${runWithCommand:?} "${runWithPromptArgs[@]}"
 	fi
 else
-    typeset -a p=("$pid")
-    printf -v pid '%q' "$pid"
-    interpolatedCommands="${commands//"$pidMarker"/$pid}"
-    [ "$interpolatedCommands" = "$commands" ] || p=()
-    eval "$interpolatedCommands" '"${p[@]}"'
+    printf -v pid '%q' "$quotedPid"
+    interpolatedCommands="${commands//"$pidMarker"/$quotedPid}"
+    [ "$interpolatedCommands" = "$commands" ] || quotedPid=''
+    eval "$interpolatedCommands" "$quotedPid"
 fi
