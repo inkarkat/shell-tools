@@ -29,12 +29,13 @@ HELPTEXT
 dirspecs=
 commands=
 typeset -a allargs=()
-typeset -a newestFileFindArgs=(-maxdepth 1)
+isRecursive=
+typeset -a findNoRecursionArg=(-maxdepth 1)
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
-	--recursive|-r)	newestFilesArgs+=("$1"); shift; newestFileFindArgs=();;
+	--recursive|-r)	shift; isRecursive=t; findNoRecursionArg=();;
 	--include-directories|-d)
 			newestFilesArgs+=("$1"); shift;;
 	-[tN])		newestFilesArgs+=("$1" "${2?}"); shift; shift;;
@@ -68,10 +69,10 @@ set -- "${allargs[@]}" "$@"
 
 if [ ${#newestFilesArgs[@]} -eq 0 ]; then
     # Default: Only single file.
-    typeset -a selector=(newestFile --name-only -- {} "${newestFileFindArgs[@]}")
+    typeset -a selector=(newestFile --name-only -- {} "${findNoRecursionArg[@]}")
 else
     # Multiple / flexible number of files requested.
-    typeset -a selector=(newestFiles "${newestFilesArgs[@]}" -- {})
+    typeset -a selector=(newestFiles ${isRecursive:+--recursive} "${newestFilesArgs[@]}" -- {})
 fi
 
 WITHSELECTEDFILES_COMMAND_JOINER="$WITHNEWESTFILE_COMMAND_JOINER" \
