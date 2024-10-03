@@ -7,14 +7,9 @@ shopt -qs extglob
 : ${WITHNEWESTFILE_FILE_MARKER='{}'}
 fileMarker="$WITHNEWESTFILE_FILE_MARKER"; unset WITHNEWESTFILE_FILE_MARKER
 
-printUsage()
+printShortUsage()
 {
-    cat <<HELPTEXT
-Execute ${commands:-COMMAND} on / print the last modified file(s) (which ${fileMarker:+either }are appended${fileMarker:+
-or replace any $fileMarker marker} inside COMMANDLINE) in ${dirspecs:-DIR}.
-HELPTEXT
-    echo
-    local commonArgs="[-d|--include-directories|-r|--recursive] [-t|--newer-than EPOCH|-N|--newer FILE|'FILE-GLOB' [...]|-n|--count N]"
+    local commonArgs="[-d|--include-directories|-r|--recursive] [--name PATTERN] [-t|--newer-than EPOCH|-N|--newer FILE|'FILE-GLOB' [...]|-n|--count N]"
     local commonCommandArgs="-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHNEWESTFILE_EXEC_END} [--exec ...] | SIMPLECOMMAND [...]"
     [ -z "$commands" ] || commonCommandArgs=''
     if [ -n "$dirspecs" ]; then
@@ -25,22 +20,57 @@ HELPTEXT
 	printf 'Usage: %q %s\n' "${WITHNEWESTFILE_WRAPPER:-$(basename "$1")}" "-f|--files DIR [...] ${WITHNEWESTFILE_FILES_END} [-f ...] ${commonArgs}${commonArgs:+ }${commonCommandArgs}${commonCommandArgs:+ }[-?|-h|--help]"
     fi
 }
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    echo
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Execute ${commands:-COMMAND} on / print the last modified file(s) (which ${fileMarker:+either }are appended${fileMarker:+
+or replace any $fileMarker marker} inside COMMANDLINE) in ${dirspecs:-DIR}.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    cat <<HELPTEXT
+    --recursive|-r	    Consider the current directory tree / subdirectories
+			    with any nesting within DIR(s).
+    --name PATTERN	    Consider only files matching (find-) PATTERN.
+    --newer-than|-t EPOCH   Consider all files that have been modified after
+			    EPOCH (seconds since 1970).
+    --newer|-N FILE|'FILE-GLOB'
+			    Consider all files that have been modified after
+			    FILE / the newest file matching FILE-GLOB (if the
+			    directory has such a file).
+    --count|-n N	    Consider the last N modified files (or fewer if not
+			    available) instead of just the last one / all newer.
+HELPTEXT
+}
 
 dirspecs=
 commands=
 typeset -a allargs=()
-typeset -a newestFileFindArgs=(-maxdepth 1)
+typeset -a findArgs=()
+isRecursive=
+typeset -a findNoRecursionArg=(-maxdepth 1)
 while [ $# -ne 0 ]
 do
     case "$1" in
-	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
-	--recursive|-r)	newestFilesArgs+=("$1"); shift; newestFileFindArgs=();;
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--recursive|-r)	shift; isRecursive=t; findNoRecursionArg=();;
 	--include-directories|-d)
 			newestFilesArgs+=("$1"); shift;;
 	-[tN])		newestFilesArgs+=("$1" "${2?}"); shift; shift;;
 	-n)		newestFilesArgs+=(--count "${2?}"); shift; shift;;  # -c N clashes with -c COMMANDLINE; rename to -n
 	--@(newer-than|newer|count))
 			newestFilesArgs+=("$1" "${2?}"); shift; shift;;
+	--name)		shift; findArgs+=(-name "${1:?}"); shift;;
 
 	--files|-f)	allargs+=("$1"); shift
 			while [ $# -gt 0 -a "$1" != "$WITHNEWESTFILE_FILES_END" ]
@@ -68,10 +98,10 @@ set -- "${allargs[@]}" "$@"
 
 if [ ${#newestFilesArgs[@]} -eq 0 ]; then
     # Default: Only single file.
-    typeset -a selector=(newestFile --name-only -- {} "${newestFileFindArgs[@]}")
+    typeset -a selector=(newestFile --name-only -- {} "${findNoRecursionArg[@]}" "${findArgs[@]}")
 else
     # Multiple / flexible number of files requested.
-    typeset -a selector=(newestFiles "${newestFilesArgs[@]}" -- {})
+    typeset -a selector=(newestFiles ${isRecursive:+--recursive} "${newestFilesArgs[@]}" -- {} ${findArgs:+${findNoRecursionArg[*]}} "${findArgs[@]}")
 fi
 
 WITHSELECTEDFILES_COMMAND_JOINER="$WITHNEWESTFILE_COMMAND_JOINER" \
