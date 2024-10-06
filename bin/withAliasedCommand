@@ -5,6 +5,9 @@ shopt -qs extglob
 : ${WITHALIASEDCOMMAND_COMMAND_JOINER=;}
 : ${WITHALIASEDCOMMAND_ALIAS_END=;}
 : ${WITHALIASEDCOMMAND_EXEC_END=;}
+: ${WITHALIASEDCOMMAND_ARG_MARKER='{X}'}
+argMarker="$WITHALIASEDCOMMAND_ARG_MARKER"; unset WITHALIASEDCOMMAND_ARG_MARKER
+argMS="${argMarker%X*}"; argME="${argMarker#*X}"
 
 printShortUsage()
 {
@@ -47,8 +50,8 @@ HELPDESCRIPTION
 			Execute ALIAS-COMMAND; all following arguments are taken
 			to be arguments to the ALIAS-COMMAND until an argument
 			consisting of '${WITHALIASEDCOMMAND_ALIAS_END}' is encountered. You can refer to
-			arguments passed to the NAME wrapper as {1}, {2}, etc.
-			and {*}, {@} if you don't want them just appended to
+			arguments passed to the NAME wrapper as ${argMarker/X/1}, ${argMarker/X/2}, etc.
+			and ${argMarker/X/*}, ${argMarker/X/@} if you don't want them just appended to
 			ALIAS-COMMAND.
     --command|-c CMD	The command line to be executed. When this is a simple
 			command, it can also be passed as such.
@@ -141,7 +144,7 @@ do
 			do
 			    quotedArg=
 			    remainder="$1"
-			    while [[ "$remainder" =~ ^(.*)'{'([0-9]+|[*@])'}'(.*)$ ]]	# Note: This will be parsed back-to-front because of the greedy matching.
+			    while [[ "$remainder" =~ ^(.*)"$argMS"([0-9]+|[*@])"$argME"(.*)$ ]]	# Note: This will be parsed back-to-front because of the greedy matching.
 			    do
 				printf -v quotedArg '"$%s"%q%s' "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" "$quotedArg"
 				remainder="${BASH_REMATCH[1]}"
