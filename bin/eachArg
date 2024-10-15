@@ -3,6 +3,7 @@ set -o pipefail
 
 : ${EACHARG_COMMAND_JOINER=;}
 : ${EACHARG_EXEC_END=;}
+: ${EACHARG_ARGUMENTS_END=;}
 : ${EACHARG_ARG_WHAT=arg}
 : ${EACHARG_ARG_MARKER='{}'}
 argMarker="$EACHARG_ARG_MARKER"; unset EACHARG_ARG_MARKER
@@ -13,7 +14,9 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q%s %s\n' "$(basename "$1")" "${hasProgressNotification:+ [--progress SINK]}" "[--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [...] --exec SIMPLECOMMAND [...] ${EACHARG_EXEC_END} [--exec ...] | SIMPLECOMMAND [...] -- ARGUMENT [...] [-?|-h|--help]"
+    printf 'Usage: %q%s %s\n' "$(basename "$1")" "${hasProgressNotification:+ [--progress SINK]}" "[--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [...] --exec SIMPLECOMMAND [...] ${EACHARG_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] -- ARGUMENT [...] [-?|-h|--help]"
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] --arguments ARG [...] ${EACHARG_ARGUMENTS_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]"
 }
 printUsage()
 {
@@ -51,16 +54,19 @@ HELPTEXT
     runWithPrompt --get-long-usage 2>/dev/null
     cat <<HELPTEXT
     --between-command BETWEEN-COMMAND
-		    Execute BETWEEN-COMMAND in between each COMMAND execution.
-		    The last COMMAND's exit status is in \$?.
+			Execute BETWEEN-COMMAND in between each COMMAND
+			execution. The last COMMAND's exit status is in \$?.
     --exec CMD [...] ${EACHARG_EXEC_END}	Execute CMD; all following arguments are taken to be
 			arguments to the CMD until an argument consisting of
 			'${EACHARG_EXEC_END}' is encountered.
+    --arguments ARG [...] ${EACHARG_ARGUMENTS_END}
+			Take the following ARG(s); i.e. all following arguments
+			until an argument consisting of '${EACHARG_ARGUMENTS_END}' is encountered.
     --usage-redirect COMMAND
-		    When no ARGUMENT(s) are passed, redirect to COMMAND --help
-		    for usage instructions instead of printing this command's
-		    usage. Useful for wrapper scripts to delegate back to
-		    themselves.
+			When no ARGUMENT(s) are passed, redirect to
+			COMMAND --help for usage instructions instead of
+			printing this command's usage. Useful for wrapper
+			scripts to delegate back to themselves.
 EXIT STATUS:
 Overall exit status is the highest status of all. If you specify any
 runWith[Prompt] argument, --worst-status needs to be explicitly passed.
@@ -71,6 +77,7 @@ HELPTEXT
 }
 
 progressSink=
+typeset -a arguments=()
 with=
 errorRedir='2>&1'
 typeset -a colorArg=()
@@ -78,10 +85,49 @@ commands=
 betweenCommand=
 usageRedirectCommand=
 typeset -a runWithPromptArgs=()
+typeset -a cmd=()
+parseTail()
+{
+    while [ $# -gt 0 ] && [ ${#arguments[@]} -gt 0 -o "$1" != -- ]
+    do
+	cmd+=("$1")
+	shift
+    done
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
+    printf -v escapedArgMarker %q "$argMarker"
+    commands+="${commands:+ $EACHARG_COMMAND_JOINER }${quotedSimpleCommand//"$escapedArgMarker"/$argMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+
+    case "$1" in
+	--) # Consume ARG(s) after a -- separator.
+	    shift
+	    arguments+=("$@"); set --
+	    ;;
+	'')	;;
+	*)	echo >&2 'ASSERT: Should not be reached.'; exit 3;;
+    esac
+}
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--arguments)	shift
+			while [ $# -gt 0 -a "$1" != "$EACHARG_ARGUMENTS_END" ]
+			do
+			    arguments+=("$1")
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --arguments must be concluded with '${EACHARG_ARGUMENTS_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			if [ ${#arguments[@]} -eq 0 ]; then
+			    echo 'ERROR: --arguments must be followed by at least one ARGUMENT.'; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			;;
 	--command|-c)	shift; commands+="${commands:+ $EACHARG_COMMAND_JOINER }$1"; shift;;
 	--exec)		shift
 			cmd=
@@ -116,20 +162,9 @@ do
 			shift; betweenCommand="$1"; shift;;
 	--usage-redirect)
 			shift; usageRedirectCommand="$1"; shift;;
-	--)		shift; break;;
+	--)		shift; parseTail "$@"; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
-	*)		typeset -a cmd=()
-			while [ $# -gt 0 -a "$1" != '--' ]
-			do
-			    cmd+=("$1")
-			    shift
-			done
-			# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-			# undo the effects of eval.
-			printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
-			printf -v escapedArgMarker %q "$argMarker"
-			commands+="${commands:+ $EACHARG_COMMAND_JOINER }${quotedSimpleCommand//"$escapedArgMarker"/$argMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
-			;;
+	*)		parseTail "$@"; break;;
     esac
 done
 if [ -z "$commands" ]; then
@@ -143,7 +178,7 @@ elif [ ${#runWithPromptArgs[@]} -gt 0 -a "$with" = 'header' ]; then
     printUsage "$0"
     exit 2
 fi >&2
-if [ $# -eq 0 ]; then
+if [ ${#arguments[@]} -eq 0 ]; then
     echo >&2 'ERROR: No ARGUMENT(s) passed.'
     echo >&2
     if [ "$usageRedirectCommand" ]; then
@@ -173,7 +208,7 @@ case "$with" in
 	    printf '%q ' "${progressNotificationCommand[@]}"
 	    printf '2>/dev/null); reportProgress() { trap "reportProgress() { :; }; trap PIPE" PIPE; printf %%s\\\\n "$*" >&4 2>/dev/null; }\n'
 
-	    for arg
+	    for arg in "${arguments[@]}"
 	    do
 		if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
 		    if [ "${betweenCommand:$((${#betweenCommand} - 1))}" = ';' ]; then
@@ -212,7 +247,7 @@ case "$with" in
 	status=0
 	: ${EACHARG_HEADER_ID:="eachArg-$$-$RANDOM"}
 	exec 3<&0
-	for arg
+	for arg in "${arguments[@]}"
 	do
 	    if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
 		setStatus $exitStatus; eval "$betweenCommand" || { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
