@@ -4,6 +4,8 @@ shopt -qs extglob
 
 : ${EACHDIR_COMMAND_JOINER=;}
 : ${EACHDIR_EXEC_END=;}
+: ${EACHDIR_DIRECTORIES_END=;}
+: ${EACHDIR_FIND_END=;}
 : ${EACHDIR_DIR_WHAT=dir}
 : ${EACHDIR_DIR_MARKER='{}'}
 dirMarker="$EACHDIR_DIR_MARKER"; unset EACHDIR_DIR_MARKER
@@ -14,9 +16,11 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" "[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] | SIMPLECOMMAND [...] [--] DIR [...] [-?|-h|--help]"
+    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" "[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [--] DIR [...] [-?|-h|--help]"
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] -c|--command \"COMMANDLINE\" [...] --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] | SIMPLECOMMAND [...] -f|--find FIND-ARGS ..."
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] --directories DIR [...] ${EACHDIR_DIRECTORIES_END}|--find-args FIND-ARGS [...] ${EACHDIR_FIND_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]"
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] -f|--find FIND-ARGS ..."
 }
 printUsage()
 {
@@ -65,12 +69,21 @@ HELPTEXT
     --exec CMD [...] ${EACHDIR_EXEC_END}	Execute CMD; all following arguments are taken to be
 			arguments to the CMD until an argument consisting of
 			'${EACHDIR_EXEC_END}' is encountered.
+    --directories DIR [...] ${EACHDIR_DIRECTORIES_END}
+			Take the following DIR(s); i.e. all following
+			arguments until an argument consisting of
+			'${EACHDIR_DIRECTORIES_END}' is encountered.
+    --find-args FIND-ARGS [...] ${EACHDIR_FIND_END} Execute find with the following FIND-ARGS;
+			i.e. all following arguments until an argument
+			consisting of '${EACHDIR_FIND_END}' is encountered.
     --find|-f		Execute find with the following FIND-ARGS (use of
 			-type d recommended for performance reasons) to obtain
 			the list of dirspecs instead of directly taking DIRs.
 			This allows recursing into and filtering of
 			subdirectories. (But you could alternatively directly
 			use find -exec {} ; to do the same.)
+--find-args is for a static search built into a script that takes user
+COMMAND(s), whereas --find itself is user-provided.
     --usage-redirect COMMAND
 			When no DIR(s) are passed, redirect to COMMAND --help
 			for usage instructions instead of printing this
@@ -91,6 +104,7 @@ HELPTEXT
 isLocalDir=
 progressSink=
 isFixedNumberOfDirs=t
+typeset -a directories=()
 dirSource='printf %s\n'
 dirProcessor=
 finder()
@@ -115,11 +129,84 @@ commands=
 betweenCommand=
 usageRedirectCommand=
 typeset -a runWithPromptArgs=()
+parseTail()
+{
+    if [ ${#directories[@]} -eq 0 ] && ! containsGlob '@(--|--find|-f)' "$@"; then
+	# Consume existing DIRs from behind.
+	while [ $# -gt 0 ]
+	do
+	    lastArg="${!#}"
+	    [ -e "$lastArg" ] || break
+	    directories=("$lastArg" "${directories[@]}")
+	    set -- "${@:1:$(($#-1))}"
+	done
+    fi
+
+    if [ $# -gt 0 ]; then
+	typeset -a cmd=()
+	while [ $# -gt 0 ] \
+	    && [[ "$1" != @(--find|-f) ]] \
+	    && [ ${#directories[@]} -gt 0 -o "$1" != -- ]
+	do
+	    cmd+=("$1")
+	    shift
+	done
+	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+	# undo the effects of eval.
+	printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
+	printf -v escapedDirMarker %q "$dirMarker"
+	commands+="${commands:+ $EACHDIR_COMMAND_JOINER }${quotedSimpleCommand//"$escapedDirMarker"/$dirMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+    fi
+
+    case "$1" in
+	--) # Consume (potentially non-existing) DIR(s) after a -- separator.
+	    shift
+	    directories+=("$@"); set --
+	    ;;
+	--find|-f)
+	    shift; findArgs=("$@"); set --; dirSource='finder'; isFixedNumberOfDirs=;;
+	'')	;;
+	*)	echo >&2 'ASSERT: Should not be reached.'; exit 3;;
+    esac
+}
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 	--local-dir|-l)	shift; isLocalDir=t; dirProcessor='makeAbsolute';;
+	--directories)	shift
+			while [ $# -gt 0 -a "$1" != "$EACHDIR_DIRECTORIES_END" ]
+			do
+			    directories+=("$1")
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --directories must be concluded with '${EACHDIR_DIRECTORIES_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			if [ ${#directories[@]} -eq 0 ]; then
+			    echo 'ERROR: --directories must be followed by at least one ARGUMENT.'; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			;;
+	--find-args)	shift
+			while [ $# -gt 0 -a "$1" != "$EACHDIR_FIND_END" ]
+			do
+			    findArgs+=("$1")
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --find-args must be concluded with '${EACHDIR_FIND_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			if [ ${#findArgs[@]} -eq 0 ]; then
+			    echo 'ERROR: --find-args must be followed by at least one ARGUMENT.'; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			dirSource='finder'; isFixedNumberOfDirs=
+			;;
 	--find|-f)	shift; findArgs=("$@"); set --; dirSource='finder'; isFixedNumberOfDirs=; break;;
 	--exec)		shift
 			cmd=
@@ -157,39 +244,9 @@ do
 			shift; betweenCommand="$1"; shift;;
 	--usage-redirect)
 			shift; usageRedirectCommand="$1"; shift;;
-	--)		shift; break;;
+	--)		shift; parseTail "$@"; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
-	*)		typeset -a dirspecs=()
-			if ! containsGlob '@(--|--find|-f)' "$@"; then
-			    # Consume existing DIRs from behind.
-			    while [ $# -gt 0 ]
-			    do
-				lastArg="${!#}"
-				[ -e "$lastArg" ] || break
-				dirspecs=("$lastArg" "${dirspecs[@]}")
-				set -- "${@:1:$(($#-1))}"
-			    done
-			fi
-
-			if [ $# -gt 0 ]; then
-			    typeset -a cmd=()
-			    while [ $# -gt 0 ] && [[ "$1" != @(--|--find|-f) ]]
-			    do
-				cmd+=("$1")
-				shift
-			    done
-			    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-			    # undo the effects of eval.
-			    printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
-			    printf -v escapedDirMarker %q "$dirMarker"
-			    commands+="${commands:+ $EACHDIR_COMMAND_JOINER }${quotedSimpleCommand//"$escapedDirMarker"/$dirMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
-			fi
-
-			if [ ${#dirspecs[@]} -gt 0 ]; then
-			    set -- "$@" "${dirspecs[@]}"
-			    break
-			fi
-			;;
+	*)		parseTail "$@"; break;;
     esac
 done
 if [ -z "$commands" ]; then
@@ -203,7 +260,7 @@ elif [ ${#runWithPromptArgs[@]} -gt 0 -a "$with" = 'header' ]; then
     printUsage "$0"
     exit 2
 fi >&2
-if [ $# -eq 0 -a ${#findArgs[@]} -eq 0 ]; then
+if [ ${#directories[@]} -eq 0 -a ${#findArgs[@]} -eq 0 ]; then
     echo >&2 'ERROR: No DIR(s) passed.'
     echo >&2
     if [ "$usageRedirectCommand" ]; then
@@ -234,7 +291,7 @@ case "$with" in
 	    printf '%q ' "${progressNotificationCommand[@]}"
 	    printf '2>/dev/null); reportProgress() { trap "reportProgress() { :; }; trap PIPE" PIPE; printf %%s\\\\n "$*" >&4 2>/dev/null; }\n'
 
-	    eval '$dirSource "$@"' "${dirProcessor:+|}" "$dirProcessor" | while IFS=$'\n' read -r dirspec || [ -n "$dirspec" ]
+	    eval '$dirSource "${directories[@]}"' "${dirProcessor:+|}" "$dirProcessor" | while IFS=$'\n' read -r dirspec || [ -n "$dirspec" ]
 	    do
 		[ -d "$dirspec" ] || continue
 
@@ -311,7 +368,7 @@ case "$with" in
 	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedDirspec" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHDIR_HEADER_ID' -- '$header'}") <&3 || \
 		{ exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
 	    isFirst=
-	done < <(eval '$dirSource "$@"' "${dirProcessor:+|}" "$dirProcessor")
+	done < <(eval '$dirSource "${directories[@]}"' "${dirProcessor:+|}" "$dirProcessor")
 	exit $status
 	;;
     *)	printf >&2 'ASSERT: Invalid strategy: %s\n' "$with"; exit 3;;
