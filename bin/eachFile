@@ -16,11 +16,11 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" "[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] | SIMPLECOMMAND [...] [--] FILE [...] [-?|-h|--help]"
+    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" "[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [--] FILE [...] [-?|-h|--help]"
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] --files FILE [...] ${EACHFILE_FILES_END}|--find-args FIND-ARGS [...] ${EACHFILE_FIND_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] | SIMPLECOMMAND [...]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] --files FILE [...] ${EACHFILE_FILES_END}|--find-args FIND-ARGS [...] ${EACHFILE_FIND_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]"
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] | SIMPLECOMMAND [...] -f|--find FIND-ARGS ..."
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] -f|--find FIND-ARGS ..."
 }
 printUsage()
 {
@@ -246,7 +246,7 @@ do
 			shift; betweenCommand="$1"; shift;;
 	--usage-redirect)
 			shift; usageRedirectCommand="$1"; shift;;
-	--)		shift; break;;
+	--)		shift; parseTail "$@"; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		parseTail "$@"; break;;
     esac
