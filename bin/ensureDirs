@@ -1,0 +1,120 @@
+#!/bin/bash
+
+: ${ENSUREDIRS_COMMAND_JOINER=;}
+: ${ENSUREDIRS_EXEC_END=;}
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[-w|--within DIR [-w ...]] [-W|--without DIR [-W ...]] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${ENSUREDIRS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Each argument of COMMAND that starts with a / or .[.]/ is treated as a filespec
+(or dirspec if it ends with a /) and its parent directory / it itself is created
+if it does not exist yet before executing COMMAND(s).
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --within|-w DIR	Only create directories within DIR.
+    --without|-W DIR	Do not create directories within DIR. Takes precedence
+			over --within.
+    --command|-c CMD	Execute CMD as a command-line.
+    --exec CMD [...] ${ENSUREDIRS_EXEC_END}	Execute CMD; all following arguments are taken to be
+			arguments to the CMD until an argument consisting of
+			'${ENSUREDIRS_EXEC_END}' is encountered.
+HELPTEXT
+}
+
+typeset -A dirspecs=()
+considerArg()
+{
+    local arg="${1:?}"; shift
+    [[ "$arg" =~ ^\.{0,2}/ ]] || return 0
+    [[ "$arg" =~ /$ ]] \
+	&& local dirspec="$arg" \
+	|| local dirspec="$(dirname -- "$arg")"
+
+    [ -e "$dirspec" ] || dirspecs["$dirspec"]=t
+}
+
+considerCommandLine()
+{
+    local cmdline="${1:?}"; shift
+    # FIXME: This is a very crude way of splitting the command line arguments. It
+    # doesn't handle quoted operators and $.
+    eval "set -- ${cmdline//[&();|<>\`\$]/ }" # Need to escape all control and redirection operators as well as $ to avoid premature execution and variable expansion.
+    for arg
+    do
+	considerArg "$arg"
+    done
+}
+
+typeset -a includes=()
+typeset -a excludes=()
+commands=
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--within|-w)	shift; includes+=("${1:?}"); shift;;
+	--without|-W)	shift; excludes+=("${1:?}"); shift;;
+	--command|-c)	shift; considerCommandLine "$1"; commands+="${commands:+ $ENSUREDIRS_COMMAND_JOINER }$1"; shift;;
+	--exec)		shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != "$ENSUREDIRS_EXEC_END" ]
+			do
+			    considerArg "$1"
+			    printf -v quotedArg %q "$1"
+			    cmd+="${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${ENSUREDIRS_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			commands+="${commands:+ $ENSUREDIRS_COMMAND_JOINER }${cmd}"
+			;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    commands+="${commands:+ $ENSUREDIRS_COMMAND_JOINER }${quotedSimpleCommand% }"
+fi
+if [ -z "$commands" ]; then
+    echo "ERROR: No COMMAND(s) specified; need to pass -c|--command \"COMMANDLINE\", or --exec SIMPLECOMMAND [...] $ENSUREDIRS_EXEC_END or SIMPLECOMMAND."
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+typeset -a missingDirspecs=()
+for dirspec in "${!dirspecs[@]}"
+do
+    [ ${#excludes[@]} -gt 0 ] && inside --directories "${excludes[@]}" \; "$dirspec" && continue
+    [ ${#includes[@]} -gt 0 ] && ! inside --directories "${includes[@]}" \; "$dirspec" && continue
+    missingDirspecs+=("$dirspec")
+done
+
+[ ${#missingDirspecs[@]} -eq 0 ] || mkdir --parents -- "${missingDirspecs[@]}" || exit $?
+
+eval "$commands"
