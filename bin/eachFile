@@ -132,6 +132,46 @@ commands=
 betweenCommand=
 usageRedirectCommand=
 typeset -a runWithPromptArgs=()
+parseTail()
+{
+    if [ ${#files[@]} -eq 0 ] && ! containsGlob '@(--|--find|-f)' "$@"; then
+	# Consume existing FILEs from behind.
+	while [ $# -gt 0 ]
+	do
+	    lastArg="${!#}"
+	    [ -e "$lastArg" ] || break
+	    files=("$lastArg" "${files[@]}")
+	    set -- "${@:1:$(($#-1))}"
+	done
+    fi
+
+    if [ $# -gt 0 ]; then
+	typeset -a cmd=()
+	while [ $# -gt 0 ] \
+	    && [[ "$1" != @(--find|-f) ]] \
+	    && [ ${#files[@]} -gt 0 -o "$1" != -- ]
+	do
+	    cmd+=("$1")
+	    shift
+	done
+	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+	# undo the effects of eval.
+	printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
+	printf -v escapedFileMarker %q "$fileMarker"
+	commands+="${commands:+ $EACHFILE_COMMAND_JOINER }${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+    fi
+
+    case "$1" in
+	--) # Consume (potentially non-existing) FILE(s) after a -- separator.
+	    shift
+	    files+=("$@"); set --
+	    ;;
+	--find|-f)
+	    shift; findArgs=("$@"); set --; fileSource='finder'; isFixedNumberOfFiles=;;
+	'')	;;
+	*)	echo >&2 'ASSERT: Should not be reached.'; exit 3;;
+    esac
+}
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -208,44 +248,7 @@ do
 			shift; usageRedirectCommand="$1"; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
-	*)		if [ ${#files[@]} -eq 0 ] && ! containsGlob '@(--|--find|-f)' "$@"; then
-			    # Consume existing FILEs from behind.
-			    while [ $# -gt 0 ]
-			    do
-				lastArg="${!#}"
-				[ -e "$lastArg" ] || break
-				files=("$lastArg" "${files[@]}")
-				set -- "${@:1:$(($#-1))}"
-			    done
-			fi
-
-			if [ $# -gt 0 ]; then
-			    typeset -a cmd=()
-			    while [ $# -gt 0 ] \
-				&& [[ "$1" != @(--find|-f) ]] \
-				&& [ ${#files[@]} -gt 0 -o "$1" != -- ]
-			    do
-				cmd+=("$1")
-				shift
-			    done
-			    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-			    # undo the effects of eval.
-			    printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
-			    printf -v escapedFileMarker %q "$fileMarker"
-			    commands+="${commands:+ $EACHFILE_COMMAND_JOINER }${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
-			fi
-
-			case "$1" in
-			    --) # Consume (potentially non-existing) FILE(s) after a -- separator.
-				shift
-				files+=("$@"); set --
-				;;
-			    --find|-f)
-				shift; findArgs=("$@"); set --; fileSource='finder'; isFixedNumberOfFiles=;;
-			    '')	;;
-			    *)	echo >&2 'ASSERT: Should not be reached.'; exit 3;;
-			esac
-			;;
+	*)		parseTail "$@"; break;;
     esac
 done
 if [ -z "$commands" ]; then
