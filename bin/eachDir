@@ -9,6 +9,7 @@ shopt -qs extglob
 : ${EACHDIR_DIR_WHAT=dir}
 : ${EACHDIR_DIR_MARKER='{}'}
 dirMarker="$EACHDIR_DIR_MARKER"; unset EACHDIR_DIR_MARKER
+printf -v escapedDirMarker %q "$dirMarker"
 
 hasProgressNotification=; type -t progressNotification >/dev/null && hasProgressNotification=t
 
@@ -16,11 +17,11 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" "[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [--] DIR [...] [-?|-h|--help]"
+    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" "[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] | ([--] SIMPLECOMMAND [...]) [--] DIR [...] [-?|-h|--help]"
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] --directories DIR [...] ${EACHDIR_DIRECTORIES_END}|--find-args FIND-ARGS [...] ${EACHDIR_FIND_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] --directories DIR [...] ${EACHDIR_DIRECTORIES_END}|--find-args FIND-ARGS [...] ${EACHDIR_FIND_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] [--] SIMPLECOMMAND [...]"
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] -f|--find FIND-ARGS ..."
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] (-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]) -f|--find FIND-ARGS ..."
 }
 printUsage()
 {
@@ -142,31 +143,26 @@ parseTail()
 	done
     fi
 
-    if [ $# -gt 0 ]; then
-	typeset -a cmd=()
+    if [ $# -gt 0 ] && [ -z "$commands" -o ${#directories[@]} -gt 0 ]; then
+	local cmd=
 	while [ $# -gt 0 ] \
 	    && [[ "$1" != @(--find|-f) ]] \
-	    && [ ${#directories[@]} -gt 0 -o "$1" != -- ]
+	    && [ ${#directories[@]} -gt 0 -o -z "$cmd" -o "$1" != -- ]
 	do
-	    cmd+=("$1")
+	    [ -z "$cmd" -a "$1" = -- ] && shift
+	    # Need to quote SIMPLECOMMAND to undo the effects of eval.
+	    printf -v quotedArg '%q' "$1"
+	    cmd="${cmd}${cmd:+ }${quotedArg//"$escapedDirMarker"/$dirMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 	    shift
 	done
-	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-	# undo the effects of eval.
-	printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
-	printf -v escapedDirMarker %q "$dirMarker"
 	commands+="${commands:+ $EACHDIR_COMMAND_JOINER }${quotedSimpleCommand//"$escapedDirMarker"/$dirMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
     fi
 
     case "$1" in
-	--) # Consume (potentially non-existing) DIR(s) after a -- separator.
-	    shift
-	    directories+=("$@"); set --
-	    ;;
 	--find|-f)
 	    shift; findArgs=("$@"); set --; dirSource='finder'; isFixedNumberOfDirs=;;
-	'')	;;
-	*)	echo >&2 'ASSERT: Should not be reached.'; exit 3;;
+	--) shift;&
+	*)  directories+=("$@"); set --;;
     esac
 }
 while [ $# -ne 0 ]
@@ -210,7 +206,6 @@ do
 	--find|-f)	shift; findArgs=("$@"); set --; dirSource='finder'; isFixedNumberOfDirs=; break;;
 	--exec)		shift
 			cmd=
-			printf -v escapedDirMarker %q "$dirMarker"
 			while [ $# -gt 0 -a "$1" != "$EACHDIR_EXEC_END" ]
 			do
 			    printf -v quotedArg '%q' "$1"
