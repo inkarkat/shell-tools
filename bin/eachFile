@@ -9,6 +9,7 @@ shopt -qs extglob
 : ${EACHFILE_FILE_WHAT=file}
 : ${EACHFILE_FILE_MARKER='{}'}
 fileMarker="$EACHFILE_FILE_MARKER"; unset EACHFILE_FILE_MARKER
+printf -v escapedFileMarker %q "$fileMarker"
 
 hasProgressNotification=; type -t progressNotification >/dev/null && hasProgressNotification=t
 
@@ -16,11 +17,11 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" "[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [--] FILE [...] [-?|-h|--help]"
+    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" "[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] | ([--] SIMPLECOMMAND [...]) [--] FILE [...] [-?|-h|--help]"
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] --files FILE [...] ${EACHFILE_FILES_END}|--find-args FIND-ARGS [...] ${EACHFILE_FIND_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] --files FILE [...] ${EACHFILE_FILES_END}|--find-args FIND-ARGS [...] ${EACHFILE_FIND_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] [--] SIMPLECOMMAND [...]"
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] -f|--find FIND-ARGS ..."
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] (-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]) -f|--find FIND-ARGS ..."
 }
 printUsage()
 {
@@ -145,31 +146,26 @@ parseTail()
 	done
     fi
 
-    if [ $# -gt 0 ]; then
-	typeset -a cmd=()
+    if [ $# -gt 0 ] && [ -z "$commands" -o ${#files[@]} -gt 0 ]; then
+	local cmd=
 	while [ $# -gt 0 ] \
 	    && [[ "$1" != @(--find|-f) ]] \
-	    && [ ${#files[@]} -gt 0 -o "$1" != -- ]
+	    && [ ${#files[@]} -gt 0 -o -z "$cmd" -o "$1" != -- ]
 	do
-	    cmd+=("$1")
+	    [ -z "$cmd" -a "$1" = -- ] && shift
+	    # Need to quote SIMPLECOMMAND to undo the effects of eval.
+	    printf -v quotedArg '%q' "$1"
+	    cmd="${cmd}${cmd:+ }${quotedArg//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 	    shift
 	done
-	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-	# undo the effects of eval.
-	printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
-	printf -v escapedFileMarker %q "$fileMarker"
-	commands+="${commands:+ $EACHFILE_COMMAND_JOINER }${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+	commands+="${commands:+ $EACHFILE_COMMAND_JOINER }${cmd}"
     fi
 
     case "$1" in
-	--) # Consume (potentially non-existing) FILE(s) after a -- separator.
-	    shift
-	    files+=("$@"); set --
-	    ;;
 	--find|-f)
 	    shift; findArgs=("$@"); set --; fileSource='finder'; isFixedNumberOfFiles=;;
-	'')	;;
-	*)	echo >&2 'ASSERT: Should not be reached.'; exit 3;;
+	--) shift;&
+	*)  files+=("$@"); set --;;
     esac
 }
 while [ $# -ne 0 ]
@@ -210,9 +206,9 @@ do
 			fi >&2
 			fileSource='finder'; isFixedNumberOfFiles=
 			;;
+	--find|-f)	shift; findArgs=("$@"); set --; fileSource='finder'; isFixedNumberOfFiles=; break;;
 	--exec)		shift
 			cmd=
-			printf -v escapedFileMarker %q "$fileMarker"
 			while [ $# -gt 0 -a "$1" != "$EACHFILE_EXEC_END" ]
 			do
 			    printf -v quotedArg '%q' "$1"
@@ -246,7 +242,7 @@ do
 			shift; betweenCommand="$1"; shift;;
 	--usage-redirect)
 			shift; usageRedirectCommand="$1"; shift;;
-	--)		shift; parseTail "$@"; break;;
+	--)		parseTail "$@"; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		parseTail "$@"; break;;
     esac

@@ -7,6 +7,7 @@ set -o pipefail
 : ${EACHARG_ARG_WHAT=arg}
 : ${EACHARG_ARG_MARKER='{}'}
 argMarker="$EACHARG_ARG_MARKER"; unset EACHARG_ARG_MARKER
+printf -v escapedArgMarker %q "$argMarker"
 
 hasProgressNotification=; type -t progressNotification >/dev/null && hasProgressNotification=t
 
@@ -14,9 +15,9 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q%s %s\n' "$(basename "$1")" "${hasProgressNotification:+ [--progress SINK]}" "[--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [...] --exec SIMPLECOMMAND [...] ${EACHARG_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] -- ARGUMENT [...] [-?|-h|--help]"
+    printf 'Usage: %q%s %s\n' "$(basename "$1")" "${hasProgressNotification:+ [--progress SINK]}" "[--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [...] --exec SIMPLECOMMAND [...] ${EACHARG_EXEC_END} [--exec ...] | ([--] SIMPLECOMMAND [...] --) ARGUMENT [...] [-?|-h|--help]"
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] --arguments ARG [...] ${EACHARG_ARGUMENTS_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] --arguments ARG [...] ${EACHARG_ARGUMENTS_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] [--] SIMPLECOMMAND [...]"
 }
 printUsage()
 {
@@ -85,28 +86,22 @@ commands=
 betweenCommand=
 usageRedirectCommand=
 typeset -a runWithPromptArgs=()
-typeset -a cmd=()
 parseTail()
 {
-    while [ $# -gt 0 ] && [ ${#arguments[@]} -gt 0 -o "$1" != -- ]
-    do
-	cmd+=("$1")
-	shift
-    done
-    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
-    # undo the effects of eval.
-    printf -v quotedSimpleCommand '%q ' "${cmd[@]}"
-    printf -v escapedArgMarker %q "$argMarker"
-    commands+="${commands:+ $EACHARG_COMMAND_JOINER }${quotedSimpleCommand//"$escapedArgMarker"/$argMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
-
-    case "$1" in
-	--) # Consume ARG(s) after a -- separator.
+    if [ -z "$commands" -o ${#arguments[@]} -gt 0 ]; then
+	local cmd=
+	while [ $# -gt 0 ] && [ ${#arguments[@]} -gt 0 -o "$1" != -- ]
+	do
+	    # Need to quote SIMPLECOMMAND to undo the effects of eval.
+	    printf -v quotedArg '%q' "$1"
+	    cmd="${cmd}${cmd:+ }${quotedArg//"$escapedArgMarker"/$argMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 	    shift
-	    arguments+=("$@"); set --
-	    ;;
-	'')	;;
-	*)	echo >&2 'ASSERT: Should not be reached.'; exit 3;;
-    esac
+	done
+	commands+="${commands:+ $EACHARG_COMMAND_JOINER }${cmd}"
+	[ "$1" = -- ] && shift
+    fi
+
+    arguments+=("$@"); set --
 }
 while [ $# -ne 0 ]
 do
@@ -131,11 +126,10 @@ do
 	--command|-c)	shift; commands+="${commands:+ $EACHARG_COMMAND_JOINER }$1"; shift;;
 	--exec)		shift
 			cmd=
-			printf -v escapedFileMarker %q "$argMarker"
 			while [ $# -gt 0 -a "$1" != "$EACHARG_EXEC_END" ]
 			do
 			    printf -v quotedArg '%q' "$1"
-			    cmd="${cmd}${cmd:+ }${quotedArg//"$escapedFileMarker"/$argMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    cmd="${cmd}${cmd:+ }${quotedArg//"$escapedArgMarker"/$argMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 			    shift
 			done
 			if [ $# -eq 0 ]; then
