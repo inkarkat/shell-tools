@@ -137,7 +137,7 @@ parseTail()
 	while [ $# -gt 0 ]
 	do
 	    lastArg="${!#}"
-	    [ -e "$lastArg" ] || break
+	    [ -d "$lastArg" ] || break
 	    directories=("$lastArg" "${directories[@]}")
 	    set -- "${@:1:$(($#-1))}"
 	done
