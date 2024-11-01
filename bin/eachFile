@@ -206,6 +206,7 @@ do
 			fi >&2
 			fileSource='finder'; isFixedNumberOfFiles=
 			;;
+	--find|-f)	shift; findArgs=("$@"); set --; fileSource='finder'; isFixedNumberOfFiles=; break;;
 	--exec)		shift
 			cmd=
 			while [ $# -gt 0 -a "$1" != "$EACHFILE_EXEC_END" ]
