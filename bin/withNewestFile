@@ -9,7 +9,7 @@ fileMarker="$WITHNEWESTFILE_FILE_MARKER"; unset WITHNEWESTFILE_FILE_MARKER
 
 printShortUsage()
 {
-    local commonArgs="[-d|--include-directories|-r|--recursive] [--name PATTERN] [-t|--newer-than EPOCH|-N|--newer FILE|'FILE-GLOB' [...]|-n|--count N]"
+    local commonArgs="[-d|--include-directories|-r|--recursive] [--name PATTERN] [-t|--newer-than EPOCH|-N|--newer FILE|'FILE-GLOB' [...]|-n|--count N] [-o|--offset N]"
     local commonCommandArgs="-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHNEWESTFILE_EXEC_END} [--exec ...] | SIMPLECOMMAND [...]"
     [ -z "$commands" ] || commonCommandArgs=''
     if [ -n "$dirspecs" ]; then
@@ -50,6 +50,8 @@ HELPDESCRIPTION
 			    directory has such a file).
     --count|-n N	    Consider the last N modified files (or fewer if not
 			    available) instead of just the last one / all newer.
+    --offset|-o N	    Skip the last (newest) N file(s). This is applied
+			    before --count.
 HELPTEXT
 }
 
@@ -66,9 +68,9 @@ do
 	--recursive|-r)	shift; isRecursive=t; findNoRecursionArg=();;
 	--include-directories|-d)
 			newestFilesArgs+=("$1"); shift;;
-	-[tN])		newestFilesArgs+=("$1" "${2?}"); shift; shift;;
+	-[otN])		newestFilesArgs+=("$1" "${2?}"); shift; shift;;
 	-n)		newestFilesArgs+=(--count "${2?}"); shift; shift;;  # -c N clashes with -c COMMANDLINE; rename to -n
-	--@(newer-than|newer|count))
+	--@(newer-than|newer|count|offset))
 			newestFilesArgs+=("$1" "${2?}"); shift; shift;;
 	--name)		shift; findArgs+=(-name "${1:?}"); shift;;
 
