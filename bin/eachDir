@@ -17,7 +17,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" "[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] | ([--] SIMPLECOMMAND [...]) [--] DIR [...] [-?|-h|--help]"
+    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" "[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [[--not] -P|--predicate-command \"COMMANDLINE\" [...]] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] | ([--] SIMPLECOMMAND [...]) [--] DIR [...] [-?|-h|--help]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "[...] --directories DIR [...] ${EACHDIR_DIRECTORIES_END}|--find-args FIND-ARGS [...] ${EACHDIR_FIND_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] [--] SIMPLECOMMAND [...]"
     echo
@@ -64,6 +64,12 @@ HELPDESCRIPTION
 HELPTEXT
     runWithPrompt --get-long-usage 2>/dev/null
     cat <<HELPTEXT
+    --predicate-command|-P CMD
+			Skip directories where CMD (executed in the DIR as with
+			--local-dir) fails. This is an alternative to
+			    --local-dir --command "if CMD; then COMMANDLINE; fi"
+    --not		Invert the predicate so that directories are skipped
+			where CMD succeeds.
     --between-command BETWEEN-COMMAND
 			Execute BETWEEN-COMMAND in between each COMMAND
 			execution. The last COMMAND's exit status is in \$?.
@@ -127,6 +133,8 @@ isHeaderBasename=
 errorRedir='2>&1'
 typeset -a colorArg=()
 commands=
+predicateComparison=-eq
+predicateCommands=
 betweenCommand=
 usageRedirectCommand=
 typeset -a runWithPromptArgs=()
@@ -235,6 +243,9 @@ do
 	--initial-status|--no-count-on|--exit-on|--exit-unless|--comment|--summarize-failed|--summarize-failed-separator)
 			runWithPromptArgs+=("$1" "$2"); shift; shift; : ${with:=runWith};;
 
+	--predicate-command|-P)
+			shift; predicateCommands+="${predicateCommands:+ $GIT_WCDOCORE_PREDICATECOMMAND_JOINER }$1"; shift;;
+	--not)		shift; predicateComparison=-ne;;
 	--between-command)
 			shift; betweenCommand="$1"; shift;;
 	--usage-redirect)
@@ -271,6 +282,21 @@ if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
     typeset -a progressNotificationCommand=(progressNotification --to "$progressSink" ${EACHDIR_DIR_WHAT:+--prepend-count "$EACHDIR_DIR_WHAT"} "${progressCountToArgs[@]}")
 fi
 
+isSelectedByPredicate()
+{
+    [ -n "$predicateCommands" ] || return 0
+    (
+	if [ "$dirspec" != . -a "$dirspec" != "$PWD" ]; then
+	    if ! cd "$dirspec" 2>/dev/null; then
+		printf >&2 'ERROR: Cannot chdir to %s!\n' "$dirspec"
+		exit 1
+	    fi
+	fi
+	eval "$predicateCommands"
+    )
+    [ $? $predicateComparison 0 ]
+}
+
 setStatus()
 {
     return ${1:-0}
@@ -288,7 +314,7 @@ case "$with" in
 
 	    eval '$dirSource "${directories[@]}"' "${dirProcessor:+|}" "$dirProcessor" | while IFS=$'\n' read -r dirspec || [ -n "$dirspec" ]
 	    do
-		[ -d "$dirspec" ] || continue
+		[ -d "$dirspec" ] && isSelectedByPredicate || continue
 
 		if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
 		    if [ "${betweenCommand:$((${#betweenCommand} - 1))}" = ';' ]; then
@@ -335,7 +361,7 @@ case "$with" in
 	: ${EACHDIR_HEADER_ID:="eachDir-$$-$RANDOM"}
 	while IFS=$'\n' read -r dirspec || [ -n "$dirspec" ]
 	do
-	    [ -d "$dirspec" ] || continue
+	    [ -d "$dirspec" ] && isSelectedByPredicate || continue
 
 	    if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
 		setStatus $exitStatus; eval "$betweenCommand" <&3 || { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
