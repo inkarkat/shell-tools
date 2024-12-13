@@ -48,9 +48,9 @@ HELPDESCRIPTION
 			file, output directory + file prefix, and trailing ARGS
 			respectively.
 ${hasProgressNotification:+    --progress SINK Report the current section through one of the SINKs of the
-		    progressNotification command.
-}    --with-header	Print a header (containing the current ARGUMENT) before each
-			execution if COMMAND produces output.
+			progressNotification command.
+}    --with-header	Print a header (containing the current ARGUMENT) before
+			each execution if COMMAND produces output.
     --separate-errors	Do not combine command output and command errors into
 			one (paged) stream. Commands that just cause error
 			output won't have a header then. Error output will
