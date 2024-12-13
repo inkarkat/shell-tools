@@ -224,7 +224,6 @@ getSectionInfo()
     eval "$interpolatedSectionInfoExtractorCommand" "$quotedSectionFile"
 }
 
-isFirst=t
 isHeader=
 case "$with" in
     runWith*)
@@ -244,7 +243,6 @@ case "$with" in
 		printf ' reportProgress %q || :\n' "$(getSectionInfo)"
 		printf '%s ' "$interpolatedCommands" "${f[@]}"
 		printf '\n'
-		isFirst=
 	    done
 	} | ${with:?} "${runWithPromptArgs[@]}"
 	;;
@@ -269,7 +267,6 @@ case "$with" in
 	do
 	    printf -v quotedSectionFile '%q' "$sectionFile"
 	    sectionInfo="$(getSectionInfo)"
-	    [ ! "$isHeader" ] || header ${isFirst:+--first} "$sectionInfo"
 
 	    interpolatedCommands="${commands//"$fileMarker"/$quotedSectionFile}"
 	    [ "$interpolatedCommands" = "$commands" ] || quotedSectionFile=''
@@ -277,7 +274,6 @@ case "$with" in
 	    reportProgress "$sectionInfo"
 	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedSectionFile" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHSPLIT_HEADER_ID' -- '$sectionInfo'}") <&3 || \
 		{ exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
-	    isFirst=
 	done
 	exit $status
 	;;
