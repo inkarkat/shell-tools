@@ -24,38 +24,28 @@ something else
 and\nnow\nmore
 final\nset
 EOF
-    run processAddedFiles --id ID --after -- printf '[%s]-'
-
-    [ $status -eq 0 ]
-    [ "$output" = "[foo]-[bar]-[with space]-" ]
+    run -0 processAddedFiles --id ID --after -- printf '[%s]-'
+    assert_output "[foo]-[bar]-[with space]-"
     assert_args '--count 2147483647 --'
     assert_last 'with space'
 
-    run processAddedFiles --id ID --after -- printf '[%s]-'
-
-    [ $status -eq 0 ]
-    [ "$output" = "[something else]-" ]
+    run -0 processAddedFiles --id ID --after -- printf '[%s]-'
+    assert_output "[something else]-"
     assert_args '--after with\ space --'
     assert_last 'something else'
 
-    run processAddedFiles --id ID --after -- printf '[%s]-'
-
-    [ $status -eq 0 ]
-    [ "$output" = "[and]-[now]-[more]-" ]
+    run -0 processAddedFiles --id ID --after -- printf '[%s]-'
+    assert_output "[and]-[now]-[more]-"
     assert_args '--count 2147483647 --'
     assert_last 'more'
 
-    run processAddedFiles --id ID --after -- printf '[%s]-'
-
-    [ $status -eq 0 ]
-    [ "$output" = "[final]-[set]-" ]
+    run -0 processAddedFiles --id ID --after -- printf '[%s]-'
+    assert_output "[final]-[set]-"
     assert_args '--after more --'
     assert_last 'set'
 
-    run processAddedFiles --id ID --after -- printf '[%s]-'
-
-    [ $status -eq 99 ]
-    [ "$output" = "" ]
+    run -99 processAddedFiles --id ID --after -- printf '[%s]-'
+    assert_output ''
     assert_args '--count 2147483647 --'
     assert_last 'set'
 }
@@ -68,25 +58,18 @@ with space\nsomething else
 
 and\nnow\nmore
 EOF
-    run processAddedFiles --id ID --after --initial-first 2 -- printf '[%s]-'
-
-    [ $status -eq 0 ]
-    [ "$output" = "[foo]-[bar]-" ]
+    run -0 processAddedFiles --id ID --after --initial-first 2 -- printf '[%s]-'
+    assert_output "[foo]-[bar]-"
     assert_args '--count 2147483647 --'
     assert_last 'bar'
 
-    run processAddedFiles --id ID --after --initial-first 2 -- printf '[%s]-'
-
-    [ $status -eq 0 ]
-    [ "$output" = "[with space]-[something else]-" ]
+    run -0 processAddedFiles --id ID --after --initial-first 2 -- printf '[%s]-'
+    assert_output "[with space]-[something else]-"
     assert_args '--after bar --'
     assert_last 'something else'
 
-    run processAddedFiles --id ID --after --initial-first 2 -- printf '[%s]-'
-
-    [ $status -eq 0 ]
-    [ "$output" = "[and]-[now]-" ]
+    run -0 processAddedFiles --id ID --after --initial-first 2 -- printf '[%s]-'
+    assert_output "[and]-[now]-"
     assert_args '--count 2147483647 --'
     assert_last 'now'
 }
-

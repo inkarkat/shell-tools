@@ -8,10 +8,8 @@ load fixture
     }
     export -f miniDB
 
-    run processPassedMonths --id ID --command "printf '[%s]-'"
-
-    [ $status -eq 3 ]
-    [ "$output" = "" ]
+    run -3 processPassedMonths --id ID --command "printf '[%s]-'"
+    assert_output ''
 }
 
 @test "failing to update the database returns 3" {
@@ -25,8 +23,6 @@ load fixture
     export -f miniDB
 
     setDate 2021-05-11
-    run processPassedMonths --id ID --command "printf '[%s]-'"
-
-    [ $status -eq 3 ]
-    [ "$output" = "[2021-04]-" ]
+    run -3 processPassedMonths --id ID --command "printf '[%s]-'"
+    assert_output '[2021-04]-'
 }

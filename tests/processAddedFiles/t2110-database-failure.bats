@@ -8,10 +8,9 @@ load fixture
     }
     export -f miniDB
 
-    run processAddedFiles --id ID --after --command "printf '[%s]-'"
+    run -3 processAddedFiles --id ID --after --command "printf '[%s]-'"
 
-    [ $status -eq 3 ]
-    [ "$output" = "" ]
+    assert_output ''
     assert_args ''
 }
 
@@ -24,9 +23,8 @@ load fixture
     export -f miniDB
     LASTFILES='foo\nbar\nwith space'
 
-    run processAddedFiles --id ID --after --command "printf '[%s]-'"
+    run -3 processAddedFiles --id ID --after --command "printf '[%s]-'"
 
-    [ $status -eq 3 ]
-    [ "$output" = "[foo]-[bar]-[with space]-" ]
+    assert_output "[foo]-[bar]-[with space]-"
     assert_args '--count 2147483647 --'
 }

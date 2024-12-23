@@ -7,8 +7,7 @@ load fixture
     run processPassedMonths --id ID -- false
 
     setDate 2021-05-11
-    run processPassedMonths --id ID --command '(printf %s {}; exit 66)'
-    [ $status -eq 66 ]
-    [ "$output" = "2021-04" ]
+    run -66 processPassedMonths --id ID --command '(printf %s {}; exit 66)'
+    assert_output '2021-04'
     assert_last_month 2021 4
 }

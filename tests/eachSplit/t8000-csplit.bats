@@ -3,9 +3,9 @@
 load fixture
 
 @test "csplit dashdash delimited file" {
-    run eachCsplit --suppress-matched '/^--$/' '{*}' --input "${BATS_TEST_DIRNAME}/inputs/dashdash-delimited.txt" -- "${SECTION_PREFIXER_COMMAND[@]}"
-    [ "$status" -eq 0 ]
-    [ "$output" = '28
+    run -0 eachCsplit --suppress-matched '/^--$/' '{*}' --input "${BATS_TEST_DIRNAME}/inputs/dashdash-delimited.txt" -- "${SECTION_PREFIXER_COMMAND[@]}"
+    assert_output - <<'EOF'
+28
 45
 35
 20
@@ -20,5 +20,6 @@ load fixture
 02: Dinge
 02: sind
 02: drei.
-03: Last but not least.' ]
+03: Last but not least.
+EOF
 }
