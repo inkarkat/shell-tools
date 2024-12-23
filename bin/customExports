@@ -1,8 +1,8 @@
 #!/bin/bash
 set -o pipefail
 
-readonly EXPORTVALUES_FILESPEC="${XDG_RUNTIME_DIR:?}/exported-values"
-readonly EXPORTPATTERNS_FILESPEC="${XDG_RUNTIME_DIR:?}/exported-patterns"
+readonly EXPORTVALUES_FILESPEC="${XDG_RUNTIME_DIR:-/tmp}/exported-values"
+readonly EXPORTPATTERNS_FILESPEC="${XDG_RUNTIME_DIR:-/tmp}/exported-patterns"
 
 printShortUsage()
 {
