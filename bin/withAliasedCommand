@@ -74,7 +74,7 @@ HELPTEXT
     printf '%q %s\n' "$(basename "$1")" 'python3=python3.10 -- python3 --version'
 }
 
-TMPDIR="$(mktemp --directory --tmpdir "${XDG_RUNTIME_DIR:?}" "$(basename -- "$0")-XXXXXX" 2>/dev/null || { dirspec="${XDG_RUNTIME_DIR:?}/$(basename -- "$0")$$$RANDOM"; mkdir -p -- "$dirspec" && printf %s "$dirspec"; })" || \
+TMPDIR="$(mktemp --directory --tmpdir "${XDG_RUNTIME_DIR:-/tmp}" "$(basename -- "$0")-XXXXXX" 2>/dev/null || { dirspec="${XDG_RUNTIME_DIR:-/tmp}/$(basename -- "$0")$$$RANDOM"; mkdir -p -- "$dirspec" && printf %s "$dirspec"; })" || \
     { printf >&2 'ERROR: Could not initialize runtime store at %s!\n' "$RUNTIME_DIRSPEC"; exit 3; }
 [ "${DEBUG:-}" ] || trap 'rm -rf -- "$TMPDIR" 2>/dev/null' EXIT
 
