@@ -1,5 +1,10 @@
 #!/bin/bash
 
+bats_require_minimum_version 1.5.0
+bats_load_library bats-support
+bats_load_library bats-assert
+bats_load_library bats-file
+
 setup()
 {
     readonly FILE1="${BATS_TMPDIR}/FILE1"; echo "FOO" > "$FILE1"
@@ -14,25 +19,26 @@ setup()
 
 assertFile1Unchanged()
 {
-    [ "$(< "${1:-$FILE1}")" = 'FOO' ]
+
+    assert_equal "$(< "${1:-$FILE1}")" 'FOO'
 }
 assertFile2Unchanged()
 {
-    [ "$(< "${1:-$FILE2}")" = 'fox' ]
+    assert_equal "$(< "${1:-$FILE2}")" 'fox'
 }
 assertFile1Changed()
 {
-    [ "$(< "${1:-$FILE1}")" = 'Fi' ]
+    assert_equal "$(< "${1:-$FILE1}")" 'Fi'
 }
 assertFile2Changed()
 {
-    [ "$(< "${1:-$FILE2}")" = 'fix' ]
+    assert_equal "$(< "${1:-$FILE2}")" 'fix'
 }
 assertFile1Deleted()
 {
-    [ ! -e "${1:-$FILE1}" ]
+    assert_not_exists "${1:-$FILE1}"
 }
 assertFile2Deleted()
 {
-    [ ! -e "${1:-$FILE2}" ]
+    assert_not_exists "${1:-$FILE2}"
 }

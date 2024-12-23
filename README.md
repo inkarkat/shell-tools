@@ -2,6 +2,8 @@
 
 _A collection of shell scripts that are either useful on its own (in interactive sessions), or offer generic functionality for higher-level scripts._
 
+![Build Status](https://github.com/inkarkat/shell-tools/actions/workflows/build.yml/badge.svg)
+
 Similar to the Shell Basics, these are more elaborate and/or specialized.
 
 ### Dependencies

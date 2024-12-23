@@ -7,9 +7,8 @@ load fixture
     run processPassedYears --id ID -- false
 
     setDate 2021-06-01
-    run processPassedYears --id ID -- printf '[%s]-' first '{}' last
-    [ $status -eq 0 ]
-    [ "$output" = "[first]-[2019]-[2020]-[last]-" ]
+    run -0 processPassedYears --id ID -- printf '[%s]-' first '{}' last
+    assert_output '[first]-[2019]-[2020]-[last]-'
 }
 
 @test "call two years later to commandline" {
@@ -17,9 +16,8 @@ load fixture
     run processPassedYears --id ID -- false
 
     setDate 2021-06-01
-    run processPassedYears --id ID --command "printf '[%s]-'"
-    [ $status -eq 0 ]
-    [ "$output" = "[2019]-[2020]-" ]
+    run -0 processPassedYears --id ID --command "printf '[%s]-'"
+    assert_output '[2019]-[2020]-'
 }
 
 @test "call two years later to commandline with explicit {}" {
@@ -27,9 +25,8 @@ load fixture
     run processPassedYears --id ID -- false
 
     setDate 2021-06-01
-    run processPassedYears --id ID --command "printf first-; printf '[%s]-' {}; printf last"
-    [ $status -eq 0 ]
-    [ "$output" = "first-[2019]-[2020]-last" ]
+    run -0 processPassedYears --id ID --command "printf first-; printf '[%s]-' {}; printf last"
+    assert_output 'first-[2019]-[2020]-last'
 }
 
 @test "call two years later to simple command with reconfigured [X] marker, leaving any {} intact" {
@@ -38,9 +35,8 @@ load fixture
 
     setDate 2021-06-01
     export PROCESSPASSEDYEARS_MARKER='[X]'
-    run processPassedYears --id ID -- printf '[%s]-{}-' first '[X]' last
-    [ $status -eq 0 ]
-    [ "$output" = "[first]-{}-[2019]-{}-[2020]-{}-[last]-{}-" ]
+    run -0 processPassedYears --id ID -- printf '[%s]-{}-' first '[X]' last
+    assert_output '[first]-{}-[2019]-{}-[2020]-{}-[last]-{}-'
 }
 
 @test "call two years later to combined command-line and simple command with reconfigured [X] marker, leaving any {} intact" {
@@ -49,7 +45,6 @@ load fixture
 
     setDate 2021-06-01
     export PROCESSPASSEDYEARS_MARKER='@@'
-    run processPassedYears --id ID --command 'printf AA{}ZZ@@' -- printf '[%s]-{}-' first '@@' last
-    [ $status -eq 0 ]
-    [ "$output" = "AA{}ZZ2019[first]-{}-[2019]-{}-[2020]-{}-[last]-{}-" ]
+    run -0 processPassedYears --id ID --command 'printf AA{}ZZ@@' -- printf '[%s]-{}-' first '@@' last
+    assert_output 'AA{}ZZ2019[first]-{}-[2019]-{}-[2020]-{}-[last]-{}-'
 }

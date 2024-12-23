@@ -7,9 +7,8 @@ load fixture
     run processPassedMonths --id ID -- false
 
     setDate 2021-05-11
-    LC_ALL=C run processPassedMonths --id ID --format '%-m, %Y' -- printf '[%s]-'
-    [ $status -eq 0 ]
-    [ "$output" = "[4, 2021]-" ]
+    LC_ALL=C run -0 processPassedMonths --id ID --format '%-m, %Y' -- printf '[%s]-'
+    assert_output '[4, 2021]-'
 }
 
 @test "output with full month name and short year" {
@@ -17,7 +16,6 @@ load fixture
     run processPassedMonths --id ID -- false
 
     setDate 2021-05-11
-    LC_ALL=C run processPassedMonths --id ID --format "%B'%y" -- printf '[%s]-'
-    [ $status -eq 0 ]
-    [ "$output" = "[April'21]-" ]
+    LC_ALL=C run -0 processPassedMonths --id ID --format "%B'%y" -- printf '[%s]-'
+    assert_output "[April'21]-"
 }

@@ -1,28 +1,26 @@
 #!/usr/bin/env bats
 
+load fixture
+
 @test "no arguments prints message and usage instructions" {
-    run processFilesAndDeleteEmpty
-    [ $status -eq 2 ]
-    [ "${lines[-1]%% *}" = 'Usage:' ]
+    run -2 processFilesAndDeleteEmpty
+    assert_line -n -1 -e '^Usage:'
 }
 
 @test "invalid option prints message and usage instructions" {
-    run processFilesAndDeleteEmpty --invalid-option
-    [ $status -eq 2 ]
-    [ "${lines[0]}" = 'ERROR: Unknown option "--invalid-option"!' ]
-    [ "${lines[-1]%% *}" = 'Usage:' ]
+    run -2 processFilesAndDeleteEmpty --invalid-option
+    assert_line -n 0 'ERROR: Unknown option "--invalid-option"!'
+    assert_line -n -1 -e '^Usage:'
 }
 
 @test "missing FILE prints message and usage instructions" {
-    run processFilesAndDeleteEmpty --exec true \; --
-    [ $status -eq 2 ]
-    [ "${lines[0]}" = 'ERROR: No FILE(s) to process.' ]
-    [ "${lines[-1]%% *}" = 'Usage:' ]
+    run -2 processFilesAndDeleteEmpty --exec true \; --
+    assert_line -n 0 'ERROR: No FILE(s) to process.'
+    assert_line -n -1 -e '^Usage:'
 }
 
 @test "--exec without ; prints message and usage instructions" {
-    run processFilesAndDeleteEmpty --exec true
-    [ $status -eq 2 ]
-    [ "${lines[0]}" = "ERROR: --exec command must be concluded with ';'" ]
-    [ "${lines[-1]%% *}" = 'Usage:' ]
+    run -2 processFilesAndDeleteEmpty --exec true
+    assert_line -n 0 "ERROR: --exec command must be concluded with ';'"
+    assert_line -n -1 -e '^Usage:'
 }

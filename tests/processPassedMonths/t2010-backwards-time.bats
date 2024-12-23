@@ -7,9 +7,8 @@ load fixture
     run processPassedMonths --id ID -- false
 
     setDate 2021-03-20
-    run processPassedMonths --id ID -- printf '[%s]-'
-    [ $status -eq 99 ]
-    [ "$output" = "" ]
+    run -99 processPassedMonths --id ID -- printf '[%s]-'
+    assert_output ''
 }
 
 @test "call with a date 11 months in the past exits with 99" {
@@ -17,7 +16,6 @@ load fixture
     run processPassedMonths --id ID -- false
 
     setDate 2020-05-20
-    run processPassedMonths --id ID -- printf '[%s]-'
-    [ $status -eq 99 ]
-    [ "$output" = "" ]
+    run -99 processPassedMonths --id ID -- printf '[%s]-'
+    assert_output ''
 }

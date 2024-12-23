@@ -7,7 +7,6 @@ load fixture
     run processPassedYears --id ID -- false
 
     setDate 2021-05-11
-    LC_ALL=C run processPassedYears --id ID --format "'%y" -- printf '[%s]-'
-    [ $status -eq 0 ]
-    [ "$output" = "['20]-" ]
+    LC_ALL=C run -0 processPassedYears --id ID --format "'%y" -- printf '[%s]-'
+    assert_output "['20]-"
 }
