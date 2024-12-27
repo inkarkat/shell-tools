@@ -1,0 +1,116 @@
+#!/bin/bash
+shopt -qs extglob
+
+: ${FILTEREXPR_COMMAND_JOINER=;}
+: ${FILTEREXPR_EXEC_END=;}
+: ${FILTEREXPR_ARG_MARKER='{}'}
+argMarker="$FILTEREXPR_ARG_MARKER"; unset FILTEREXPR_ARG_MARKER
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-k|--keep-arg] -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${FILTEREXPR_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]"
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Only print lines where the execution of COMMAND, with the value of the first
+column ${argMarker:+either }appended${argMarker:+ or replacing any $argMarker marker}, succeeds.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --field-separator|-F FS
+			Use FS for splitting the data into columns (instead of
+			the default whitespace). Unlike AWK, does not support a
+			regular expression.
+    --keep-arg|-k	Keep the argument column. By default, the column is
+			dropped.
+    --command|-c CMD	The command line to be executed. When this is a simple
+			command, it can also be passed as such. Read arguments
+			are appended${argMarker:+ or replace the string $argMarker}.
+    --exec CMD [...] ${FILTEREXPR_EXEC_END}	Execute CMD; all following arguments are taken to be
+			arguments to the CMD until an argument consisting of
+			'${FILTEREXPR_EXEC_END}' is encountered. The argument ${argMarker:+either }is appended
+			${argMarker:+or replaces any $argMarker marker }inside COMMANDLINE.
+SEE ALSO:
+- linesFilter passes the entire line to COMMAND, and doesn't drop anything.
+
+EXIT STATUS:
+    0	At least one arg made COMMAND succeed.
+    1	No arg made COMMAND succeed.
+    2	Bad invocation, wrong or missing command-line arguments.
+HELPTEXT
+}
+
+isKeepArg=
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--field-separator|-F)
+			shift; IFS="$1"; shift;;
+	--keep-arg|-k)
+			shift; isKeepArg=t;;
+	--command|-c)	shift; commands+="${commands:+ $FILTEREXPR_COMMAND_JOINER }$1"; shift;;
+	--exec)		shift
+			cmd=
+			printf -v escapedArgMarker %q "$argMarker"
+			while [ $# -gt 0 -a "$1" != "$FILTEREXPR_EXEC_END" ]
+			do
+			    printf -v quotedArg %q "$1"
+			    cmd+="${cmd:+ }${quotedArg//"$escapedArgMarker"/$argMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${FILTEREXPR_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			commands+="${commands:+ $FILTEREXPR_COMMAND_JOINER }${cmd}"
+			;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    printf -v escapedArgMarker %q "$argMarker"
+    commands+="${commands:+ $FILTEREXPR_COMMAND_JOINER }${quotedSimpleCommand//"$escapedArgMarker"/$argMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+fi
+if [ -z "$commands" ]; then
+    echo "ERROR: No COMMAND(s) specified; need to pass -c|--command \"COMMANDLINE\", or --exec SIMPLECOMMAND [...] $FILTEREXPR_EXEC_END or SIMPLECOMMAND."
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+status=1
+isEOL=t
+while read -r arg remainder || { isEOL=; [ -n "$line" ]; }
+do
+
+    printf -v quotedArg '%q' "$arg"
+    interpolatedCommands="${commands//"$argMarker"/$quotedArg}"
+    [ "$interpolatedCommands" = "$commands" ] || quotedArg=''
+
+    if eval "$interpolatedCommands $quotedArg" >&2; then
+	printf "%s${isEOL:+\\n}" "${isKeepArg:+${arg}${IFS:0:1}}$remainder"
+	status=0
+    fi
+done
+exit $status
