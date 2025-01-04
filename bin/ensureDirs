@@ -97,6 +97,7 @@ done
 if [ $# -ne 0 ]; then
     # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
     # undo the effects of eval.
+    for arg; do considerArg "$arg"; done
     printf -v quotedSimpleCommand '%q ' "$@"
     commands+="${commands:+ $ENSUREDIRS_COMMAND_JOINER }${quotedSimpleCommand% }"
 fi
