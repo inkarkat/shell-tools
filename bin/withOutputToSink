@@ -159,4 +159,4 @@ execute()
     fi
 }
 
-eval "{ execute ${teePrefix} | ${isTee:+"tee >("}" "$sinkCommands" "${isTee:+)}; } ${teeSuffix}"
+eval "{ execute ${teePrefix} | ${isTee:+\"tee >\(\"}" "$sinkCommands" "${isTee:+\)}; } ${teeSuffix}"
