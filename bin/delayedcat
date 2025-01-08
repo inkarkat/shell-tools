@@ -26,10 +26,15 @@ HELPDESCRIPTION
     echo
     printShortUsage "$1"
     cat <<HELPTEXT
-    NUMBER[SUFFIX]	Delay before doing any output at all.
+    NUMBER[SUFFIX]	Delay before doing any output at all. Does NOT wait for
+			input first!
     NUMBER may be an arbitrary floating-point number, TIMESPAN must be an
     integer. SUFFIX may be 's' for seconds (the default), 'm' for minutes, 'h'
     for hours or 'd' for days.
+
+RELATED COMMANDS:
+- delay introduces a constant delay between its standard input and its standard
+  output, not just a delayed start of output.
 HELPTEXT
 }
 
