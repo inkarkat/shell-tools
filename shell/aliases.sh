@@ -46,6 +46,12 @@ addAliasSupport tempfileAndEdit \
     'dbe' \
     'directory|basename|extension'
 
+addAliasSupport tempfileAndOpen \
+    'C' \
+    'cleanup' \
+    'dbe' \
+    'directory|basename|extension'
+
 addAliasSupport tempfile \
     '' \
     '' \
@@ -64,4 +70,5 @@ if [ -d ~/tmp ]; then
     alias tempedit='TMPDIR=~/tmp tempedit'
     alias tempfile='TMPDIR=~/tmp tempfile'
     alias tempfileAndEdit='TMPDIR=~/tmp tempfileAndEdit'
+    alias tempfileAndOpen='TMPDIR=~/tmp tempfileAndOpen'
 fi
