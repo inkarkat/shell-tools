@@ -32,6 +32,7 @@ Capture output from stdin / emitted by COMMAND into a temp file whose name is
 then printed / passed to SINK-COMMAND (${fileMarker:+either }appended${fileMarker:+ or replacing any
 $fileMarker marker }inside COMMANDLINE).
 Additionally, statistics about the amount of captured text is printed to stderr.
+The temp file is removed if it's been consumed by a SINK-COMMAND.
 HELPDESCRIPTION
     echo
     printShortUsage "$1"

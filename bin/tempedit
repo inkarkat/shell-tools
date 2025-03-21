@@ -12,7 +12,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf '[TMPDIR=DIR] %q %s\n' "$(basename "$1")" "[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-P|--no-print|-p|--print]] [-v|--verbose] [-C|--cleanup] [--edit-empty] [-s|--sink-command \"COMMANDLINE\" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $TEMPEDIT_EXEC_END [-S ...] [--editor-args EDITORARGS [...] ${TEMPEDIT_EDITORARGS_END} [--editor-args ...]] ... [-?|-h|--help]"
+    printf '[TMPDIR=DIR] %q %s\n' "$(basename "$1")" "[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-p|--print|-P|--no-print [-C|--cleanup]] [-v|--verbose] [--edit-empty] [-s|--sink-command \"COMMANDLINE\" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $TEMPEDIT_EXEC_END [-S ...] [--editor-args EDITORARGS [...] ${TEMPEDIT_EDITORARGS_END} [--editor-args ...]] ... [-?|-h|--help]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "... -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${TEMPEDIT_EXEC_END} [--exec ...] [--] SIMPLECOMMAND [...]"
     echo
@@ -35,7 +35,7 @@ printLongUsage()
 Capture output from stdin / emitted by COMMAND into a temp file that is then
 opened in $(basename -- "${EDITOR}") for editing, and if successful, the edited contents
 are printed / passed to SINK-COMMAND (${fileMarker:+either }appended${fileMarker:+ or replacing any
-$fileMarker marker }inside COMMANDLINE).
+$fileMarker marker }inside COMMANDLINE) and the temp file is removed.
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
@@ -45,11 +45,14 @@ HELPDESCRIPTION
 			directory to store the temp file in.
     --basename|-b BASE	Use BASE as the prefix of the temp file name.
     --extension|-e EXT	Use EXT as the temp file extension.
-    --no-print|-P	Just edit, but don't check or print the results.
     --print|-p		Even print when a SINK-COMMAND is given.
-    --verbose|-v	Print the filespec, too.
+    --no-print|-P	Just edit, but don't check or print the results. In this
+			case (unless a SINK-COMMAND is given), the temp file
+			will NOT be removed, so the edits aren't totally lost.
     --cleanup|-C	When just editing, don't keep the temp file after the
-			editor exits; the contents will be gone.
+			editor exits; the contents will be gone. The editor was
+			just used as a viewer or for its side effects.
+    --verbose|-v	Print the filespec, too.
     --edit-empty	Also launch the (empty) editor if nothing got read from
 			stdin.
     --sink-command|-s SINK-COMMAND
