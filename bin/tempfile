@@ -10,7 +10,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: [TMPDIR=DIR] %q %s\n' "$(basename "$1")" "[-q|--quiet] [-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-s|--sink-command \"COMMANDLINE\" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $TEMPFILE_EXEC_END [-S ...]] ... [-?|-h|--help]"
+    printf 'Usage: [TMPDIR=DIR] %q %s\n' "$(basename "$1")" "[-q|--quiet] [-v|--verbose] [-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-s|--sink-command \"COMMANDLINE\" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $TEMPFILE_EXEC_END [-S ...]] ... [-?|-h|--help]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "... -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${TEMPFILE_EXEC_END} [--exec ...] [--] SIMPLECOMMAND [...]"
     echo
@@ -38,6 +38,7 @@ HELPDESCRIPTION
     echo
     cat <<HELPTEXT
     --quiet|-q		Don't print statistics.
+    --verbose|-v	Also print the filespec when passing to a SINK-COMMAND.
     --directory|-d DIR	Use (and create) a subdirectory DIR inside the temp
 			directory to store the temp file in.
     --basename|-b BASE	Use BASE as the prefix of the temp file name.
@@ -63,6 +64,7 @@ HELPTEXT
 }
 
 isQuiet=
+isVerbose=
 subdir=
 basename=
 extension=
@@ -73,6 +75,7 @@ do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 	--quiet|-q)	shift; isQuiet=t;;
+	--verbose|-v)	shift; isVerbose=t;;
 	--directory|-d)	shift; subdir="${1:?}"; shift;;
 	--basename|-b)	shift; basename="$1"; shift;;
 	--extension|-e)	shift; extension="$1"; shift;;
@@ -154,9 +157,11 @@ if [ ! "$isQuiet" ]; then
     printf >&2 '%d line%s, %d word%s, %d byte%s read\n' "$lineCnt" "$lineCntPlural" "$wordCnt" "$wordCntPlural" "$byteCnt" "$byteCntPlural"
 fi
 
-if [ -z "$sinkCommands" ]; then
+if [ -z "$sinkCommands" ] || [ "$isVerbose" ]; then
     printf '%s\n' "$tempFilespec"
-else
+fi
+
+if [ -n "$sinkCommands" ]; then
     [ "${DEBUG:-}" ] || trap 'cleanup' EXIT
     printf -v quotedTempFilespec '%q' "$tempFilespec"
     interpolatedCommands="${sinkCommands//"$fileMarker"/$quotedTempFilespec}"

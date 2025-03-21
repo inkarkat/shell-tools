@@ -7,7 +7,7 @@ Capture output from stdin / emitted by COMMAND into a temp file that is then
 opened in $(basename -- "${EDITOR}") for editing.
 HELPTEXT
     echo
-    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" "[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-C|--cleanup]"
+    printf 'Usage: cat FILE [...] | [TMPDIR=DIR] %q %s\n' "$(basename "$1")" "[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-C|--cleanup] [-v|--verbose]"
     echo
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '... -c|--command "COMMANDLINE" [-c ...] [--] SIMPLECOMMAND [...]'
 }

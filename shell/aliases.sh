@@ -35,26 +35,26 @@ addAliasSupport tempdir \
     'or-existing|create-subdir|name'
 
 addAliasSupport tempedit \
-    'PC' \
-    'no-print|cleanup|edit-empty' \
+    'pPCv' \
+    'print|no-print|verbose|cleanup|edit-empty' \
     'dbe' \
     'directory|basename|extension'
 
 addAliasSupport tempfileAndEdit \
-    'C' \
-    'cleanup|edit-empty' \
+    'Cv' \
+    'cleanup|verbose|edit-empty' \
     'dbe' \
     'directory|basename|extension'
 
 addAliasSupport tempfileAndOpen \
-    'C' \
-    'cleanup' \
+    'Cv' \
+    'cleanup|verbose' \
     'dbe' \
     'directory|basename|extension'
 
 addAliasSupport tempfile \
-    '' \
-    '' \
+    'qv' \
+    'quiet|verbose' \
     'dbesS' \
     'directory|basename|extension|sink-command|sink-exec'
 

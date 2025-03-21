@@ -12,7 +12,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf '[TMPDIR=DIR] %q %s\n' "$(basename "$1")" "[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-P|--no-print|-p|--print]] [-C|--cleanup] [--edit-empty] [-s|--sink-command \"COMMANDLINE\" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $TEMPEDIT_EXEC_END [-S ...] [--editor-args EDITORARGS [...] ${TEMPEDIT_EDITORARGS_END} [--editor-args ...]] ... [-?|-h|--help]"
+    printf '[TMPDIR=DIR] %q %s\n' "$(basename "$1")" "[-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-P|--no-print|-p|--print]] [-v|--verbose] [-C|--cleanup] [--edit-empty] [-s|--sink-command \"COMMANDLINE\" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $TEMPEDIT_EXEC_END [-S ...] [--editor-args EDITORARGS [...] ${TEMPEDIT_EDITORARGS_END} [--editor-args ...]] ... [-?|-h|--help]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "... -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${TEMPEDIT_EXEC_END} [--exec ...] [--] SIMPLECOMMAND [...]"
     echo
@@ -47,6 +47,7 @@ HELPDESCRIPTION
     --extension|-e EXT	Use EXT as the temp file extension.
     --no-print|-P	Just edit, but don't check or print the results.
     --print|-p		Even print when a SINK-COMMAND is given.
+    --verbose|-v	Print the filespec, too.
     --cleanup|-C	When just editing, don't keep the temp file after the
 			editor exits; the contents will be gone.
     --edit-empty	Also launch the (empty) editor if nothing got read from
@@ -82,6 +83,7 @@ basename=
 extension=
 isEditEmpty=
 isPrint=t
+isVerbose=
 sinkCommands=
 commands=
 typeset -a editorArgs=()
@@ -96,6 +98,7 @@ do
 	--edit-empty)	shift; isEditEmpty=t;;
 	--no-print|-P)	shift; isPrint=;;
 	--print|-p)	shift; isPrint=t;;
+	--verbose|-v)	shift; isVerbose=t;;
 	--sink-command|-s)
 			shift; sinkCommands+="${sinkCommands:+ $TEMPEDIT_SINKCOMMAND_JOINER }$1"; shift; isPrint=;;
 	--sink-exec|-S)	shift
@@ -185,6 +188,8 @@ else
 fi > "$tempFilespec"
 
 [ "$isEditEmpty" ] || [ -s "$tempFilespec" ] || { cleanup; exit 1; }
+
+[ ! "$isVerbose" ] || printf '%s\n' "$tempFilespec"
 
 exec </dev/tty	# Reconnect stdin to terminal, to avoid that Vim complains that input is not from a terminal.
 if [ "$isPrint" ] || [ -n "$sinkCommands" ]; then
