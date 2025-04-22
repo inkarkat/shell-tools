@@ -163,7 +163,7 @@ parseTail()
 	    cmd="${cmd}${cmd:+ }${quotedArg//"$escapedDirMarker"/$dirMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 	    shift
 	done
-	commands+="${commands:+ $EACHDIR_COMMAND_JOINER }${quotedSimpleCommand//"$escapedDirMarker"/$dirMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+	commands+="${commands:+ $EACHDIR_COMMAND_JOINER }${cmd}"
     fi
 
     case "$1" in
