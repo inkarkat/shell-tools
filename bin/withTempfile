@@ -174,7 +174,7 @@ if [ "$isDirectory" ]; then
     tempFilespec="$(mktemp --directory --tmpdir${tempDirspec:+="$tempDirspec"} "${prefix}-XXXXXX" 2>/dev/null || { dirspec="${tempDirspec:-${TMPDIR:-/tmp}}/${prefix}.$$$RANDOM"; mkdir --parents -- "$dirspec" && printf %s "$dirspec"; })" \
 	&& [ -d "$tempFilespec" ]
 else
-    tempFilespec="$(mktemp ${tempDirspec:+--tmpdir="$tempDirspec"} "${prefix}-XXXXXX" 2>/dev/null || { tempfile="${tempDirspec:-${TMPDIR:-/tmp}}/${prefix}.$$$RANDOM"; touch -- "$tempfile" && printf %s "$tempfile"; })" \
+    tempFilespec="$(mktemp --tmpdir${tempDirspec:+="$tempDirspec"} "${prefix}-XXXXXX" 2>/dev/null || { tempfile="${tempDirspec:-${TMPDIR:-/tmp}}/${prefix}.$$$RANDOM"; touch -- "$tempfile" && printf %s "$tempfile"; })" \
 	&& [ -f "$tempFilespec" ]
 fi || exit 125
 unset tempFilePermissions; [ -n "$renameOp" ] && [ -n "$tempDirspec" ] && tempFilePermissions="$(getOctalFilePermissions "$tempFilespec")"
