@@ -1,0 +1,128 @@
+#!/bin/bash
+
+: ${RUNFIRSTCALLABLECOMMAND_EXEC_END=;}
+: ${RUNFIRSTCALLABLECOMMAND_NO_COMMAND_STATUS:=99}
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, they can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[--command|-c CMDLINE [-c ...] | --exec SIMPLECOMMAND [...] ${RUNFIRSTCALLABLECOMMAND_EXEC_END} [--exec ...]] [--or-message|-m MESSAGE|--ignore-missing|-i] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Execute the first callable COMMAND (starting with SIMPLECOMMAND).
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --command|-c CMD	Execute CMD as a command-line.
+    --exec CMD [...] ${RUNFIRSTCALLABLECOMMAND_EXEC_END}	Execute CMD; all following arguments are taken to be
+			arguments to the CMD until an argument consisting of
+			'${RUNFIRSTCALLABLECOMMAND_EXEC_END}' is encountered.
+    --or-message|-m MESSAGE
+			If no COMMAND is callable, print the custom MESSAGE.
+    --ignore-missing|-i	Do not print the default error message if no COMMAND is
+			callable.
+SEE ALSO:
+- pipeIfCallable is a variant for commands that operate on standard input and
+  acts as a no-op pipeline or input suppressor if no command is callable.
+
+EXIT STATUS:
+    0	Complete success.
+    2	Bad invocation, wrong or missing command-line arguments.
+    $RUNFIRSTCALLABLECOMMAND_NO_COMMAND_STATUS	If no COMMAND is callable.
+    *   any exit status from COMMAND(s)
+HELPTEXT
+}
+
+commands=
+unset message
+isIgnoreMissing=
+typeset -a triedCommandNames=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--command|-c)
+			shift
+			if [ -z "$commands" ] \
+			    && commandName="$(commandName --eval --undefined '' -- "${1:?}")" || exit 5 \
+			    && triedCommandNames+=("$commandName") \
+			    && type -t -- "$commandName" >/dev/null
+			then
+			    commands="$1"
+			fi
+			shift
+			;;
+	--exec)		shift
+			naiveCommandName="$1"
+			typeset -a currentCommand="$1"
+			cmd=
+			while [ $# -gt 0 -a "$1" != "$RUNFIRSTCALLABLECOMMAND_EXEC_END" ]
+			do
+			    printf -v quotedArg %q "$1"
+			    cmd+="${cmd:+ }${quotedArg}"
+			    currentCommand+=("$1")
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --or-exec command must be concluded with '${RUNFIRSTCALLABLECOMMAND_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			if [ -z "$commands" ] \
+			    && commandName="$(commandName --undefined '' -- "${currentCommand[@]}" 2>/dev/null || printf %s "$naiveCommandName")" \
+			    && triedCommandNames+=("$commandName") \
+			    && type -t -- "$commandName" >/dev/null
+			then
+			    commands="$cmd"
+			fi
+			;;
+	--or-message|-m)
+			shift; message="${1?}"; shift;;
+	--ignore-missing|-i)
+			shift; isIgnoreMissing=t;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -gt 0 ] \
+    && commandName="$(commandName --undefined '' -- "$@" 2>/dev/null || printf %s "$1")" \
+    && triedCommandNames=("$commandName" "${triedCommandNames[@]}") \
+    && type -t -- "$commandName" >/dev/null
+then
+    printf -v quotedSimpleCommand '%q ' "$@"
+    commands="${quotedSimpleCommand% }"
+fi
+if [ ${#triedCommandNames[@]} -eq 0 ]; then
+    echo 'ERROR: No COMMAND(s) passed.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+if [ -n "$commands" ]; then
+    eval "$commands"
+else
+    if [ ! "$isIgnoreMissing" ]; then
+	if [ ${#triedCommandNames[@]} -eq 1 ]; then
+	    printf 'ERROR: %s is not callable.\n' "${triedCommandNames[0]}"
+	else
+	    printf '%s\n' "${message-$(joinBy --prefix 'ERROR: None of ' --suffix ' is callable.' --last-separator ' or ' -- ', ' "${triedCommandNames[@]}")}"
+	fi >&2
+    fi
+    exit $RUNFIRSTCALLABLECOMMAND_NO_COMMAND_STATUS
+fi
