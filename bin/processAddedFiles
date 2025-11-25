@@ -181,12 +181,12 @@ typeset -a addedFilespecs=()
 readarray -t addedFilespecs < <(
     if [ "$last" ]; then
 	eval '"${addedFileCommand[@]}" "$last" -- "${dirspecs[@]}"' "${maxFilter:+|}" '"${maxFilter[@]}"'
-	typeset -a status=("${PIPESTATUS[@]}")
-	if [ -n "$restartExitStatus" ] && [ ${status[0]} -eq $restartExitStatus ]; then
+	typeset -a states=("${PIPESTATUS[@]}")
+	if [ -n "$restartExitStatus" ] && [ ${states[0]} -eq $restartExitStatus ]; then
 	    eval '"${allFileCommand[@]}" -- "${dirspecs[@]}"' "${initialFilter:+|}" '"${initialFilter[@]}"'
 	    printf '\n%d\n' "$?"
 	else
-	    printf '\n%d\n' ${status[-1]}
+	    printf '\n%d\n' ${states[-1]}
 	fi
     else
 	eval '"${allFileCommand[@]}" -- "${dirspecs[@]}"' "${initialFilter:+|}" '"${initialFilter[@]}"'
