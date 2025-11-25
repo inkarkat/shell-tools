@@ -69,7 +69,8 @@ HELPTEXT
     --exec CMD [...] ${EACHFILE_EXEC_END}	Execute CMD; all following arguments are taken to be
 			arguments to the CMD until an argument consisting of
 			'${EACHFILE_EXEC_END}' is encountered.
-    --files FILE [...] ${EACHFILE_FILES_END}	Take the following FILE(s); i.e. all following
+    --files FILE [...] ${EACHFILE_FILES_END}
+			Take the following FILE(s); i.e. all following
 			arguments until an argument consisting of
 			'${EACHFILE_FILES_END}' is encountered.
     --find-args FIND-ARGS [...] ${EACHFILE_FIND_END} Execute find with the following FIND-ARGS;
