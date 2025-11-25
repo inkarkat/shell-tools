@@ -5,23 +5,39 @@
 : ${PROCESSFILESANDDELETEEMPTY_FILE_MARKER='{}'}
 fileMarker="$PROCESSFILESANDDELETEEMPTY_FILE_MARKER"; unset PROCESSFILESANDDELETEEMPTY_FILE_MARKER
 
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" "-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND ... ${fileMarker:+[}${fileMarker}${fileMarker:+]} $PROCESSFILESANDDELETEEMPTY_EXEC_END [--exec ...] [--] FILE [...] [-?|-h|--help]"
+}
 printUsage()
 {
-    cat <<HELPTEXT
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
 Passes FILEs to COMMAND(s) (as the last command-line argument${fileMarker:+, or replacing any
 $fileMarker marker inside COMMAND}), assuming it writes the output back into the same
 FILEs (i.e. performs an in-place update). If COMMAND(s) succeed and a resulting
 FILE becomes completely empty, it is removed.
-HELPTEXT
+HELPDESCRIPTION
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND ... ${fileMarker:+[}${fileMarker}${fileMarker:+]} $PROCESSFILESANDDELETEEMPTY_EXEC_END [--exec ...] [--] FILE [...] [-?|-h|--help]"
+    printShortUsage "$1"
+    echo
 }
 
 commands=
 while [ $# -ne 0 ]
 do
     case "$1" in
-	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 	--command|-c)	shift; commands+="${commands:+ $PROCESSFILESANDDELETEEMPTY_COMMAND_JOINER }$1"; shift;;
 	--exec)		shift
 			cmd=
