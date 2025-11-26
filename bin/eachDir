@@ -132,6 +132,7 @@ with=
 isHeaderBasename=
 errorRedir='2>&1'
 typeset -a colorArg=()
+additionalSuccessStatus=
 commands=
 predicateComparison=-eq
 predicateCommands=
@@ -238,10 +239,12 @@ do
 	--color)		colorArg=("$1" "$2"); shift; shift;;
 	--with-prompt)	shift; with=runWithPrompt;;
 
-	--trailing-prompt|--no-trailing-prompt|--no-output-no-prompt|--no-output-no-error|--no-success-no-count|--exit-on-success|--exit-on-failure|--emulate-prompt|--worst-status|--status-99-is-noop)
+	--trailing-prompt|--no-trailing-prompt|--no-output-no-prompt|--no-output-no-error|--no-success-no-count|--exit-on-success|--exit-on-failure|--emulate-prompt|--worst-status)
 			runWithPromptArgs+=("$1"); shift; : ${with:=runWith};;
 	--initial-status|--no-count-on|--exit-on|--exit-unless|--comment|--summarize-failed|--summarize-failed-separator)
 			runWithPromptArgs+=("$1" "$2"); shift; shift; : ${with:=runWith};;
+	--status-99-is-noop)
+			runWithPromptArgs+=("$1"); shift; additionalSuccessStatus=99;;
 
 	--predicate-command|-P)
 			shift; predicateCommands+="${predicateCommands:+ $GIT_WCDOCORE_PREDICATECOMMAND_JOINER }$1"; shift;;
@@ -356,7 +359,7 @@ case "$with" in
 	    reportProgress() { :; }
 	fi
 
-	status=0
+	status=
 	exec 3<&0
 	: ${EACHDIR_HEADER_ID:="eachDir-$$-$RANDOM"}
 	while IFS=$'\n' read -r dirspec || [ -n "$dirspec" ]
@@ -364,7 +367,10 @@ case "$with" in
 	    [ -d "$dirspec" ] && isSelectedByPredicate || continue
 
 	    if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
-		setStatus $exitStatus; eval "$betweenCommand" <&3 || { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
+		setStatus $exitStatus; eval "$betweenCommand" <&3; exitStatus=$?
+		if [ $exitStatus -gt ${status:--1} -a $exitStatus -ne ${additionalSuccessStatus:--1} ]; then
+		    status=$exitStatus
+		fi
 	    fi
 
 	    header="$dirspec"
@@ -386,11 +392,13 @@ case "$with" in
 	    fi
 
 	    reportProgress "$header"
-	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedDirspec" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHDIR_HEADER_ID' -- '$header'}") <&3 || \
-		{ exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
+	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedDirspec" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHDIR_HEADER_ID' -- '$header'}") <&3; exitStatus=$?
+	    if [ $exitStatus -gt ${status:--1} -a $exitStatus -ne ${additionalSuccessStatus:--1} ]; then
+		status=$exitStatus
+	    fi
 	    isFirst=
 	done < <(eval '$dirSource "${directories[@]}"' "${dirProcessor:+|}" "$dirProcessor")
-	exit $status
+	exit ${status:-${additionalSuccessStatus:-0}}
 	;;
     *)	printf >&2 'ASSERT: Invalid strategy: %s\n' "$with"; exit 3;;
 esac
