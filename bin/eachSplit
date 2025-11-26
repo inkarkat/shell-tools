@@ -90,6 +90,7 @@ with=
 errorRedir='2>&1'
 typeset -a colorArg=()
 inputFilespec=-
+additionalSuccessStatus=
 commands=
 typeset -a splitCommand=(split OPTIONS ARGS FILE PREFIX)
 typeset -a splitOptions=()
@@ -127,6 +128,8 @@ do
 			runWithPromptArgs+=("$1"); shift; : ${with:=runWith};;
 	--initial-status|--no-count-on|--exit-on|--exit-unless|--comment|--summarize-failed|--summarize-failed-separator)
 			runWithPromptArgs+=("$1" "$2"); shift; shift; : ${with:=runWith};;
+	--status-99-is-noop)
+			runWithPromptArgs+=("$1"); shift; additionalSuccessStatus=99;;
 	--section-info-extractor)
 			shift
 			cmd=
@@ -260,7 +263,7 @@ case "$with" in
 	    reportProgress() { :; }
 	fi
 
-	status=0
+	status=
 	: ${EACHSPLIT_HEADER_ID:="eachSplit-$$-$RANDOM"}
 	exec 3<&0
 	for sectionFile in "${sectionFiles[@]}"
@@ -272,10 +275,12 @@ case "$with" in
 	    [ "$interpolatedCommands" = "$commands" ] || quotedSectionFile=''
 
 	    reportProgress "$sectionInfo"
-	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedSectionFile" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHSPLIT_HEADER_ID' -- '$sectionInfo'}") <&3 || \
-		{ exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
+	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedSectionFile" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHSPLIT_HEADER_ID' -- '$sectionInfo'}") <&3; exitStatus=$?
+	    if [ $exitStatus -gt ${status:--1} -a $exitStatus -ne ${additionalSuccessStatus:--1} ]; then
+		status=$exitStatus
+	    fi
 	done
-	exit $status
+	exit ${status:-${additionalSuccessStatus:-0}}
 	;;
     *)	printf >&2 'ASSERT: Invalid strategy: %s\n' "$with"; exit 3;;
 esac

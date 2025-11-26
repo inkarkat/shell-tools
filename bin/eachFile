@@ -130,6 +130,7 @@ with=
 isHeaderBasename=
 errorRedir='2>&1'
 typeset -a colorArg=()
+additionalSuccessStatus=
 commands=
 betweenCommand=
 usageRedirectCommand=
@@ -238,6 +239,8 @@ do
 			runWithPromptArgs+=("$1"); shift; : ${with:=runWith};;
 	--initial-status|--no-count-on|--exit-on|--exit-unless|--comment|--summarize-failed|--summarize-failed-separator)
 			runWithPromptArgs+=("$1" "$2"); shift; shift; : ${with:=runWith};;
+	--status-99-is-noop)
+			runWithPromptArgs+=("$1"); shift; additionalSuccessStatus=99;;
 
 	--between-command)
 			shift; betweenCommand="$1"; shift;;
@@ -332,13 +335,16 @@ case "$with" in
 	    reportProgress() { :; }
 	fi
 
-	status=0
+	status=
 	: ${EACHFILE_HEADER_ID:="eachFile-$$-$RANDOM"}
 	exec 3<&0
 	while IFS=$'\n' read -r filespec || [ -n "$filespec" ]
 	do
 	    if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
-		setStatus $exitStatus; eval "$betweenCommand" <&3 || { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
+		setStatus $exitStatus; eval "$betweenCommand" <&3; exitStatus=$?
+		if [ $exitStatus -gt ${status:--1} -a $exitStatus -ne ${additionalSuccessStatus:--1} ]; then
+		    status=$exitStatus
+		fi
 	    fi
 
 	    header="$filespec"
@@ -360,11 +366,13 @@ case "$with" in
 	    [ "$interpolatedCommands" = "$commands" ] || quotedFilespec=''
 
 	    reportProgress "$header"
-	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedFilespec" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHFILE_HEADER_ID' -- '$header'}") <&3 || \
-		{ exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
+	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedFilespec" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHFILE_HEADER_ID' -- '$header'}") <&3; exitStatus=$?
+	    if [ $exitStatus -gt ${status:--1} -a $exitStatus -ne ${additionalSuccessStatus:--1} ]; then
+		status=$exitStatus
+	    fi
 	    isFirst=
 	done < <(eval '$fileSource "${files[@]}"' "${fileProcessor:+|}" "$fileProcessor")
-	exit $status
+	exit ${status:-${additionalSuccessStatus:-0}}
 	;;
     *)	printf >&2 'ASSERT: Invalid strategy: %s\n' "$with"; exit 3;;
 esac
