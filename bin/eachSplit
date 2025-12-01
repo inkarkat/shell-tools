@@ -47,8 +47,8 @@ HELPDESCRIPTION
 			and ARGS are replaced by the passed SPLIT-OPTIONS, input
 			file, output directory + file prefix, and trailing ARGS
 			respectively.
-${hasProgressNotification:+    --progress SINK Report the current section through one of the SINKs of the
-			progressNotification command.
+${hasProgressNotification:+    --progress SINK	Report the current section through one of the SINKs of
+			the progressNotification command.
 }    --with-header	Print a header (containing the current ARGUMENT) before
 			each execution if COMMAND produces output.
     --separate-errors	Do not combine command output and command errors into
