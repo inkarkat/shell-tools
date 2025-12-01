@@ -8,7 +8,7 @@ printUsage()
 - separatedcat can be used to collate multiple section files with a proper\
   section separator in between.' \
 	-e '/^ *--splitter/b removeOptionLoop' \
-	-e '/^Usage:$/N' -e '/\(^\|\n\)Usage: */{ s/\(^\|\n\)\(Usage: *\)\?\([^ ]\+ \)*eachSplit /\1\2'"$(basename "$1")"' /; s/\[--splitter SPLIT-COMMAND ARGS FILE PREFIX ;\] //; }' \
+	-e '/^Usage:$/N' -e '/\(^\|\n\)Usage: */{ s/\(^\|\n\)\(Usage: *\)\?\([^ ]\+ \)*eachSplit /\1\2'"$(basename "$1")"' /; s/\[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ;\] //; }' \
 	-e '/^Example:$/N' -e '/\(^\|\n\)Example: */{ s/\(^\|\n\)\(Example: *\)\?eachSplit /\1\2'"$(basename "$1") /; }" \
 	-e b -e :removeOptionLoop -e '{ /\n *--splitter[^\n]*$/{ N; b removeOptionLoop; }; /\n *--[^\n]*$\|\n[^	 ]\|\n$/{ s/^\(.*\n\)\?//; b; }; N; b removeOptionLoop; }'
 }
