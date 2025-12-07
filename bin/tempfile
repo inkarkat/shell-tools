@@ -49,7 +49,7 @@ HELPDESCRIPTION
 			${fileMarker:+or replacing any $fileMarker marker }inside COMMANDLINE the temp
 			filespec. Multiple SINK-COMMANDs are joined with | as
 			pipeline steps.
-    -S|--sink-exec SINK-COMMAND [...] $TEMPFILE_EXEC_END
+    --sink-exec|-S SINK-COMMAND [...] $TEMPFILE_EXEC_END
 			Execute SINK-COMMAND as a command-line, ${fileMarker:+either }appending
 			${fileMarker:+or replacing any $fileMarker marker }inside COMMANDLINE the temp
 			filespec.; all following arguments are taken to be
