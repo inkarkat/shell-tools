@@ -10,7 +10,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: [TMPDIR=DIR] %q %s\n' "$(basename "$1")" "[-q|--quiet] [-v|--verbose] [-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-s|--sink-command \"COMMANDLINE\" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $TEMPFILE_EXEC_END [-S ...]] ... [-?|-h|--help]"
+    printf 'Usage: [TMPDIR=DIR] %q %s\n' "$(basename "$1")" "[-q|--quiet] [-v|--verbose] [-d|--directory DIR] [-b|--basename BASE] [-e|--extension EXT] [-s|--sink-command \"COMMANDLINE\" [-s ...] | -S|--sink-exec SIMPLE-SINK-COMMAND [...] $TEMPFILE_EXEC_END [-S ...]] ... [-D|--no-delete] [-?|-h|--help]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "... -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${TEMPFILE_EXEC_END} [--exec ...] [--] SIMPLECOMMAND [...]"
     echo
@@ -56,6 +56,10 @@ HELPDESCRIPTION
 			arguments to the SINK-COMMAND until an argument
 			consisting of '${TEMPFILE_EXEC_END}' is encountered. Multiple SINK-COMMANDs
 			are joined with | as pipeline steps.
+    --no-delete|-D	Do not remove the temp file after it's been consumed by
+			SINK-COMMAND (so that it can e.g. tell the user about
+			its location and have the user continue to work with
+			it).
     --command|-c CMD	The command whose output is captured. When this is a
 			simple command, it can also be passed as such.
     --exec CMD [...] ${TEMPFILE_EXEC_END}	The command whose output is captured; all following
@@ -69,6 +73,7 @@ isVerbose=
 subdir=
 basename=
 extension=
+isNoDelete=
 sinkCommands=
 commands=
 while [ $# -ne 0 ]
@@ -80,6 +85,7 @@ do
 	--directory|-d)	shift; subdir="${1:?}"; shift;;
 	--basename|-b)	shift; basename="$1"; shift;;
 	--extension|-e)	shift; extension="$1"; shift;;
+	--no-delete|-D)	shift; isNoDelete=t;;
 	--sink-command|-s)
 			shift; sinkCommands+="${sinkCommands:+ $TEMPFILE_SINKCOMMAND_JOINER }$1"; shift;;
 	--sink-exec|-S)	shift
@@ -163,7 +169,7 @@ if [ -z "$sinkCommands" ] || [ "$isVerbose" ]; then
 fi
 
 if [ -n "$sinkCommands" ]; then
-    [ "${DEBUG:-}" ] || trap 'cleanup' EXIT
+    [ "$isNoDelete" ] || [ "${DEBUG:-}" ] || trap 'cleanup' EXIT
     printf -v quotedTempFilespec '%q' "$tempFilespec"
     interpolatedCommands="${sinkCommands//"$fileMarker"/$quotedTempFilespec}"
     [ "$interpolatedCommands" = "$sinkCommands" ] || quotedTempFilespec=''
