@@ -61,7 +61,7 @@ HELPDESCRIPTION
 			Multiple SINK-COMMANDs are joined with | as pipeline
 			steps.
 			PATTERN is a grep-style unanchored basic regular
-			expresion.
+			expression.
     --tee|-t		Also print the output in addition to piping it.
     --stdout|-1		Only pipe output to standard output; error output is
 			output normally.
