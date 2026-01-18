@@ -1,0 +1,89 @@
+#!/bin/bash
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: [DEBUG=sudo[!]] %q %s\n' "$(basename "$1")" '[--sudo] [-c|--no-create|-U|--no-update] [-m|--mode MODE] [-v|--verbose] [--] FILE [...] [-?|-h|--help]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Create / ensure that FILE exists / can be created, including the creation of
+parent directories as needed.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --sudo		Create with sudo unless already running as the
+			superuser.
+    --no-create|-c	Do not create any files (only missing directories up to
+			it).
+    --no-update|-U	Do not update the timestamp of existing files.
+    --mode|-m MODE	Set file mode (as in chmod).
+    --verbose|-v	Print a message for each created directory.
+
+SEE ALSO:
+- redir-p can be used to create a FILE and simultaneous provide its contents.
+HELPTEXT
+}
+
+sudoArg=
+isCreate=t
+isUpdate=t
+isVerbose=
+typeset -a mkdirArgs=()
+typeset -a touchArgs=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--sudo)		shift; sudoArg="${SUDO:-sudo}";;
+
+	--verbose|-v)	mkdirArgs+=("$1"); shift; isVerbose=t;;
+	--mode|-m)	mkdirArgs+=("$1" "$2"); shift; shift;;
+
+	--no-create|-c)	touchArgs+=("$1"); shift; isCreate=;;
+	--no-update|-U)	shift; isUpdate=;;
+
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -eq 0 ]; then
+    printUsage "$0" >&2
+    exit 2
+fi
+
+SUDO="$sudoArg"; [ $EUID -eq 0 ] && SUDO=''
+[ -n "$sudoArg" ] && case ",${DEBUG:-}," in *,sudo,*) SUDO="verbose $SUDO";; *,sudo\!,*) SUDO="echotrace $SUDO";; esac
+
+status=0
+for filespec
+do
+    if [ -e "$filespec" ]; then
+	if [ "$isCreate" ] && [ "$isUpdate" ]; then
+	    $SUDO touch "${touchArgs[@]}" -- "$filespec" || status=$?
+	fi
+    else
+	dirspec="$(dirname -- "$filespec")"
+	[ -d "$dirspec" ] || $SUDO mkdir --parents "${mkdirArgs[@]}" -- "$dirspec" || { status=$?; continue; }
+	if [ "$isCreate" ]; then
+	    $SUDO touch "${touchArgs[@]}" -- "$filespec" && \
+		if [ "$isVerbose" ]; then printf "touch: created file '%s'\\n" "$filespec"; fi || \
+		status=$?
+	fi
+    fi
+done
+exit $status
