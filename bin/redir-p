@@ -31,6 +31,9 @@ HELPDESCRIPTION
     --verbose|-v	Print a message for each created directory.
     --append|-a		Append to FILE instead of overwriting it.
     --tee|-t		Also print the output in addition to piping it.
+
+SEE ALSO:
+- touch-p just creates FILE without providing / updating contents.
 HELPTEXT
 }
 sudoArg=
