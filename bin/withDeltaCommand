@@ -9,8 +9,12 @@ shopt -qs extglob
 : ${WITHDELTACOMMAND_COMMAND_JOINER=;}
 : ${WITHDELTACOMMAND_OUTPUT_BEFORE_MARKER='{a}'}
 : ${WITHDELTACOMMAND_OUTPUT_AFTER_MARKER='{b}'}
+: ${WITHDELTACOMMAND_FILE_BEFORE_MARKER='{A}'}
+: ${WITHDELTACOMMAND_FILE_AFTER_MARKER='{B}'}
 outputBeforeMarker="$WITHDELTACOMMAND_OUTPUT_BEFORE_MARKER"; unset WITHDELTACOMMAND_OUTPUT_BEFORE_MARKER
 outputAfterMarker="$WITHDELTACOMMAND_OUTPUT_AFTER_MARKER"; unset WITHDELTACOMMAND_OUTPUT_AFTER_MARKER
+fileBeforeMarker="$WITHDELTACOMMAND_FILE_BEFORE_MARKER"; unset WITHDELTACOMMAND_FILE_BEFORE_MARKER
+fileAfterMarker="$WITHDELTACOMMAND_FILE_AFTER_MARKER"; unset WITHDELTACOMMAND_FILE_AFTER_MARKER
 
 printShortUsage()
 {
@@ -34,7 +38,7 @@ printLongUsage()
     # This is the long "man page" when launched with the help argument.
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
-Execute COMMAND surrounded by two invocations of DELTA-COMMAND.
+Execute COMMAND(s) surrounded by two invocations of DELTA-COMMAND.
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
@@ -51,14 +55,19 @@ HELPDESCRIPTION
 			and print it after COMMAND but before the second
 			DELTA-COMMAND. (Before any sinks receive it.)
     --sink-command|-s CMD
-			Capture the (stdout) output of the first DELTA-COMMAND
-			and pass both to CMD. Outputs ${outputBeforeMarker:+either }are appended${outputBeforeMarker:+ or
-			replace any $outputBeforeMarker / $outputAfterMarker markers} inside COMMANDLINE.
+			Capture the (stdout) output of both DELTA-COMMANDs and
+			pass them to CMD. Outputs are appended${outputBeforeMarker:+ or replace any
+			$outputBeforeMarker / $outputAfterMarker markers}${fileBeforeMarker:+ or are passed as temp files whose
+			filespec replaces any $fileBeforeMarker / $fileAfterMarker markers} inside
+			COMMANDLINE.
     --sink-exec CMD [...] ${WITHDELTACOMMAND_EXEC_END}
-			Capture the (stdout) output of the first DELTA-COMMAND
-			and pass both to CMD; all following arguments are taken
-			to be arguments to the CMD until an argument consisting
-			of '${WITHDELTACOMMAND_EXEC_END}' is encountered. Outputs ${outputBeforeMarker:+either }are appended${outputBeforeMarker:+ or
+			Capture the (stdout) output of both DELTA-COMMANDs and
+			pass them to CMD; all following arguments are taken to
+			be arguments to the CMD until an argument consisting
+			of '${WITHDELTACOMMAND_EXEC_END}' is encountered.  Outputs are appended${outputBeforeMarker:+ or replace
+			any $outputBeforeMarker / $outputAfterMarker markers}${fileBeforeMarker:+ or are passed as temp files whose
+			filespec replaces any $fileBeforeMarker / $fileAfterMarker markers} inside
+			COMMANDLINE.
 			replace any $outputBeforeMarker / $outputAfterMarker markers} inside COMMANDLINE.
     --command|-c CMD	The command line to be executed. When this is a simple
 			command, it can also be passed as such.
@@ -98,11 +107,15 @@ do
 			cmd=
 			printf -v escapedOutputBeforeMarker %q "$outputBeforeMarker"
 			printf -v escapedOutputAfterMarker %q "$outputAfterMarker"
+			printf -v escapedFileBeforeMarker %q "$fileBeforeMarker"
+			printf -v escapedFileAfterMarker %q "$fileAfterMarker"
 			while [ $# -gt 0 -a "$1" != "$WITHDELTACOMMAND_EXEC_END" ]
 			do
 			    printf -v quotedArg '%q' "$1"
 			    quotedArg="${quotedArg//"$escapedOutputBeforeMarker"/$outputBeforeMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 			    quotedArg="${quotedArg//"$escapedOutputAfterMarker"/$outputAfterMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    quotedArg="${quotedArg//"$escapedFileBeforeMarker"/$fileBeforeMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    quotedArg="${quotedArg//"$escapedFileAfterMarker"/$fileAfterMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 			    cmd+="${cmd:+ }${quotedArg}"
 			    shift
 			done
@@ -190,6 +203,23 @@ executeDelta()
     eval "$deltaCommands"
 }
 
+typeset -a tempFilespecs=()
+interpolateFileMarker()
+{
+    local fileMarker="${1?}"; shift
+    [ -n "$fileMarker" ] || return
+    [ "${interpolatedSinkCommands//"$fileMarker"/}" != "$interpolatedSinkCommands" ] || return
+
+    local output="${1?}"; shift
+
+    local tempFilespec="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM")"
+    [ "${DEBUG:-}" ] || trap 'rm -f -- "${tempFilespecs[@]}" 2>/dev/null' EXIT
+    printf '%s\n' "$output" > "$tempFilespec" || exit 3
+    tempFilespecs+=("$tempFilespec")
+    local quotedTempFilespec; printf -v quotedTempFilespec %q "$tempFilespec"
+    interpolatedSinkCommands="${interpolatedSinkCommands//"$fileMarker"/$quotedTempFilespec}"
+}
+
 executeSink()
 {
     [ ! "$isOutputAtEnd" ] \
@@ -199,8 +229,11 @@ executeSink()
     printf -v quotedFirstDelta %q "$firstDelta"
     printf -v quotedSecondDelta %q "$secondDelta"
     typeset -a a=("$firstDelta" "$secondDelta")
-    interpolatedSinkCommands="${sinkCommands//"$outputBeforeMarker"/$quotedFirstDelta}"
+    interpolatedSinkCommands="$sinkCommands"
+    interpolatedSinkCommands="${interpolatedSinkCommands//"$outputBeforeMarker"/$quotedFirstDelta}"
     interpolatedSinkCommands="${interpolatedSinkCommands//"$outputAfterMarker"/$quotedSecondDelta}"
+    interpolateFileMarker "$fileBeforeMarker" "$firstDelta"
+    interpolateFileMarker "$fileAfterMarker" "$secondDelta"
     [ "$interpolatedSinkCommands" = "$sinkCommands" ] || a=()
     eval "$interpolatedSinkCommands" '"${a[@]}"'
 }
