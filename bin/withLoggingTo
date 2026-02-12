@@ -3,12 +3,13 @@ set -o pipefail
 shopt -qs extglob
 
 : ${WITHLOGGINGTO_COMMAND_JOINER=;}
+: ${WITHLOGGINGTO_EXEC_END=;}
 
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" 'LOGFILESPEC [-T|--timestamp [--human|--short|--sortable] [--no-millis] [-s|--separator SEP] [-f|--field-separator SEP] [-d|--date DATE] [--prefix PREFIX]] [-a|--append] [-t|--tee] [-1|--stdout|-2|--stderr] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" "LOGFILESPEC [-T|--timestamp [--human|--short|--sortable] [--no-millis] [-s|--separator SEP] [-f|--field-separator SEP] [-d|--date DATE] [--prefix PREFIX]] [-a|--append] [-t|--tee] [-1|--stdout|-2|--stderr] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHLOGGINGTO_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
     echo
     printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" "[...] [--bare|$(runWithPrompt --get-short-usage 2>/dev/null)]"
     echo
@@ -42,6 +43,9 @@ HELPDESCRIPTION
     --stderr|-2		Only log error output; other output is output normally.
     --command|-c CMD	The command line to be captured. When this is a simple
 			command, it can also be passed as such.
+    --exec CMD [...] ${WITHLOGGINGTO_EXEC_END}	The command to be captured. All following arguments are
+			taken to be arguments to the CMD until an argument
+			consisting of '${WITHLOGGINGTO_EXEC_END}' is encountered.
     --bare		Do not print a status line before and after launching
 			the COMMAND.
 HELPTEXT
@@ -89,6 +93,21 @@ do
 	--stdout|-1)	shift; redirSuffix=''; teePrefix='';;
 	--stderr|-2)	shift; redirPrefix='2'; redirSuffix=''; teePrefix='3>&1 1>&2 2>&3 3>&-'; teeSuffix='3>&1 1>&2 2>&3 3>&-';;
 	--command|-c)	shift; commands+="${commands:+ $WITHLOGGINGTO_COMMAND_JOINER }$1"; shift;;
+	--exec)		shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != "$WITHLOGGINGTO_EXEC_END" ]
+			do
+			    printf -v quotedArg %q "$1"
+			    cmd+="${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${WITHLOGGINGTO_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			commands+="${commands:+ $WITHLOGGINGTO_COMMAND_JOINER }${cmd}"
+			;;
 	--bare)		shift; isBare=t; runWithCommand=runWith;;
 	--exit-on-failure)
 			bashArgs+=(-e); runWithPromptArgs+=("$1"); shift;;
