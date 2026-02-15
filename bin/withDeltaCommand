@@ -44,9 +44,9 @@ HELPDESCRIPTION
     printShortUsage "$1"
     echo
     cat <<HELPTEXT
-    -d|--delta-command DELTA-COMMAND
+    --delta-command|-d DELTA-COMMAND
 			Execute DELTA-COMMAND before and after COMMAND.
-    -D|--delta-exec DELTA-COMMAND [...] $WITHDELTACOMMAND_EXEC_END
+    --delta-exec|-D DELTA-COMMAND [...] $WITHDELTACOMMAND_EXEC_END
 			Execute DELTA-COMMAND before and after COMMAND; all
 			following arguments are taken to be arguments to the
 			DELTA-COMMAND until an argument consisting of '${WITHDELTACOMMAND_EXEC_END}' is

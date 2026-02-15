@@ -34,11 +34,11 @@ HELPDESCRIPTION
     printShortUsage "$1"
     echo
     cat <<HELPTEXT
-    -s|--sink-command SINK-COMMAND
+    --sink-command|-s SINK-COMMAND
 			Execute SINK-COMMAND with the output piped into it.
 			Multiple SINK-COMMANDs are joined with | as pipeline
 			steps.
-    -S|--sink-exec SINK-COMMAND [...] $WITHOUTPUTTOSINK_EXEC_END
+    --sink-exec|-S SINK-COMMAND [...] $WITHOUTPUTTOSINK_EXEC_END
 			Execute SINK-COMMAND with the output piped into it; all
 			following arguments are taken to be arguments to the
 			SINK-COMMAND until an argument consisting of '${WITHOUTPUTTOSINK_EXEC_END}' is

@@ -25,7 +25,9 @@ Print file contents on standard output with an almost imperceptible delay.
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
+    echo
     cat <<HELPTEXT
+Parameters:
     NUMBER[SUFFIX]	Delay before doing any output at all. Does NOT wait for
 			input first!
     NUMBER may be an arbitrary floating-point number, TIMESPAN must be an
