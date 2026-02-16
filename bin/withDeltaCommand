@@ -20,7 +20,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "-d|--delta-command DELTA-COMMANDLINE | -D|--delta-exec SIMPLE-DELTA-COMMAND [...] $WITHDELTACOMMAND_EXEC_END [...] [-E|--output-at-end|-s|--sink-command \"COMMANDLINE\" [-s ...]|--sink-exec SIMPLECOMMAND [...] ${WITHDELTACOMMAND_EXEC_END} [--sink-exec ...]] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHDELTACOMMAND_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "-d|--delta-command DELTA-COMMANDLINE [-d ...] | -D|--delta-exec SIMPLE-DELTA-COMMAND [...] $WITHDELTACOMMAND_EXEC_END [-D ...] [-E|--output-at-end|-s|--sink-command \"COMMANDLINE\" [-s ...]|--sink-exec SIMPLECOMMAND [...] ${WITHDELTACOMMAND_EXEC_END} [--sink-exec ...]] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHDELTACOMMAND_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
     echo
     printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" "[...] [--bare|$(runWithPrompt --get-short-usage 2>/dev/null)]"
     echo
