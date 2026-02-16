@@ -144,7 +144,7 @@ if [ "$isTimestamp" ]; then
     if [ "$isTee" ]; then
 	eval "{ execute ${teePrefix} | tee >(timestamp \"\${timestampArgs[@]}\" - ${redirOp} \"\$logFilespec\"); } ${teeSuffix}"
     else
-	eval "{ execute | timestamp \"\${timestampArgs[@]}\" - ${redirOp} \"\$logFilespec\"; }"
+	eval "{ execute ${teePrefix} | timestamp \"\${timestampArgs[@]}\" - ${redirOp} \"\$logFilespec\"; } ${teeSuffix}"
     fi
 elif [ "$isTee" ]; then
     eval "{ execute ${teePrefix} | tee $teeArg -- \"\$logFilespec\"; } ${teeSuffix}"
