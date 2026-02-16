@@ -69,8 +69,8 @@ redirPrefix=
 redirOp='>'
 redirSuffix='2>&1'
 isTee=
-teePrefix='2>&1'
-teeSuffix=
+pipelinePrefix='2>&1'
+pipelineSuffix=
 isBare=
 commands=
 typeset -a bashArgs=()
@@ -90,8 +90,8 @@ do
 
 	--append|-a)	shift; redirOp='>>'; teeArg='--append';;
 	--tee|-t)	shift; isTee=t;;
-	--stdout|-1)	shift; redirSuffix=''; teePrefix='';;
-	--stderr|-2)	shift; redirPrefix='2'; redirSuffix=''; teePrefix='3>&1 1>&2 2>&3 3>&-'; teeSuffix='3>&1 1>&2 2>&3 3>&-';;
+	--stdout|-1)	shift; redirSuffix=''; pipelinePrefix='';;
+	--stderr|-2)	shift; redirPrefix='2'; redirSuffix=''; pipelinePrefix='3>&1 1>&2 2>&3 3>&-'; pipelineSuffix='3>&1 1>&2 2>&3 3>&-';;
 	--command|-c)	shift; commands+="${commands:+ $WITHLOGGINGTO_COMMAND_JOINER }$1"; shift;;
 	--exec)		shift
 			cmd=
@@ -142,12 +142,12 @@ execute()
 
 if [ "$isTimestamp" ]; then
     if [ "$isTee" ]; then
-	eval "{ execute ${teePrefix} | tee >(timestamp \"\${timestampArgs[@]}\" - ${redirOp} \"\$logFilespec\"); } ${teeSuffix}"
+	eval "{ execute ${pipelinePrefix} | tee >(timestamp \"\${timestampArgs[@]}\" - ${redirOp} \"\$logFilespec\"); } ${pipelineSuffix}"
     else
-	eval "{ execute ${teePrefix} | timestamp \"\${timestampArgs[@]}\" - ${redirOp} \"\$logFilespec\"; } ${teeSuffix}"
+	eval "{ execute ${pipelinePrefix} | timestamp \"\${timestampArgs[@]}\" - ${redirOp} \"\$logFilespec\"; } ${pipelineSuffix}"
     fi
 elif [ "$isTee" ]; then
-    eval "{ execute ${teePrefix} | tee $teeArg -- \"\$logFilespec\"; } ${teeSuffix}"
+    eval "{ execute ${pipelinePrefix} | tee $teeArg -- \"\$logFilespec\"; } ${pipelineSuffix}"
 else
     eval "execute ${redirPrefix}${redirOp} \"\$logFilespec\" ${redirSuffix}"
 fi
