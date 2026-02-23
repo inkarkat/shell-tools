@@ -289,9 +289,11 @@ case "$with" in
     runWith*)
 	[ ${#runWithPromptArgs[@]} -eq 0 ] && runWithPromptArgs=(--worst-status)
 	{
-	    printf ' exec 4> >('
-	    printf '%q ' "${progressNotificationCommand[@]}"
-	    printf '2>/dev/null); reportProgress() { trap "reportProgress() { :; }; trap PIPE" PIPE; printf %%s\\\\n "$*" >&4 2>/dev/null; }\n'
+	    if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
+		printf ' exec 4> >('
+		printf '%q ' "${progressNotificationCommand[@]}"
+		printf '2>/dev/null); reportProgress() { trap "reportProgress() { :; }; trap PIPE" PIPE; printf %%s\\\\n "$*" >&4 2>/dev/null; }\n'
+	    fi
 
 	    eval '$fileSource "${files[@]}"' "${fileProcessor:+|}" "$fileProcessor" | while IFS=$'\n' read -r filespec || [ -n "$filespec" ]
 	    do
@@ -314,7 +316,8 @@ case "$with" in
 		typeset -a f=("$quotedFilespec")
 		[ "$interpolatedCommands" = "$commands" ] || f=()
 
-		printf ' reportProgress %q || :\n' "$filespec"
+		[ "$hasProgressNotification" ] && [ -n "$progressSink" ] \
+		    && printf ' reportProgress %q || :\n' "$filespec"
 		printf '%s ' "$interpolatedCommands" "${f[@]}"
 		printf '\n'
 		isFirst=
