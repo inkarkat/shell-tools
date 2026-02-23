@@ -253,7 +253,7 @@ do
 			shift; betweenCommand="$1"; shift;;
 	--usage-redirect)
 			shift; usageRedirectCommand="$1"; shift;;
-	--)		shift; parseTail "$@"; break;;
+	--)		shift; parseTail "$@"; shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		parseTail "$@"; break;;
     esac
