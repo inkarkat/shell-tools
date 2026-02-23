@@ -7,9 +7,13 @@ shopt -qs extglob
 : ${EACHFILE_FILES_END=;}
 : ${EACHFILE_FIND_END=;}
 : ${EACHFILE_FILE_WHAT=file}
+: ${EACHFILE_NOOP_EXIT=99}
 : ${EACHFILE_FILE_MARKER='{}'}
+: ${EACHFILE_TARGETFILE_MARKER='{T}'}
 fileMarker="$EACHFILE_FILE_MARKER"; unset EACHFILE_FILE_MARKER
+targetFileMarker="$EACHFILE_TARGETFILE_MARKER"; unset EACHFILE_TARGETFILE_MARKER
 printf -v escapedFileMarker %q "$fileMarker"
+printf -v escapedTargetFileMarker %q "$targetFileMarker"
 
 hasProgressNotification=; type -t progressNotification >/dev/null && hasProgressNotification=t
 
@@ -17,7 +21,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" "[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] | ([--] SIMPLECOMMAND [...]) [--] FILE [...] [-?|-h|--help]"
+    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" "[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] [[-1|--single] -d|--strip|-o|--rebase TARGETDIR|-b|--basename|-c|--splice INSERTION|-f|--default EXT|-m|--modify EXT|-a|--add EXT [...] [-v|--verbose]] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] | ([--] SIMPLECOMMAND [...]) [--] FILE [...] [-?|-h|--help]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "[...] --files FILE [...] ${EACHFILE_FILES_END}|--find-args FIND-ARGS [...] ${EACHFILE_FIND_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] [--] SIMPLECOMMAND [...]"
     echo
@@ -35,8 +39,9 @@ printLongUsage()
     # This is the long "man page" when launched with the help argument.
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
-Execute COMMAND on each FILE (which ${fileMarker:+either }is appended${fileMarker:+ or replaces any $fileMarker marker}
-inside COMMANDLINE) individually. So one invocation of COMMAND per FILE.
+Execute COMMAND on each FILE [requiring an update] (which ${fileMarker:+either }is appended${fileMarker:+ or
+replaces any $fileMarker marker} inside COMMANDLINE) individually. So one invocation of
+COMMAND per FILE.
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
@@ -66,6 +71,29 @@ HELPTEXT
     --between-command BETWEEN-COMMAND
 			Execute BETWEEN-COMMAND in between each COMMAND
 			execution. The last COMMAND's exit status is in \$?.
+
+Optionally, the processing can be limited to files that need an update. The
+following arguments convert each FILE's name into a target filename and execute
+COMMAND on those (appending or replacing any $fileMarker / $targetFileMarker markers} inside
+COMMANDLINE) where the target file either doesn't exist or is older than the source.
+    --single|-1		Just parse a single .extension (instead of a maximum of
+			three).
+    --strip|-d		The extension is removed and the bare (path +) name
+			without extension is used.
+    --rebase|-o TARGETDIR
+			Change the directory part of FILENAME to TARGETDIR.
+    --basename|-b	Both path and extension are removed; the bare name
+			without path and extension is printed.
+    --splice INSERTION	INSERTION is inserted at the end of the file name,
+			before the extension(s). If you want to prepend an EXT,
+			use --splice .EXT
+    --default|-f EXT	Append EXT to FILENAME if it doesn't have one yet.
+    --modify|-m EXT	Change any existing file extension to EXT.
+    --add|-a EXT	Append EXT to the existing file extension.
+    --verbose|-v	Mention up-to-date files instead of silently skipping
+			them.
+A warning is printed for FILEs that don't yield a different target filename.
+
     --exec CMD [...] ${EACHFILE_EXEC_END}	Execute CMD; all following arguments are taken to be
 			arguments to the CMD until an argument consisting of
 			'${EACHFILE_EXEC_END}' is encountered.
@@ -100,12 +128,16 @@ SEE ALSO:
 EXIT STATUS:
 Overall exit status is the highest status of all. If you specify any
 runWith[Prompt] argument, --worst-status needs to be explicitly passed.
+    $EACHFILE_NOOP_EXIT	if no FILE needs an update (i.e. all target filenames are up to date).
 
 Example:
 HELPTEXT
     printf '%q %s\n' "$(basename "$1")" '--local-dir ping -c1 -q -- /var/htdocs/*.com'
+    printf '%q %s\n' "$(basename "$1")" "--rebase /tmp --splice '-prod' -c 'grep -v test -- {} > {T}' -- /etc/{group,passwd}"
 }
 
+typeset -a fileExtensionArgs=()
+isVerbose=
 isLocalDir=
 progressSink=
 isFixedNumberOfFiles=t
@@ -157,7 +189,9 @@ parseTail()
 	    [ -z "$cmd" -a "$1" = -- ] && shift
 	    # Need to quote SIMPLECOMMAND to undo the effects of eval.
 	    printf -v quotedArg '%q' "$1"
-	    cmd="${cmd}${cmd:+ }${quotedArg//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+	    quotedArg="${quotedArg//"$escapedFileMarker"/$fileMarker}"
+	    quotedArg="${quotedArg//"$escapedTargetFileMarker"/$targetFileMarker}"
+	    cmd="${cmd}${cmd:+ }${quotedArg}"	# %q escapes {}, we don't want that to have it interpolated later.
 	    shift
 	done
 	commands+="${commands:+ $EACHFILE_COMMAND_JOINER }${cmd}"
@@ -174,6 +208,15 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+
+	-+([1db]))	fileExtensionArgs+=("$1"); shift;;
+	--@(single|strip|basename))
+			fileExtensionArgs+=("$1"); shift;;
+	-[ofma])	fileExtensionArgs+=("$1" "${2?}"); shift; shift;;
+	--@(rebase|splice|default|modify|add))
+			fileExtensionArgs+=("$1" "${2?}"); shift; shift;;
+	--verbose|-v)	isVerbose=t; shift;;
+
 	--local-dir|-l)	shift; isLocalDir=t; fileProcessor='makeAbsolute';;
 	--files)	shift
 			while [ $# -gt 0 -a "$1" != "$EACHFILE_FILES_END" ]
@@ -214,7 +257,9 @@ do
 			while [ $# -gt 0 -a "$1" != "$EACHFILE_EXEC_END" ]
 			do
 			    printf -v quotedArg '%q' "$1"
-			    cmd="${cmd}${cmd:+ }${quotedArg//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    quotedArg="${quotedArg//"$escapedFileMarker"/$fileMarker}"
+			    quotedArg="${quotedArg//"$escapedTargetFileMarker"/$targetFileMarker}"
+			    cmd="${cmd}${cmd:+ }${quotedArg}"	# %q escapes {}, we don't want that to have it interpolated later.
 			    shift
 			done
 			if [ $# -eq 0 ]; then
@@ -282,6 +327,21 @@ setStatus()
 {
     return ${1:-0}
 }
+getTargetFilespec()
+{
+    local sourceFilespec="${1:?}"; shift
+
+    local targetFilespec; targetFilespec="$(fileExtension "${fileExtensionArgs[@]}" -- "$sourceFilespec")" || exit $?
+    if [ "$targetFilespec" = "$sourceFilespec" ]; then
+	printf >&2 'Warning: Target filename is identical to %s; cannot update in-place.\n' "$sourceFilespec"
+	return 1
+    elif [ -e "$targetFilespec" ] && [ ! "$sourceFilespec" -nt "$targetFilespec" ]; then
+	[ ! "$isVerbose" ] || printf >&2 'Note: %s is up-to-date; skipping.\n' "$sourceFilespec"
+	return 1
+    fi
+
+    printf %s "$targetFilespec"
+}
 
 isFirst=t
 isHeader=
@@ -297,6 +357,10 @@ case "$with" in
 
 	    eval '$fileSource "${files[@]}"' "${fileProcessor:+|}" "$fileProcessor" | while IFS=$'\n' read -r filespec || [ -n "$filespec" ]
 	    do
+		if [ ${#fileExtensionArgs[@]} -gt 0 ]; then
+		    targetFilespec="$(getTargetFilespec "$filespec")" || continue
+		fi
+
 		if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
 		    if [ "${betweenCommand:$((${#betweenCommand} - 1))}" = ';' ]; then
 			printf '%s ' "$betweenCommand"  # Prepend the BETWEEN-COMMAND to the next FILE's execution (so there's no separate prompt) if it ends with a semicolon. Its exit status is then ignored.
@@ -308,13 +372,26 @@ case "$with" in
 		if [ "$isLocalDir" ]; then
 		    dirspec="$(dirname -- "$filespec")"
 		    filespec="$(basename -- "$filespec")"
+		    if [ ${#fileExtensionArgs[@]} -gt 0 ]; then
+			targetDirspec="$(dirname -- "$targetFilespec")"
+			if [ "$targetDirspec" = "$dirspec" ]; then
+			    # Remove dirspec when processing within the same directory.
+			    targetFilespec="$(basename -- "$targetFilespec")"
+			fi
+		    fi
 		    printf 'cd %q && ' "$dirspec"   # Previous COMMANDS may have changed the directory, so unconditionally do the chdir.
 		fi
 
 		printf -v quotedFilespec '%q' "$filespec"
 		interpolatedCommands="${commands//"$fileMarker"/$quotedFilespec}"
-		typeset -a f=("$quotedFilespec")
-		[ "$interpolatedCommands" = "$commands" ] || f=()
+		typeset -a f=()
+		[ "$interpolatedCommands" = "$commands" ] && f+=("$quotedFilespec")
+		if [ ${#fileExtensionArgs[@]} -gt 0 ]; then
+		    printf -v quotedTargetFilespec '%q' "$targetFilespec"
+		    interpolatedTargetCommands="${interpolatedCommands//"$targetFileMarker"/$quotedTargetFilespec}"
+		    [ "$interpolatedTargetCommands" = "$interpolatedCommands" ] && f+=("$quotedTargetFilespec")
+		    interpolatedCommands="$interpolatedTargetCommands"
+		fi
 
 		[ "$hasProgressNotification" ] && [ -n "$progressSink" ] \
 		    && printf ' reportProgress %q || :\n' "$filespec"
@@ -339,10 +416,16 @@ case "$with" in
 	fi
 
 	status=
+	noopStatus=$EACHFILE_NOOP_EXIT
 	: ${EACHFILE_HEADER_ID:="eachFile-$$-$RANDOM"}
 	exec 3<&0
 	while IFS=$'\n' read -r filespec || [ -n "$filespec" ]
 	do
+	    if [ ${#fileExtensionArgs[@]} -gt 0 ]; then
+		targetFilespec="$(getTargetFilespec "$filespec")" || continue
+	    fi
+	    noopStatus=
+
 	    if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
 		setStatus $exitStatus; eval "$betweenCommand" <&3; exitStatus=$?
 		if [ $exitStatus -gt ${status:--1} -a $exitStatus -ne ${additionalSuccessStatus:--1} ]; then
@@ -362,20 +445,34 @@ case "$with" in
 		    fi
 		fi
 		filespec="$(basename -- "$filespec")"
+		if [ ${#fileExtensionArgs[@]} -gt 0 ]; then
+		    targetDirspec="$(dirname -- "$targetFilespec")"
+		    if [ "$targetDirspec" = "$dirspec" ]; then
+			# Remove dirspec when processing within the same directory.
+			targetFilespec="$(basename -- "$targetFilespec")"
+		    fi
+		fi
 	    fi
 
 	    printf -v quotedFilespec '%q' "$filespec"
 	    interpolatedCommands="${commands//"$fileMarker"/$quotedFilespec}"
 	    [ "$interpolatedCommands" = "$commands" ] || quotedFilespec=''
+	    quotedTargetFilespec=''
+	    if [ ${#fileExtensionArgs[@]} -gt 0 ]; then
+		printf -v quotedTargetFilespec '%q' "$targetFilespec"
+		interpolatedTargetCommands="${interpolatedCommands//"$targetFileMarker"/$quotedTargetFilespec}"
+		[ "$interpolatedTargetCommands" = "$interpolatedCommands" ] || quotedTargetFilespec=''
+		interpolatedCommands="$interpolatedTargetCommands"
+	    fi
 
 	    reportProgress "$header"
-	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedFilespec" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHFILE_HEADER_ID' -- '$header'}") <&3; exitStatus=$?
+	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedFilespec" "$quotedTargetFilespec" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHFILE_HEADER_ID' -- '$header'}") <&3; exitStatus=$?
 	    if [ $exitStatus -gt ${status:--1} -a $exitStatus -ne ${additionalSuccessStatus:--1} ]; then
 		status=$exitStatus
 	    fi
 	    isFirst=
 	done < <(eval '$fileSource "${files[@]}"' "${fileProcessor:+|}" "$fileProcessor")
-	exit ${status:-${additionalSuccessStatus:-0}}
+	exit ${noopStatus:-${status:-${additionalSuccessStatus:-0}}}
 	;;
     *)	printf >&2 'ASSERT: Invalid strategy: %s\n' "$with"; exit 3;;
 esac
