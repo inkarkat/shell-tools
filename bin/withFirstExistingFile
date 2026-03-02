@@ -7,6 +7,7 @@ set -o pipefail
 : ${WITHFIRSTEXISTINGFILE_FILES_END=;}
 : ${WITHFIRSTEXISTINGFILE_FILE_MARKER='{}'}
 fileMarker="$WITHFIRSTEXISTINGFILE_FILE_MARKER"; unset WITHFIRSTEXISTINGFILE_FILE_MARKER
+: ${WITHFIRSTEXISTINGFILE_NO_COMMAND_STATUS:=4}
 
 printShortUsage()
 {
@@ -56,7 +57,7 @@ SEE ALSO:
 EXIT STATUS:
     2	Bad invocation, wrong or missing command-line arguments.
     3	Internal error or failed assertion.
-    4	None of the passed FILE(s) exist.
+    $WITHFIRSTEXISTINGFILE_NO_COMMAND_STATUS	None of the passed FILE(s) exist.
     *   any exit status from COMMAND(s)
 HELPTEXT
 }
@@ -184,4 +185,4 @@ do
     eval "$interpolatedCommands" "$quotedFilespec"
     exit $?
 done
-exit 4
+exit $WITHFIRSTEXISTINGFILE_NO_COMMAND_STATUS
