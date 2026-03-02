@@ -146,7 +146,7 @@ do
 			    remainder="$1"
 			    while [[ "$remainder" =~ ^(.*)"$argMS"([0-9]+|[*@])"$argME"(.*)$ ]]	# Note: This will be parsed back-to-front because of the greedy matching.
 			    do
-				printf -v quotedArg '"$%s"%q%s' "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" "$quotedArg"
+				printf -v quotedArg '"${%s}"%q%s' "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" "$quotedArg"
 				remainder="${BASH_REMATCH[1]}"
 				isAppendArguments=
 			    done
