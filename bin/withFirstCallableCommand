@@ -1,5 +1,6 @@
 #!/bin/bash
 set -o pipefail
+shopt -qs extglob
 
 : ${WITHFIRSTCALLABLECOMMAND_COMMAND_JOINER=;}
 : ${WITHFIRSTCALLABLECOMMAND_EXEC_END=;}
@@ -63,6 +64,29 @@ EXIT STATUS:
 HELPTEXT
 }
 
+quoteMarkers()
+{
+    local quoter="${1:?}"; shift
+    quotedCmd=''
+    local remainder="${1?}"; shift
+    if [ -z "$remainder" ]; then
+	printf -v quotedCmd "$quoter" "$remainder"
+	return
+    fi
+    while [[ "$remainder" =~ ^(.*)"$argMS"(-?[0-9]+|@)"$argME"(.*)$ ]]	# Note: This will be parsed back-to-front because of the greedy matching.
+    do
+	printf -v quotedCmd "%s%s%s${quoter}%s" "$argMS" "${BASH_REMATCH[2]}" "$argME" "${BASH_REMATCH[3]}" "$quotedCmd"
+	remainder="${BASH_REMATCH[1]}"
+	usedMarkers["${BASH_REMATCH[2]}"]=t
+    done
+    if [ -n "$remainder" ]; then
+	printf -v quotedCmd "${quoter}%s" "$remainder" "$quotedCmd"
+    fi
+    # Returns $quotedCmd; cannot use command substitution as we're collecting
+    # markers in usedMarkers.
+}
+
+typeset -A usedMarkers=()
 candidateCommand=
 typeset -a candidateArgs=()
 unset message
@@ -99,13 +123,18 @@ do
 			shift
 			;;
 
+	--command|-c)	shift
+			quoteMarkers %s "$1"; shift
+			commands+="${commands:+ $WITHFIRSTCALLABLECOMMAND_COMMAND_JOINER }${quotedCmd}"
+			shift
+			;;
 	--exec)		shift
 			cmd=
 			printf -v escapedCommandMarker %q "$commandMarker"
 			while [ $# -gt 0 -a "$1" != "$WITHFIRSTCALLABLECOMMAND_EXEC_END" ]
 			do
-			    printf -v quotedArg '%q' "$1"
-			    cmd="${cmd}${cmd:+ }${quotedArg//"$escapedCommandMarker"/$commandMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    quoteMarkers %q "$1"
+			    cmd="${cmd}${cmd:+ }${quotedCmd//"$escapedCommandMarker"/$commandMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 			    shift
 			done
 			if [ $# -eq 0 ]; then
@@ -115,7 +144,6 @@ do
 			shift
 			commands+="${commands:+ $WITHFIRSTCALLABLECOMMAND_COMMAND_JOINER }${cmd}"
 			;;
-	--command|-c)	shift; commands+="${commands:+ $WITHFIRSTCALLABLECOMMAND_COMMAND_JOINER }$1"; shift;;
 	--or-message|-m)
 			shift; message="${1?}"; shift;;
 	--ignore-missing|-i)
@@ -128,10 +156,14 @@ done
 if [ $# -ne 0 ]; then
     # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
     # undo the effects of eval.
-    printf -v quotedSimpleCommand '%q ' "$@"
-    commands+="${commands:+ $WITHFIRSTCALLABLECOMMAND_COMMAND_JOINER }${quotedSimpleCommand% }"
+    cmd=
+    while [ $# -gt 0 ]
+    do
+	quoteMarkers %q "$1"; shift
+	cmd+="${cmd:+ }${quotedCmd}"
+    done
     printf -v escapedCommandMarker %q "$commandMarker"
-    commands+="${commands:+ $WITHFIRSTCALLABLECOMMAND_COMMAND_JOINER }${quotedSimpleCommand//"$escapedCommandMarker"/$commandMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+    commands+="${commands:+ $WITHFIRSTCALLABLECOMMAND_COMMAND_JOINER }${cmd//"$escapedCommandMarker"/$commandMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 fi
 if [ ${#triedCommandNames[@]} -eq 0 ]; then
     echo "ERROR: No CANDIDATE-COMMAND(s) passed; need to pass -C|--candidate CANDIDATE-COMMAND, or -T|--custom-candidate CANDIDATE-COMMAND [CANDIDATE-ARG [...]] ${WITHFIRSTCALLABLECOMMAND_CUSTOM_CANDIDATE_END}"
@@ -151,3 +183,41 @@ elif [ -z "$candidateCommand" ]; then
     exit $WITHFIRSTCALLABLECOMMAND_NO_COMMAND_STATUS
 fi >&2
 
+interpolatedCommands="$commands"
+printf -v quotedCandidateCommand %q "$candidateCommand"
+interpolatedCommands="${commands//"$commandMarker"/$quotedCandidateCommand}"
+if [ "$interpolatedCommands" = "$commands" ]; then
+    # No command marker; prepend candidateCommand.
+    interpolatedCommands="$quotedCandidateCommand $interpolatedCommands"
+fi
+
+if [ ${#usedMarkers[@]} -eq 0 ]; then
+    # No argument markers; append CANDIDATE-ARG(s).
+    [ ${#candidateArgs[@]} -eq 0 ] \
+	    && replacement='' \
+	    || printf -v replacement ' %q' "${candidateArgs[@]}"
+    interpolatedCommands="${interpolatedCommands}${replacement}"
+fi
+
+for marker in "${!usedMarkers[@]}"
+do
+    case "$marker" in
+	@)  [ ${#candidateArgs[@]} -eq 0 ] \
+		&& replacement='' \
+		|| printf -v replacement '%q ' "${candidateArgs[@]}"; replacement="${replacement% }"
+	    ;;
+	+([0-9]))
+	    [ $marker -eq 0 ] \
+		&& printf -v replacement %q '' \
+		|| printf -v replacement %q "${candidateArgs[$((marker - 1))]}"
+	    ;;
+	-+([0-9]))
+	    [ $((-1 * marker)) -gt ${#candidateArgs[@]} ] \
+		&& printf -v replacement %q '' \
+		|| printf -v replacement %q "${candidateArgs[$marker]}";;
+	*)  printf >&2 'ASSERT: Unhandled marker: %s\n' "$marker"; exit 3;;
+    esac
+    interpolatedCommands="${interpolatedCommands//"${argMS}${marker}${argME}"/${replacement}}"
+done
+
+eval "$interpolatedCommands"

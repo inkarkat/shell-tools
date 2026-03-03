@@ -5,12 +5,21 @@ bats_load_library bats-support
 bats_load_library bats-assert
 
 commandAlpha() {
-    printf '%q ' alpha "$@"
+    printf alpha
+    [ $# -eq 0 ] || printf -- '-%s' "$@"
+    printf '\n'
 }
 
 commandBeta() {
-    printf '%q ' Beta "$@"
+    printf beta
+    [ $# -eq 0 ] || printf -- '-%s' "$@"
+    printf '\n'
     return 42
 }
 
-export -f commandAlpha commandBeta
+wrapper() {
+    local output="$("$@")"
+    printf '[%s]\n' "$output"
+}
+
+export -f commandAlpha commandBeta wrapper
