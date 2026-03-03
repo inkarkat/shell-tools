@@ -117,10 +117,12 @@ if [ -n "$commands" ]; then
     eval "$commands"
 else
     if [ ! "$isIgnoreMissing" ]; then
-	if [ ${#triedCommandNames[@]} -eq 1 ]; then
+	if [ -n "${message+t}" ]; then
+	    [ -z "$message" ] || printf '%s\n' "$message"
+	elif [ ${#triedCommandNames[@]} -eq 1 ]; then
 	    printf 'ERROR: %s is not callable.\n' "${triedCommandNames[0]}"
 	else
-	    printf '%s\n' "${message-$(joinBy --prefix 'ERROR: None of ' --suffix ' is callable.' --last-separator ' or ' -- ', ' "${triedCommandNames[@]}")}"
+	    printf '%s\n' "$(joinBy --prefix 'ERROR: None of ' --suffix ' is callable.' --last-separator ' or ' -- ', ' "${triedCommandNames[@]}")"
 	fi >&2
     fi
     exit $RUNFIRSTCALLABLECOMMAND_NO_COMMAND_STATUS
