@@ -18,3 +18,15 @@ load fixture
     run -0 withFirstCallableCommand -h
     refute_line -n 0 -e '^Usage:'
 }
+
+@test "missing ; after --exec prints message and usage instructions" {
+    run -2 withFirstCallableCommand --exec arg
+    assert_line -n 0 "ERROR: --exec command must be concluded with ';'"
+    assert_line -n 1 -e '^Usage:'
+}
+
+@test "missing ; after --custom-candidate prints message and usage instructions" {
+    run -2 withFirstCallableCommand --custom-candidate commandAlpha
+    assert_line -n 0 "ERROR: --custom-candidate|-T must be concluded with ';'"
+    assert_line -n 1 -e '^Usage:'
+}

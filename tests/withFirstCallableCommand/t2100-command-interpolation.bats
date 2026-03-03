@@ -7,7 +7,7 @@ load fixture
     assert_output 'alpha-one-two-and three'
 }
 
-@test "second passed candidate is executed within -c COMMANDLIN with explicit marker" {
+@test "second passed candidate is executed within -c COMMANDLINE with explicit marker" {
     run -0 withFirstCallableCommand --candidate doesNotExist --candidate commandAlpha -c '{} one two and\ three'
     assert_output 'alpha-one-two-and three'
 }
@@ -22,7 +22,7 @@ load fixture
     assert_output '[alpha-one-two-and three]'
 }
 
-@test "second passed candidate is executed within -c COMMANDLIN by wrapper through explicit marker" {
+@test "second passed candidate is executed within -c COMMANDLINE by wrapper through explicit marker" {
     run -0 withFirstCallableCommand --candidate doesNotExist --candidate commandAlpha -c 'wrapper {} one two and\ three'
     assert_output '[alpha-one-two-and three]'
 }

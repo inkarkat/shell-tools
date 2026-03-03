@@ -111,6 +111,7 @@ do
 			    candidateCommand="$1"
 			    isFoundHere=t
 			fi
+			shift
 			while [ $# -gt 0 -a "$1" != "$WITHFIRSTCALLABLECOMMAND_CUSTOM_CANDIDATE_END" ]
 			do
 			    [ "$isFoundHere" ] && candidateArgs+=("$1")
