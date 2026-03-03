@@ -1,0 +1,153 @@
+#!/bin/bash
+set -o pipefail
+
+: ${WITHFIRSTCALLABLECOMMAND_COMMAND_JOINER=;}
+: ${WITHFIRSTCALLABLECOMMAND_EXEC_END=;}
+: ${WITHFIRSTCALLABLECOMMAND_CUSTOM_CANDIDATE_END=;}
+: ${WITHFIRSTCALLABLECOMMAND_COMMAND_MARKER='{}'}
+commandMarker="$WITHFIRSTCALLABLECOMMAND_COMMAND_MARKER"; unset WITHFIRSTCALLABLECOMMAND_COMMAND_MARKER
+: ${WITHFIRSTCALLABLECOMMAND_ARG_MARKER='{X}'}
+argMarker="$WITHFIRSTCALLABLECOMMAND_ARG_MARKER"; unset WITHFIRSTCALLABLECOMMAND_ARG_MARKER
+argMS="${argMarker%X*}"; argME="${argMarker#*X}"
+: ${WITHFIRSTCALLABLECOMMAND_NO_COMMAND_STATUS:=4}
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" "-C|--candidate CANDIDATE-COMMAND [-C ...] | -T|--custom-candidate CANDIDATE-COMMAND [CANDIDATE-ARG [...]] ${WITHFIRSTCALLABLECOMMAND_CUSTOM_CANDIDATE_END} [-T ...] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHFIRSTCALLABLECOMMAND_EXEC_END} [--exec ...] [--or-message|-m MESSAGE|--ignore-missing|-i] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Execute COMMAND with the first callable CANDIDATE-COMMAND (which ${commandMarker:+either }is
+prepended${commandMarker:+ or replaces any $commandMarker marker} inside COMMANDLINE) that exists.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --candidate|-C CANDIDATE-COMMAND
+			Use CANDIDATE-COMMAND if it's callable.
+    --custom-candidate|-T CANDIDATE-COMMAND [CANDIDATE-ARG [...]] ${WITHFIRSTCALLABLECOMMAND_CUSTOM_CANDIDATE_END}
+			Use CANDIDATE-COMMAND if it's callable, and${argMarker:+ either}
+			append CANDIDATE-ARG(s) after COMMAND${argMarker:+ or replace any
+			${argMarker/X/1}, ${argMarker/X/2}, etc., ${argMarker/X/-1} for indexing from behind, ${argMarker/X/@} for
+			all CANDIDATE-ARG(s) inside COMMAND}.
+    --exec CMD [...] ${WITHFIRSTCALLABLECOMMAND_EXEC_END}	Execute CMD; all following arguments are taken to be
+			arguments to the CMD until an argument consisting of
+			'${WITHFIRSTCALLABLECOMMAND_EXEC_END}' is encountered.
+    --or-message|-m MESSAGE
+			If no COMMAND is callable, print the custom MESSAGE.
+    --ignore-missing|-i	Do not print the default error message if no COMMAND is
+			callable.
+SEE ALSO:
+- runFirstCallableCommand executes the first callable COMMAND, extracting the
+  commands from individual commandlines instead of assembling (mostly, except
+  for CANDIDATE-ARG(s)) uniform invocations with different CANDIDATE-COMMAND(s)
+
+EXIT STATUS:
+    2	Bad invocation, wrong or missing command-line arguments.
+    3	Internal error or failed assertion.
+    $WITHFIRSTCALLABLECOMMAND_NO_COMMAND_STATUS	None of the passed CANDIDATE-COMMAND(s) are callable.
+    *   any exit status from COMMAND(s)
+HELPTEXT
+}
+
+candidateCommand=
+typeset -a candidateArgs=()
+unset message
+isIgnoreMissing=
+typeset -a triedCommandNames=()
+commands=
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--candidate|-C)	shift
+			triedCommandNames+=("${1:?}")
+			[ -z "$candidateCommand" ] && type -t -- "$1" >/dev/null \
+			    && candidateCommand="$1"
+			shift
+			;;
+	--custom-candidate|-T)
+			shift
+			triedCommandNames+=("${1:?}")
+			isFoundHere=
+			if [ -z "$candidateCommand" ] && type -t -- "$1" >/dev/null; then
+			    candidateCommand="$1"
+			    isFoundHere=t
+			fi
+			while [ $# -gt 0 -a "$1" != "$WITHFIRSTCALLABLECOMMAND_CUSTOM_CANDIDATE_END" ]
+			do
+			    [ "$isFoundHere" ] && candidateArgs+=("$1")
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --custom-candidate|-T must be concluded with '${WITHFIRSTCALLABLECOMMAND_CUSTOM_CANDIDATE_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			;;
+
+	--exec)		shift
+			cmd=
+			printf -v escapedCommandMarker %q "$commandMarker"
+			while [ $# -gt 0 -a "$1" != "$WITHFIRSTCALLABLECOMMAND_EXEC_END" ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd="${cmd}${cmd:+ }${quotedArg//"$escapedCommandMarker"/$commandMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${WITHFIRSTCALLABLECOMMAND_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			commands+="${commands:+ $WITHFIRSTCALLABLECOMMAND_COMMAND_JOINER }${cmd}"
+			;;
+	--command|-c)	shift; commands+="${commands:+ $WITHFIRSTCALLABLECOMMAND_COMMAND_JOINER }$1"; shift;;
+	--or-message|-m)
+			shift; message="${1?}"; shift;;
+	--ignore-missing|-i)
+			shift; isIgnoreMissing=t;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    commands+="${commands:+ $WITHFIRSTCALLABLECOMMAND_COMMAND_JOINER }${quotedSimpleCommand% }"
+    printf -v escapedCommandMarker %q "$commandMarker"
+    commands+="${commands:+ $WITHFIRSTCALLABLECOMMAND_COMMAND_JOINER }${quotedSimpleCommand//"$escapedCommandMarker"/$commandMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+fi
+if [ ${#triedCommandNames[@]} -eq 0 ]; then
+    echo "ERROR: No CANDIDATE-COMMAND(s) passed; need to pass -C|--candidate CANDIDATE-COMMAND, or -T|--custom-candidate CANDIDATE-COMMAND [CANDIDATE-ARG [...]] ${WITHFIRSTCALLABLECOMMAND_CUSTOM_CANDIDATE_END}"
+    echo
+    printUsage "$0"
+    exit 2
+elif [ -z "$candidateCommand" ]; then
+    if [ ! "$isIgnoreMissing" ]; then
+	if [ -n "${message+t}" ]; then
+	    [ -z "$message" ] || printf '%s\n' "$message"
+	elif [ ${#triedCommandNames[@]} -eq 1 ]; then
+	    printf 'ERROR: %s is not callable.\n' "${triedCommandNames[0]}"
+	else
+	    printf '%s\n' "$(joinBy --prefix 'ERROR: None of ' --suffix ' is callable.' --last-separator ' or ' -- ', ' "${triedCommandNames[@]}")"
+	fi >&2
+    fi
+    exit $WITHFIRSTCALLABLECOMMAND_NO_COMMAND_STATUS
+fi >&2
+
