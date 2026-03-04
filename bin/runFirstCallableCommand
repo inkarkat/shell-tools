@@ -36,6 +36,9 @@ HELPDESCRIPTION
     --ignore-missing|-i	Do not print the default error message if no COMMAND is
 			callable.
 SEE ALSO:
+- withFirstCallableCommand also executes the first callable COMMAND, but focuses
+  on assembling uniform invocations with only different candidate command(s) and
+  (mostly) identical arguments instead of working with individual commandlines.
 - pipeIfCallable is a variant for commands that operate on standard input and
   acts as a no-op pipeline or input suppressor if no command is callable.
 
