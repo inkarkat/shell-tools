@@ -42,6 +42,9 @@ SEE ALSO:
 - pipeIfCallable is a variant for commands that operate on standard input and
   acts as a no-op pipeline or input suppressor if no command is callable.
 
+RELATED COMMANDS:
+- commandName is used to determine the command name of the passed commandlines.
+
 EXIT STATUS:
     0	Complete success.
     2	Bad invocation, wrong or missing command-line arguments.
