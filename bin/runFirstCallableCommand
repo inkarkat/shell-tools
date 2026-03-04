@@ -47,7 +47,9 @@ EXIT STATUS:
     2	Bad invocation, wrong or missing command-line arguments.
     $RUNFIRSTCALLABLECOMMAND_NO_COMMAND_STATUS	If no COMMAND is callable.
     *   any exit status from COMMAND(s)
+Example:
 HELPTEXT
+    printf 'COMMANDNAME_WRAPPERS=sudo %q %s\n' "$(basename "$1")" '--exec sudo aptitude full-upgrade \; --exec sudo apt dist-upgrade \; --exec sudo apt-get dist-upgrade \;'
 }
 
 commands=

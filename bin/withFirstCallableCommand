@@ -61,7 +61,10 @@ EXIT STATUS:
     3	Internal error or failed assertion.
     $WITHFIRSTCALLABLECOMMAND_NO_COMMAND_STATUS	None of the passed CANDIDATE-COMMAND(s) are callable.
     *   any exit status from COMMAND(s)
+
+Example:
 HELPTEXT
+    printf '%q %s\n' "$(basename "$1")" '-T aptitude full-upgrade \; -T apt dist-upgrade \; -T apt-get dist-upgrade \; -- sudo {}'
 }
 
 quoteMarkers()
