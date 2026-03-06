@@ -11,7 +11,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: [WITHDIFF_DIFF_COMMAND|DIFF=DIFFCMD] %q %s\n' "$(basename "$1")" "--for FILE|DIR [--for ...] [DIFF-ARGS ...] [-?|-h|--help]"
+    printf 'Usage: [WITHDIFF_DIFF_COMMAND|DIFF=DIFFCMD] %q %s\n' "$(basename "$1")" "--for FILE|DIR [--for ...] [--color=(always|auto|never)|--no-color] [DIFF-ARGS ...] [-?|-h|--help] ..."
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "... -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHDIFF_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]"
     echo
