@@ -193,7 +193,8 @@ execute()
 
 execute || exit $?
 
-diffCommand="${WITHDIFF_DIFF_COMMAND:-${DIFF:-diff}}"; [ "$isColor" ] && type -t colordiff >/dev/null && diffCommand=colordiff
+diffCommand=diff; [ "$isColor" ] && type -t colordiff >/dev/null && diffCommand=colordiff
+diffCommand="${WITHDIFF_DIFF_COMMAND:-${DIFF:-$diffCommand}}"
 status=0
 for file in "${filespecs[@]}"
 do
