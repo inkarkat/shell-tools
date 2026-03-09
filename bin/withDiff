@@ -58,6 +58,12 @@ EXIT STATUS:
     2	Bad invocation, wrong or missing command-line arguments.
     3	Temp copies failed, internal error or failed assertion.
     *   any exit status from COMMAND(s)
+
+SEE ALSO:
+- pipelineWithDiff uses a command pipeline instead of FILE(s), and shows the
+  diff between the input and output of the pipeline.
+- processEachFile executes COMMAND(s) for each FILE separately, and only shows
+  diffs on demand and in conjunction with a backup strategy.
 HELPTEXT
 }
 
