@@ -8,7 +8,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: [DEBUG=sudo[!]] %q %s\n' "$(basename "$1")" '[--] TARGET-FILE [-a|--append] [--sudo] [-t|--tee] [-?|-h|--help] ...'
+    printf 'Usage: [DEBUG=sudo[!]] %q %s\n' "$(basename "$1")" '[--] TARGET-FILE [--sudo] [-m|--mode MODE] [-v|--verbose] [-a|--append] [-t|--tee] [-?|-h|--help] ...'
     printf 'Usage: %q %s\n' "$(basename "$1")" "... [-1|--stdout|-2|--stderr] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${TOFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]"
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '...'
 }
@@ -31,10 +31,12 @@ HELPDESCRIPTION
     printShortUsage "$1"
     echo
     cat <<HELPTEXT
-    --append|-a		Append to TARGET-FILE instead of overwriting it.
     --sudo		Create with sudo unless the target directory is
 			writeable by the current user or we're already running
 			as the superuser.
+    --mode|-m MODE	Set file mode (as in chmod).
+    --verbose|-v	Print a message for a created directory.
+    --append|-a		Append to TARGET-FILE instead of overwriting it.
     --tee|-t		Also print the input in addition to putting it into
 			TARGET-FILE. This then works like tee, but with
 			auto-creation of missing parent directories.
@@ -50,6 +52,7 @@ HELPDESCRIPTION
 HELPTEXT
 }
 
+typeset -a mkdirArgs=()
 sudoArg=
 sudoTeeRedir='>/dev/null'
 redir='>'
@@ -61,9 +64,14 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
-	--append|-a)	teeArg=("$1"); shift; redir='>>';;
 	--sudo)		shift; sudoArg="${SUDO:-sudo}";;
+
+	--verbose|-v)	mkdirArgs+=("$1"); shift;;
+	--mode|-m)	mkdirArgs+=("$1" "$2"); shift; shift;;
+
+	--append|-a)	teeArg=("$1"); shift; redir='>>';;
 	--tee|-t)	shift; isTee=t; sudoTeeRedir='';;
+
 	--stdout|-1)	shift; capturePrefix='';;
 	--stderr|-2)	shift; capturePrefix='3>&1 1>&2 2>&3 3>&-'; captureSuffix='3>&1 1>&2 2>&3 3>&-';;
 	--command|-c)	shift; commands+="${commands:+ $TOFILE_COMMAND_JOINER }${1?}"; shift;;
@@ -109,7 +117,7 @@ SUDO="$sudoArg"; [ $EUID -eq 0 ] || [ -w "$targetDirspec" ] && SUDO=''
 [ -n "$sudoArg" ] && case ",${DEBUG:-}," in *,sudo,*) SUDO="verbose $SUDO";; *,sudo\!,*) SUDO="echotrace $SUDO";; esac
 
 targetDirspec="$(dirname -- "$targetFilespec")"
-[ -d "$targetDirspec" ] || $SUDO mkdir --parents -- "$targetDirspec" || exit $?
+[ -d "$targetDirspec" ] || $SUDO mkdir --parents "${mkdirArgs[@]}" -- "$targetDirspec" || exit $?
 
 capture()
 {
