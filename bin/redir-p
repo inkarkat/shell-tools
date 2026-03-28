@@ -55,11 +55,10 @@ HELPTEXT
 typeset -a mkdirArgs=()
 sudoArg=
 sudoTeeRedir='>/dev/null'
-redir='>'
+isAppend=
 isTee=
 capturePrefix='2>&1'
 captureSuffix=
-typeset -a teeArg=()
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -69,7 +68,7 @@ do
 	--verbose|-v)	mkdirArgs+=("$1"); shift;;
 	--mode|-m)	mkdirArgs+=("$1" "$2"); shift; shift;;
 
-	--append|-a)	teeArg=("$1"); shift; redir='>>';;
+	--append|-a)	shift; isAppend=t;;
 	--tee|-t)	shift; isTee=t; sudoTeeRedir='';;
 
 	--stdout|-1)	shift; capturePrefix='';;
@@ -122,11 +121,11 @@ targetDirspec="$(dirname -- "$targetFilespec")"
 capture()
 {
     if [ -n "$SUDO" ]; then
-	eval '$SUDO tee "${teeArg[@]}" -- "$targetFilespec"' "$sudoTeeRedir"
+	eval '$SUDO tee ${isAppend:+--append} -- "$targetFilespec"' "$sudoTeeRedir"
     elif [ "$isTee" ]; then
-	tee "${teeArg[@]}" -- "$targetFilespec"
+	tee ${isAppend:+--append} -- "$targetFilespec"
     else
-	eval "cat $redir \"\$targetFilespec\""
+	eval "cat >${isAppend:+>} \"\$targetFilespec\""
     fi
 }
 
