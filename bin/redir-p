@@ -8,7 +8,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: [DEBUG=sudo[!]] %q %s\n' "$(basename "$1")" '[--] TARGET-FILE [--sudo] [-m|--mode MODE] [-v|--verbose] [-a|--append] [-t|--tee] [-?|-h|--help] ...'
+    printf 'Usage: [DEBUG=sudo[!]] %q %s\n' "$(basename "$1")" '[--] TARGET-FILE [--sudo] [-m|--mode MODE] [-v|--verbose] [-a|--append] [--sponge] [-t|--tee] [-?|-h|--help] ...'
     printf 'Usage: %q %s\n' "$(basename "$1")" "... [-1|--stdout|-2|--stderr] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${REDIRP_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]"
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '...'
 }
@@ -37,6 +37,10 @@ HELPDESCRIPTION
     --mode|-m MODE	Set file mode (as in chmod).
     --verbose|-v	Print a message for a created directory.
     --append|-a		Append to TARGET-FILE instead of overwriting it.
+    --sponge		Read all input before writing to TARGET-FILE, so that the
+			input can be safely redirected from TARGET-FILE itself /
+			TARGET-FILE is updated (when possible) atomically even
+			if the input generation is slow.
     --tee|-t		Also print the input in addition to putting it into
 			TARGET-FILE. This then works like tee, but with
 			auto-creation of missing parent directories.
@@ -69,6 +73,7 @@ do
 	--mode|-m)	mkdirArgs+=("$1" "$2"); shift; shift;;
 
 	--append|-a)	shift; isAppend=t;;
+	--sponge)	shift; isSponge=t;;
 	--tee|-t)	shift; isTee=t; sudoTeeRedir='';;
 
 	--stdout|-1)	shift; capturePrefix='';;
@@ -120,7 +125,24 @@ targetDirspec="$(dirname -- "$targetFilespec")"
 
 capture()
 {
-    if [ -n "$SUDO" ]; then
+    if [ "$isSponge" ]; then
+	typeset -a spongeCommand=(sponge ${isAppend:+-a} -- "$targetFilespec")
+	if [ -n "$SUDO" ]; then
+	    if [ "$isTee" ]; then
+		# Note: Cannot use $SUDO inside the process substitution; it'll interfere with a
+		# password query.
+		#tee >($SUDO "${spongeCommand[@]}")
+		printf -v quotedSpongeCommand '%q ' "${spongeCommand[@]}"; quotedSpongeCommand="${quotedSpongeCommand% }"
+		$SUDO bash -c "tee >(${quotedSpongeCommand})"
+	    else
+		$SUDO "${spongeCommand[@]}"
+	    fi
+	elif [ "$isTee" ]; then
+	    tee >("${spongeCommand[@]}")
+	else
+	    "${spongeCommand[@]}"
+	fi
+    elif [ -n "$SUDO" ]; then
 	eval '$SUDO tee ${isAppend:+--append} -- "$targetFilespec"' "$sudoTeeRedir"
     elif [ "$isTee" ]; then
 	tee ${isAppend:+--append} -- "$targetFilespec"
