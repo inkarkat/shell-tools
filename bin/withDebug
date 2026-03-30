@@ -41,12 +41,14 @@ HELPDESCRIPTION
 			Just enable debugging diagnostics for MODULE of the
 			following COMMAND(s), but not for the overall COMMAND
 			itself.
-    --[only-]module ''	Reset modules; following COMMAND(s) just print the over
-			debugging diagnostics.
+    --[only-]module ''	Reset modules; following COMMAND(s) just print the
+			overall debugging diagnostics.
     --for COMMANDNAME	Also enable debugging diagnostics and wrapper commands
 			for COMMANDNAME.
     --command|-c CMD	Execute CMD as a command-line.
-    --exec CMD [...] ${WITHDEBUG_EXEC_END}	Execute CMD; all following arguments are taken to be arguments to the CMD until an argument consisting of '${WITHDEBUG_EXEC_END}' is encountered.
+    --exec CMD [...] ${WITHDEBUG_EXEC_END}	Execute CMD; all following arguments are taken to be
+			arguments to the CMD until an argument consisting of
+			'${WITHDEBUG_EXEC_END}' is encountered.
 HELPTEXT
 }
 
