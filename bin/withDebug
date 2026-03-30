@@ -24,9 +24,9 @@ printLongUsage()
     cat <<HELPDESCRIPTION
 Execute COMMAND while enabling debugging diagnostics for it. This is done by
 adding the COMMAND's name to the \$DEBUG environment variable.
-If DEBUG_<command-name>[_<module>]_WRAPPER environment variables exist, their
-contents are prepended before the corresponding COMMAND and that executed
-instead.
+If DEBUG_<command-name>[_<module>]_WRAPPER (<module> without any trailing
+sigil(s)) environment variables exist, their contents are prepended before the
+corresponding COMMAND and that executed instead.
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
@@ -94,6 +94,7 @@ addCommand()
     do
 	local module; for module in "${modules[@]}"
 	do
+	    module="${module%%+([^[:alnum:]])}"
 	    local wrapperConfigName="DEBUG_${commandName//[^[:alnum:]]/_}${module:+_}${module//[^[:alnum:]]/_}_WRAPPER"
 	    if [ -n "${!wrapperConfigName}" ]; then
 		# Prepend the wrapper command to the executed command.
