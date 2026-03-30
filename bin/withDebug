@@ -4,11 +4,16 @@ shopt -qs globstar extglob nullglob
 : ${WITHDEBUG_COMMAND_JOINER=;}
 : ${WITHDEBUG_EXEC_END=;}
 
+readonly DATA_DIRSPEC="${XDG_DATA_HOME:-${HOME}/.local/share}"
+readonly WITHDEBUG_RECALL_FILESPEC="${DATA_DIRSPEC}/withDebug"
+
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
     printf 'Usage: %q %s\n' "$(basename "$1")" "[-v|--verbose] [-m|--module MODULE|'' [-m ...]|-M|--only-module MODULE|'' [-M ...]] --for COMMANDNAME [--for ...] | -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${WITHDEBUG_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" "--recall [-v|--verbose] [-m|--module MODULE|'' [-m ...]|-M|--only-module MODULE|'' [-M ...]] --for COMMANDNAME [--for ...]"
 }
 printUsage()
 {
@@ -49,6 +54,9 @@ HELPDESCRIPTION
     --exec CMD [...] ${WITHDEBUG_EXEC_END}	Execute CMD; all following arguments are taken to be
 			arguments to the CMD until an argument consisting of
 			'${WITHDEBUG_EXEC_END}' is encountered.
+    --recall		Rerun the previous debugging command, optionally
+			dropping matching arguments or adding those not given to
+			the original command.
 HELPTEXT
 }
 
@@ -106,6 +114,69 @@ addCommand()
     commands+="${commands:+ $WITHDEBUG_COMMAND_JOINER }${wrappers}${cmd}"
 }
 
+handleRecall()
+{
+    if [ ! -r "$WITHDEBUG_RECALL_FILESPEC" ]; then
+	echo >&2 'ERROR: No previous debug command to retry.'
+	exit 1
+    fi
+
+    local overrideVerbose=
+    typeset -A overrideFor=()
+    typeset -A overrideModules=()
+    typeset -A overrideOnlyModules=()
+    while [ $# -ne 0 ]
+    do
+	case "$1" in
+	    --verbose|-v)	shift; overrideVerbose=t;;
+	    --for)		shift; overrideFor["$1"]=t; shift;;
+	    --module|-m)	shift; overrideModules["$1"]=t; shift;;
+	    --only-module|-M)	shift; overrideOnlyModules["$1"]=t; shift;;
+	    --)			shift; break;;
+	    *)			shift;;
+	esac
+    done
+
+    source "$WITHDEBUG_RECALL_FILESPEC" || exit 3
+
+    # Iterate over the previously given arguments to remove those also given to the
+    # recall.
+    allargs=()	# These will be returned.
+    while [ $# -ne 0 ]
+    do
+	case "$1" in
+	    --verbose|-v)	[ "$overrideVerbose" ] && overrideVerbose= || allargs+=("$1"); shift;;
+	    --for)		[ "${overrideFor["$2"]}" ] && unset "overrideFor[$2]" || allargs+=("$1" "$2"); shift; shift;;
+	    --module|-m)	[ "${overrideModules["$2"]}" ] && unset "overrideModules[$2]" || allargs+=("$1" "$2"); shift; shift;;
+	    --only-module|-M)   [ "${overrideOnlyModules["$2"]}" ] && unset "overrideOnlyModules[$2]" || allargs+=("$1" "$2"); shift; shift;;
+	    --)			allargs+=("$@"); break;;
+	    *)			allargs+=("$1"); shift;;
+	esac
+    done
+
+    # Add those arguments given to the recall that were not used to remove any
+    # recalled arguments.
+    typeset -a newArgs=()
+    [ "$overrideVerbose" ] && newArgs+=(--verbose)
+    local arg
+    for arg in "${!overrideFor[@]}"
+    do
+	newArgs+=(--for "$arg")
+    done
+    for arg in "${!overrideModules[@]}"
+    do
+	newArgs+=(--module "$arg")
+    done
+    for arg in "${!overrideOnlyModules[@]}"
+    do
+	newArgs+=(--only-module "$arg")
+    done
+
+    # Return via allargs array.
+    allargs=("${newArgs[@]}" "${allargs[@]}")
+}
+
+typeset -a allargs=("$@")
 isVerbose=
 commands=
 let commandCnt=0
@@ -113,6 +184,7 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--recall)	shift; handleRecall "$@"; set -- "${allargs[@]}";;
 	--verbose|-v)	shift; isVerbose=t;;
 	--for)		shift
 			addDebug "${1:?}"; shift
@@ -175,6 +247,9 @@ if [ -z "$commands" ]; then
     printUsage "$0"
     exit 2
 fi >&2
+
+printf -v quotedArgs ' %q' "${allargs[@]}"
+printf 'set --%s\n' "$quotedArgs" > "$WITHDEBUG_RECALL_FILESPEC"
 
 if [ "$isVerbose" ]; then
     if [ $commandCnt -eq 1 ]; then
