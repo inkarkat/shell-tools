@@ -4,11 +4,16 @@ shopt -qs globstar extglob nullglob
 : ${WITHDEBUG_COMMAND_JOINER=;}
 : ${WITHDEBUG_EXEC_END=;}
 
+readonly DATA_DIRSPEC="${XDG_DATA_HOME:-${HOME}/.local/share}"
+readonly WITHDEBUG_RECALL_FILESPEC="${DATA_DIRSPEC}/withDebug"
+
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[-v|--verbose] [-m|--module MODULE|'' [-m ...]|-M|--only-module MODULE|'' [-M ...]] --for COMMANDNAME [--for ...] | -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${WITHDEBUG_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[-p|--paginate|-i|--inbox] [-v|--verbose] [-m|--module MODULE|'' [-m ...]|-M|--only-module MODULE|'' [-M ...]] --for COMMANDNAME [--for ...] | -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${WITHDEBUG_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" "--recall [-p|--paginate|-i|--inbox] [-v|--verbose] [-m|--module MODULE|'' [-m ...]|-M|--only-module MODULE|'' [-M ...]] --for COMMANDNAME [--for ...]"
 }
 printUsage()
 {
@@ -24,14 +29,17 @@ printLongUsage()
     cat <<HELPDESCRIPTION
 Execute COMMAND while enabling debugging diagnostics for it. This is done by
 adding the COMMAND's name to the \$DEBUG environment variable.
-If DEBUG_<command-name>[_<module>]_WRAPPER environment variables exist, their
-contents are prepended before the corresponding COMMAND and that executed
-instead.
+If DEBUG_<command-name>[_<module>]_WRAPPER (<module> without any trailing
+sigil(s)) environment variables exist, their contents are prepended before the
+corresponding COMMAND and that executed instead.
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
     echo
     cat <<HELPTEXT
+    --paginate|-p	Show the debugging diagnostics (and all other stderr
+			output) separately after the execution.
+    --inbox|-i		Write the debugging diagnostics into the inbox.
     --verbose|-v	Print the full command line (with all debugging
 			configuration) before executing it, in a format suitable
 			for copy-and-pasting it into the shell.
@@ -41,12 +49,17 @@ HELPDESCRIPTION
 			Just enable debugging diagnostics for MODULE of the
 			following COMMAND(s), but not for the overall COMMAND
 			itself.
-    --[only-]module ''	Reset modules; following COMMAND(s) just print the over
-			debugging diagnostics.
+    --[only-]module ''	Reset modules; following COMMAND(s) just print the
+			overall debugging diagnostics.
     --for COMMANDNAME	Also enable debugging diagnostics and wrapper commands
 			for COMMANDNAME.
     --command|-c CMD	Execute CMD as a command-line.
-    --exec CMD [...] ${WITHDEBUG_EXEC_END}	Execute CMD; all following arguments are taken to be arguments to the CMD until an argument consisting of '${WITHDEBUG_EXEC_END}' is encountered.
+    --exec CMD [...] ${WITHDEBUG_EXEC_END}	Execute CMD; all following arguments are taken to be
+			arguments to the CMD until an argument consisting of
+			'${WITHDEBUG_EXEC_END}' is encountered.
+    --recall		Rerun the previous debugging command, optionally
+			dropping matching arguments or adding those not given to
+			the original command.
 HELPTEXT
 }
 
@@ -92,6 +105,7 @@ addCommand()
     do
 	local module; for module in "${modules[@]}"
 	do
+	    module="${module%%+([^[:alnum:]])}"
 	    local wrapperConfigName="DEBUG_${commandName//[^[:alnum:]]/_}${module:+_}${module//[^[:alnum:]]/_}_WRAPPER"
 	    if [ -n "${!wrapperConfigName}" ]; then
 		# Prepend the wrapper command to the executed command.
@@ -103,13 +117,96 @@ addCommand()
     commands+="${commands:+ $WITHDEBUG_COMMAND_JOINER }${wrappers}${cmd}"
 }
 
+handleRecall()
+{
+    if [ ! -r "$WITHDEBUG_RECALL_FILESPEC" ]; then
+	echo >&2 'ERROR: No previous debug command to retry.'
+	exit 1
+    fi
+
+    local overrideVerbose=
+    local overridePaginate=
+    local overrideInbox=
+    typeset -A overrideFor=()
+    typeset -A overrideModules=()
+    typeset -A overrideOnlyModules=()
+    while [ $# -ne 0 ]
+    do
+	case "$1" in
+	    --verbose|-v)	shift; overrideVerbose=t;;
+	    --paginate|-p)	shift; overridePaginate=t;;
+	    --inbox|-i)		shift; overrideInbox=t;;
+	    --for)		shift; overrideFor["$1"]=t; shift;;
+	    --module|-m)	shift; overrideModules["$1"]=t; shift;;
+	    --only-module|-M)	shift; overrideOnlyModules["$1"]=t; shift;;
+	    --)			shift; break;;
+	    *)			shift;;
+	esac
+    done
+
+    source "$WITHDEBUG_RECALL_FILESPEC" || exit 3
+
+    # Iterate over the previously given arguments to remove those also given to the
+    # recall.
+    allargs=()	# These will be returned.
+    while [ $# -ne 0 ]
+    do
+	case "$1" in
+	    --verbose|-v)	[ "$overrideVerbose" ] && overrideVerbose= || allargs+=("$1"); shift;;
+	    --paginate|-p)	[ "$overridePaginate" ] && overridePaginate= || allargs+=("$1"); shift;;
+	    --inbox|-i)		[ "$overrideInbox" ] && overrideInbox= || allargs+=("$1"); shift;;
+	    --for)		[ "${overrideFor["$2"]}" ] && unset "overrideFor[$2]" || allargs+=("$1" "$2"); shift; shift;;
+	    --module|-m)	[ "${overrideModules["$2"]}" ] && unset "overrideModules[$2]" || allargs+=("$1" "$2"); shift; shift;;
+	    --only-module|-M)   [ "${overrideOnlyModules["$2"]}" ] && unset "overrideOnlyModules[$2]" || allargs+=("$1" "$2"); shift; shift;;
+	    --)			allargs+=("$@"); break;;
+	    *)			allargs+=("$1"); shift;;
+	esac
+    done
+
+    # Add those arguments given to the recall that were not used to remove any
+    # recalled arguments.
+    typeset -a newArgs=()
+    [ "$overrideVerbose" ] && newArgs+=(--verbose)
+    [ "$overridePaginate" ] && newArgs+=(--paginate)
+    [ "$overrideInbox" ] && newArgs+=(--inbox)
+    local arg
+    for arg in "${!overrideFor[@]}"
+    do
+	newArgs+=(--for "$arg")
+    done
+    for arg in "${!overrideModules[@]}"
+    do
+	newArgs+=(--module "$arg")
+    done
+    for arg in "${!overrideOnlyModules[@]}"
+    do
+	newArgs+=(--only-module "$arg")
+    done
+
+    # Return via allargs array.
+    allargs=("${newArgs[@]}" "${allargs[@]}")
+}
+
+saveToInbox()
+{
+    inbox --base "${commandNames[0]:?}" -- "$@"
+}
+
+typeset -a allargs=("$@")
 isVerbose=
 commands=
 let commandCnt=0
+typeset -a viewer=()
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--recall)	shift; handleRecall "$@"; set -- "${allargs[@]}";;
+	--paginate|-p)	shift
+			[ "$PAGER" = smartless ] && PAGER=less	# smartless does not page small outputs that fit the terminal, but we explicitly want to page through the captured debug diagnostics.
+			viewer=("${PAGER:-less}" --RAW-CONTROL-CHARS --)
+			;;
+	--inbox|-i)	shift; viewer=(saveToInbox);;
 	--verbose|-v)	shift; isVerbose=t;;
 	--for)		shift
 			addDebug "${1:?}"; shift
@@ -173,6 +270,9 @@ if [ -z "$commands" ]; then
     exit 2
 fi >&2
 
+printf -v quotedArgs ' %q' "${allargs[@]}"
+printf 'set --%s\n' "$quotedArgs" > "$WITHDEBUG_RECALL_FILESPEC"
+
 if [ "$isVerbose" ]; then
     if [ $commandCnt -eq 1 ]; then
 	printf >&2 '%sDEBUG=%q %s\n' "${PS4:-\$ }" "$DEBUG" "$commands"
@@ -182,4 +282,6 @@ if [ "$isVerbose" ]; then
 fi
 
 export DEBUG
-eval "$commands"
+
+eval "${viewer:+{ }${commands}${viewer:+;\} 3>&1 1>&2 2>&3 3>&- }" \
+    "${viewer:+|}" '"${viewer[@]}"' "${viewer:+ 3>&1 1>&2 2>&3 3>&-}"
