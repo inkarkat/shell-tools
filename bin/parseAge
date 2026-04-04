@@ -126,8 +126,8 @@ calculateTimeRange()
 
     if [ -n "$timeformat" ]; then
 	local nowTime fileTime
-	nowTime="$(date --date "@$now" "+$timeformat")" || exit 3
-	fileTime="$(date --date "@$epoch" "+$timeformat")" || exit 3
+	nowTime="$(date --date "@$now" "+$timeformat")" || exit 2
+	fileTime="$(date --date "@$epoch" "+$timeformat")" || exit 2
 	[ "$fileTime" $formatCompareOp "$nowTime" ]
     elif [ -n "$timedivider" ]; then
 	local nowDivision fileDivision
