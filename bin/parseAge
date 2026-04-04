@@ -128,15 +128,15 @@ calculateTimeRange()
     local now="$(date +%s)"
 
     if [ -n "$timeformat" ]; then
-	local nowTime fileTime
+	local nowTime parseTime
 	nowTime="$(date --date "@$now" "+$timeformat")" || exit 2
-	fileTime="$(date --date "@$epoch" "+$timeformat")" || exit 2
-	[ "$fileTime" $formatCompareOp "$nowTime" ]
+	parseTime="$(date --date "@$epoch" "+$timeformat")" || exit 2
+	[ "$parseTime" $formatCompareOp "$nowTime" ]
     elif [ -n "$timedivider" ]; then
-	local nowDivision fileDivision
+	local nowDivision parseDivision
 	nowDivision="$((now / timedivider))"
-	fileDivision="$((epoch / timedivider))"
-	delta=$((nowDivision - fileDivision))
+	parseDivision="$((epoch / timedivider))"
+	delta=$((nowDivision - parseDivision))
 	[ $age $spanCompareOp $((delta < 0 ? -delta : delta)) ]
     else
 	[ $age $spanCompareOp $((now - epoch)) ]
