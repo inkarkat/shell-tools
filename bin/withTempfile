@@ -9,7 +9,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[-p|--tmpdir DIRSPEC] [-n|--name NAME] [--move|-m|--move-on-success|-M|--move-on-failure|--rename|-r|--rename-on-success|-R|--rename-on-failure] [--keep|-k|--keep-on-success|-K|--keep-on-failure] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...]${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${WITHTEMPFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[-p|--tmpdir DIRSPEC] [-n|--name NAME] [--move|-m|--move-on-success|-M|--move-on-failure|--rename|-r|--rename-on-success|-R|--rename-on-failure] [-k|--keep|--keep-on-success|-K|--keep-on-failure] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...]${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${WITHTEMPFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} [-?|-h|--help]"
     echo
     printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" "[...] [--bare|$(runWithPrompt --get-short-usage 2>/dev/null)]"
     echo
