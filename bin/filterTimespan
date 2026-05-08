@@ -1,8 +1,23 @@
 #!/bin/bash
 shopt -qs extglob
 
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-k|--keep-timespan] --shorter|--longer|-lt|-le|-eq|-ne|-ge|-gt [+-]TIMESPAN'
+}
 printUsage()
 {
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
 Only print lines where the [+-]SECONDS timespan in the first column is longer /
 shorter than [+-]TIMESPAN.
@@ -10,7 +25,8 @@ SUFFIX may be 's' for seconds (the default), 'm' for minutes, 'h' for hours, 'd'
 for days, 'w' for weeks, 'mo' for months, 'y' for years, 'g' for generations.
 HELPDESCRIPTION
     echo
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-k|--keep-timespan] --shorter|--longer|-lt|-le|-eq|-ne|-ge|-gt [+-]TIMESPAN[SUFFIX]'
+    printShortUsage "$1"
+    echo
     cat <<HELPTEXT
     --field-separator|-F FS
 			Use FS for splitting the data into columns (instead of
@@ -18,6 +34,9 @@ HELPDESCRIPTION
 			regular expression.
     --keep-timespan|-k	Keep the timespan column. By default, the column is
 			dropped.
+    --shorter|--longer|-lt|-le|-eq|-ne|-ge|-gt TIMESPAN[SUFFIX]
+			Compare the timespan in the first column with TIMESPAN
+			(purely mathematically).
 EXIT STATUS:
     0	At least one timespan passed the comparison.
     1	No timespan passed the comparison.
@@ -51,7 +70,7 @@ compareOp=
 while [ $# -ne 0 ]
 do
     case "$1" in
-	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
 	--field-separator|-F)
 			shift; IFS="$1"; shift;;
 	--keep-timespan|-k)
