@@ -10,7 +10,7 @@ SUFFIX may be 's' for seconds (the default), 'm' for minutes, 'h' for hours, 'd'
 for days, 'w' for weeks, 'mo' for months, 'y' for years, 'g' for generations.
 HELPDESCRIPTION
     echo
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-k|--keep-timespan] -s|--shorter|-l|--longer|-lt|-le|-eq|-ne|-ge|-gt [+-]TIMESPAN[SUFFIX]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-k|--keep-timespan] --shorter|--longer|-lt|-le|-eq|-ne|-ge|-gt [+-]TIMESPAN[SUFFIX]'
     cat <<HELPTEXT
     --field-separator|-F FS
 			Use FS for splitting the data into columns (instead of
@@ -56,8 +56,8 @@ do
 			shift; IFS="$1"; shift;;
 	--keep-timespan|-k)
 			shift; isKeepTimespan=t;;
-	--shorter|-s)	shift; age="$(timeToSeconds "$1")" || exit $?; shift; compareOp=-lt;;
-	--longer|-l)	shift; age="$(timeToSeconds "$1")" || exit $?; shift; compareOp=-gt;;
+	--shorter)	shift; age="$(timeToSeconds "$1")" || exit $?; shift; compareOp=-lt;;
+	--longer)	shift; age="$(timeToSeconds "$1")" || exit $?; shift; compareOp=-gt;;
 	-lt|-le|-eq|-ne|-ge|-gt)
 			compareOp="$1"; shift; age="$(timeToSeconds "$1")" || exit $?; shift;;
 	--)		shift; break;;
