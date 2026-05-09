@@ -7,7 +7,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" 'NUMBER[SUFFIX] [-b|--before NUMBER[SUFFIX]] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" 'TIMESPAN [-b|--before TIMESPAN] -c|--command "COMMANDLINE" [-c ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
 }
 printUsage()
 {
@@ -21,43 +21,33 @@ printLongUsage()
     # This is the long "man page" when launched with the help argument.
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
-Execute COMMAND and make it last at least NUMBER[SUFFIX], sleeping some more if
+Execute COMMAND and make it last at least TIMESPAN, sleeping some more if
 necessary.
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
     echo
+    local timespanFormat="$(durationToSeconds --get-short-usage format 2>/dev/null)"
     cat <<HELPTEXT
-    --before|-b NUMBER[SUFFIX]
-			Sleep NUMBER[SUFFIX] before invoking COMMAND. This
-			already counts towards the entire runtime.
+    --before|-b ${timespanFormat:-TIMESPAN}
+			Sleep TIMESPAN before invoking COMMAND. This already
+			counts towards the entire runtime.
 HELPTEXT
 }
 
-timeToSeconds()
-{
-    case "$1" in
-	+([0-9])?(s))   time="${1%s}";;
-	+([0-9])m)	time=$((${1%m} * 60));;
-	+([0-9])h)	time=$((${1%h} * 3600));;
-	+([0-9])d)	time=$((${1%d} * 86400));;
-	*)		printf >&2 'ERROR: Illegal duration: %s\n' "$1"; exit 2;;
-    esac
-    printf %s "$time"
-}
 case "$1" in
     --help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
-    '')			echo >&2 'ERROR: No duration (NUMBER[SUFFIX]) passed.'; echo >&2; printUsage "$0" >&2; exit 2;;
+    '')			echo >&2 'ERROR: No TIMESPAN passed.'; echo >&2; printUsage "$0" >&2; exit 2;;
 esac
 
-duration="$(timeToSeconds "$1")" || exit $?; shift
+duration=$(durationToSeconds -- "${1:?}") || { printf >&2 'ERROR: Illegal TIMESPAN: %s\n' "$1"; exit 2; }
 before=
 commands=
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
-	--before|-b)	shift; before="$(timeToSeconds "$1")" || exit $?; shift;;
+	--before|-b)	shift; before=$(durationToSeconds -- "${1:?}") || { printf >&2 'ERROR: Illegal TIMESPAN: %s\n' "$1"; exit 2; }; shift;;
 	--command|-c)	shift; commands+="${commands:+ $SLOWCOMMAND_COMMAND_JOINER }$1"; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;

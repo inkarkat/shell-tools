@@ -21,7 +21,7 @@ STABILIZED_TIME=2147483647
 
 printShortUsage()
 {
-    printf 'Usage: %q %s\n' "$(basename "$1")" "-d|--dir DIR|-g|--glob 'FILE-GLOB' [-d|--dir DIR]|--source-command SOURCE-COMMAND [-d|--dir DIR] [--accept-existing] [-n|--count N|-1] [--delay NUMBER[SUFFIX]] [--stabilization-time NUMBER[SUFFIX]] [-i|--interval NUMBER[SUFFIX] [-l|--max-files N] [-D|--stop-on-empty-dir] [-S|--stop-on-empty-file [--delete-empty-file]] [-s|--stop-on-filename PATTERN] [-t|--stop-after TIMEOUT[SUFFIX]] --print] [[--bare|[--no-capture-output $(runWithPrompt --get-short-usage 2>/dev/null)] [--prefix-command PC] [--prefix-command-command PCC] [--parallel [--parallel-limit N] [--rate-limit NUMBER[SUFFIX]]] [--delete-on-success|--delete-on-failure|--delete-on NUM|--delete-unless NUM] -c|--command \"COMMANDLINE\" | [--] SIMPLECOMMAND [...]] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "-d|--dir DIR|-g|--glob 'FILE-GLOB' [-d|--dir DIR]|--source-command SOURCE-COMMAND [-d|--dir DIR] [--accept-existing] [-n|--count N|-1] [--delay NUMBER[SUFFIX]] [--stabilization-time TIMESPAN] [-i|--interval NUMBER[SUFFIX] [-l|--max-files N] [-D|--stop-on-empty-dir] [-S|--stop-on-empty-file [--delete-empty-file]] [-s|--stop-on-filename PATTERN] [-t|--stop-after TIMESPAN] --print] [[--bare|[--no-capture-output $(runWithPrompt --get-short-usage 2>/dev/null)] [--prefix-command PC] [--prefix-command-command PCC] [--parallel [--parallel-limit N] [--rate-limit NUMBER[SUFFIX]]] [--delete-on-success|--delete-on-failure|--delete-on NUM|--delete-unless NUM] -c|--command \"COMMANDLINE\" | [--] SIMPLECOMMAND [...]] [-?|-h|--help]"
 }
 printUsage()
 {
@@ -59,6 +59,7 @@ HELPDESCRIPTION
 			the COMMAND.
 HELPTEXT
     runWithPrompt --get-long-usage 2>/dev/null
+    local timespanFormat="$(durationToSeconds --get-short-usage format 2>/dev/null)"
     cat <<HELPTEXT
     --no-capture-output	By default, no status line is printed if the COMMAND did
 			not have any output, and failing parallel invocations
@@ -88,10 +89,10 @@ HELPTEXT
     --delay NUMBER[SUFFIX]
 			Sleep for NUMBER[SUFFIX]] before executing COMMAND (to
 			allow the file to stabilize, for example).
-    --stabilization-time NUMBER[SUFFIX]
-			Wait until NUMBER[SUFFIX] has passed (with a granularity
-			of INTERVAL) after the last modification of the file
-			before recognizing the change.
+    --stabilization-time ${timespanFormat:-TIMESPAN}
+			Wait until TIMESPAN has passed (with a granularity of
+			INTERVAL) after the last modification of the file before
+			recognizing the change.
     --interval|-i INTERVAL[SUFFIX]
 			Wait for INTERVAL seconds between observations of DIR.
 			By default, any change is observed almost immediately.
@@ -108,9 +109,8 @@ HELPTEXT
 			Stop observing if an added filename matches
 			PATTERN. PATTERN is a Bash-style extended regular
 			expression.
-    --stop-after|-t TIMEOUT[SUFFIX]
-			Stop observing if no files have been added for
-			TIMEOUT[SUFFIX].
+    --stop-after|-t ${timespanFormat:-TIMESPAN}
+			Stop observing if no files have been added for TIMEOUT.
     --parallel		Instead of waiting for one COMMAND to finish before
 			executing the next, run each one the moment the change
 			is triggered. The default is sequential invocation.
@@ -136,18 +136,6 @@ SUFFIX may be 's' for seconds (the default), 'm' for minutes, 'h' for hours or
 Example:
 HELPTEXT
     printf '%q %s\n' "$(basename "$1")" "--glob '*.url' -i 5 --accept-existing --delete-on-success --stop-on-empty-file --delete-empty-file -- wget --input-file $fileMarker"
-}
-
-timeToSeconds()
-{
-    case "$1" in
-	+([0-9])?(s))   time="${1%s}";;
-	+([0-9])m)	time=$((${1%m} * 60));;
-	+([0-9])h)	time=$((${1%h} * 3600));;
-	+([0-9])d)	time=$((${1%d} * 86400));;
-	*)		printf >&2 "ERROR: Illegal ${2:-timeout}: %s\\n" "$1"; exit 2;;
-    esac
-    printf %s "$time"
 }
 
 dir=
@@ -216,7 +204,7 @@ do
 	--prefix-command-command)
 				shift; prefixCommandCommand="$1"; shift;;
 	--delay)		shift; delay="$1"; shift;;
-	--stabilization-time)	shift; stabilizationTime="$(timeToSeconds "$1" number)" || exit $?; shift
+	--stabilization-time)	shift; stabilizationTime=$(durationToSeconds -- "${1:?}") || { printf >&2 'ERROR: Illegal TIMESPAN: %s\n' "$1"; exit 2; }; shift
 				SECONDS=$(date +%s) # Need to sync up only once; Bash will keep the epoch updated from then on.
 				;;
 	--interval|-i)		shift; interval="$1"; shift;;
@@ -224,7 +212,7 @@ do
 	--stop-on-empty-dir|-D)	shift; isStopOnEmptyDir=t;;
 	--stop-on-empty-file|-S)
 				shift; isStopOnEmptyFile=t;;
-	--stop-after|-t)	shift; stopAfter="$(timeToSeconds "$1")" || exit $?; shift;;
+	--stop-after|-t)	shift; stopAfter=$(durationToSeconds -- "${1:?}") || { printf >&2 'ERROR: Illegal TIMESPAN: %s\n' "$1"; exit 2; }; shift;;
 	--delete-empty-file)	shift; isDeleteEmptyFile=t;;
 	--stop-on-filename|-s)	shift; stopFilenamePattern="$1"; shift;;
 	--parallel-limit)	shift; parallelLimit="$1"; shift;;
