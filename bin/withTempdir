@@ -9,7 +9,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[-p|--tmpdir DIRSPEC] [-n|--name NAME] [--move|-m|--move-on-success|-M|--move-on-failure|--rename|-r|--rename-on-success|-R|--rename-on-failure] [--keep|-k|--keep-on-success|-K|--keep-on-failure] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...]${dirMarker:+ [}${dirMarker}${dirMarker:+] [...]} ${WITHTEMPDIR_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]${dirMarker:+ [}${dirMarker}${dirMarker:+] [...]} [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[-p|--tmpdir DIRSPEC] [-b|--basename BASE] [--move|-m|--move-on-success|-M|--move-on-failure|--rename|-r|--rename-on-success|-R|--rename-on-failure] [--keep|-k|--keep-on-success|-K|--keep-on-failure] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...]${dirMarker:+ [}${dirMarker}${dirMarker:+] [...]} ${WITHTEMPDIR_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]${dirMarker:+ [}${dirMarker}${dirMarker:+] [...]} [-?|-h|--help]"
     echo
     printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" "[...] [--bare|$(runWithPrompt --get-short-usage 2>/dev/null)]"
     echo
@@ -36,7 +36,7 @@ HELPDESCRIPTION
     cat <<HELPTEXT
     --tmpdir|-p DIRSPEC	Create the tempdir inside DIRSPEC instead of the
 			default temp directory.
-    --name|-n NAME	Use NAME as the tempdir prefix.
+    --basename|-b BASE	Use BASE as the prefix of the temp dir name.
     --move DIRSPEC	Move the tempdir after COMMAND(s) have executed.
     --move-on-success|-m DIRSPEC
 			Move the tempdir to DIRSPEC if COMMAND(s) succeed.
