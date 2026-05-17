@@ -65,6 +65,16 @@ HELPDESCRIPTION
     --exec CMD [...] ${TEMPFILE_EXEC_END}	The command whose output is captured; all following
 			arguments are taken to be arguments to the CMD until an
 			argument consisting of '${TEMPFILE_EXEC_END}' is encountered.
+SEE ALSO:
+- withTempfile just creates a temp file, passes its name to a command, and can
+  move/rename/keep it, but does not capture any output into it. Use it when you
+  want to create an empty temp file or when the command itself is responsible
+  for writing into the temp file.
+
+EXIT STATUS:
+    0	Complete success.
+    2	Bad invocation, wrong or missing command-line arguments.
+    *	Any exit status from SINK-COMMAND(s).
 HELPTEXT
 }
 
@@ -83,8 +93,8 @@ do
 	--quiet|-q)	shift; isQuiet=t;;
 	--verbose|-v)	shift; isVerbose=t;;
 	--directory|-d)	shift; subdir="${1:?}"; shift;;
-	--basename|-b)	shift; basename="$1"; shift;;
-	--extension|-e)	shift; extension="$1"; shift;;
+	--basename|-b)	shift; basename="${1:?}"; shift;;
+	--extension|-e)	shift; extension="${1?}"; shift;;
 	--no-delete|-D)	shift; isNoDelete=t;;
 	--sink-command|-s)
 			shift; sinkCommands+="${sinkCommands:+ $TEMPFILE_SINKCOMMAND_JOINER }$1"; shift;;

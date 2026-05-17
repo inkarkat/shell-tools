@@ -70,6 +70,11 @@ HELPTEXT
     runWithPrompt --get-long-usage 2>/dev/null
     cat <<HELPTEXT
 
+SEE ALSO:
+- tempfile initializes the temp file with input / output from a passed command;
+  the consuming (sink-)command is optional there, whereas it's the main
+  motivation for this command.
+
 EXIT STATUS:
     0	Complete success.
     *   any exit status from COMMAND(s)
