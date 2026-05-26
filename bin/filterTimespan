@@ -1,6 +1,8 @@
 #!/bin/bash
 shopt -qs extglob
 
+export DURATIONTOSECONDS_ACCEPT_SIGN=t
+
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
@@ -16,7 +18,7 @@ printUsage()
 }
 printLongUsage()
 {
-    local timespanFormat="$(DURATIONTOSECONDS_ACCEPT_SIGN=t durationToSeconds --get-short-usage format 2>/dev/null)"
+    local timespanFormat="$(durationToSeconds --get-short-usage format 2>/dev/null)"
     # This is the long "man page" when launched with the help argument.
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
@@ -54,10 +56,10 @@ do
 			shift; IFS="$1"; shift;;
 	--keep-timespan|-k)
 			shift; isKeepTimespan=t;;
-	--shorter)	shift; age=$(DURATIONTOSECONDS_ACCEPT_SIGN=t durationToSeconds -- "${1:?}") || { printf >&2 'ERROR: Illegal TIMESPAN: %s\n' "$1"; exit 2; }; shift; compareOp=-lt;;
-	--longer)	shift; age=$(DURATIONTOSECONDS_ACCEPT_SIGN=t durationToSeconds -- "${1:?}") || { printf >&2 'ERROR: Illegal TIMESPAN: %s\n' "$1"; exit 2; }; shift; compareOp=-gt;;
+	--shorter)	shift; age=$(durationToSeconds -- "${1:?}") || { printf >&2 'ERROR: Illegal TIMESPAN: %s\n' "$1"; exit 2; }; shift; compareOp=-lt;;
+	--longer)	shift; age=$(durationToSeconds -- "${1:?}") || { printf >&2 'ERROR: Illegal TIMESPAN: %s\n' "$1"; exit 2; }; shift; compareOp=-gt;;
 	-lt|-le|-eq|-ne|-ge|-gt)
-			compareOp="$1"; shift; age=$(DURATIONTOSECONDS_ACCEPT_SIGN=t durationToSeconds -- "${1:?}") || { printf >&2 'ERROR: Illegal TIMESPAN: %s\n' "$1"; exit 2; }; shift;;
+			compareOp="$1"; shift; age=$(durationToSeconds -- "${1:?}") || { printf >&2 'ERROR: Illegal TIMESPAN: %s\n' "$1"; exit 2; }; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
