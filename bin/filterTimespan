@@ -3,11 +3,36 @@ shopt -qs extglob
 
 export DURATIONTOSECONDS_ACCEPT_SIGN=t
 
+readonly compareArgs='--shorter|--longer|-lt|-le|-eq|-ne|-ge|-gt [+-]TIMESPAN'
+getShortUsage()
+{
+    case "$1" in
+	compare)
+	    printf %s "$compareArgs";;
+	*)  echo "ERROR: Unknown short usage topic \"$1\"!" >&2; return 2;;
+    esac
+}
+getLongUsage()
+{
+    local topic="$1"; shift
+    local description="$1"; shift
+    local timespanFormat="$(durationToSeconds --get-short-usage format 2>/dev/null)"
+    case "$topic" in
+	compare)
+	    cat <<HELPTEXT
+    --shorter|--longer|-lt|-le|-eq|-ne|-ge|-gt ${timespanFormat:-TIMESPAN}
+			${description:-Compare the timespan in the first column with TIMESPAN
+			(purely mathematically).}
+HELPTEXT
+	    ;;
+	*)  echo "ERROR: Unknown long usage topic \"$1\"!" >&2; return 2;;
+    esac
+}
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-k|--keep-timespan] --shorter|--longer|-lt|-le|-eq|-ne|-ge|-gt [+-]TIMESPAN'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-k|--keep-timespan] $compareArgs"
 }
 printUsage()
 {
@@ -18,7 +43,6 @@ printUsage()
 }
 printLongUsage()
 {
-    local timespanFormat="$(durationToSeconds --get-short-usage format 2>/dev/null)"
     # This is the long "man page" when launched with the help argument.
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
@@ -35,9 +59,9 @@ HELPDESCRIPTION
 			regular expression.
     --keep-timespan|-k	Keep the timespan column. By default, the column is
 			dropped.
-    --shorter|--longer|-lt|-le|-eq|-ne|-ge|-gt ${timespanFormat:-TIMESPAN}
-			Compare the timespan in the first column with TIMESPAN
-			(purely mathematically).
+HELPTEXT
+    getLongUsage compare
+    cat <<HELPTEXT
 EXIT STATUS:
     0	At least one timespan passed the comparison.
     1	No timespan passed the comparison.
@@ -52,6 +76,11 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--get-short-usage)
+			shift; getShortUsage "$@"; exit $?;;
+	--get-long-usage)
+			shift; getLongUsage "$@"; exit $?;;
+
 	--field-separator|-F)
 			shift; IFS="$1"; shift;;
 	--keep-timespan|-k)
