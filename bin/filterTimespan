@@ -72,6 +72,11 @@ HELPTEXT
 
 isKeepTimespan=
 compareOp=
+option() { :; }
+parameter() { :; }
+endOfOptionsAndParameters() { :; }
+noUnderstand() { :; }
+typeset -A understandsSubtopics=()
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -80,18 +85,26 @@ do
 			shift; getShortUsage "$@"; exit $?;;
 	--get-long-usage)
 			shift; getLongUsage "$@"; exit $?;;
+	--understand-for)
+			shift; understandsSubtopics["${1:?}"]=t; shift;;
+	--understands)	shift
+			option() { [ $# -eq 0 -a ${#understandsSubtopics[@]} -gt 0 -a ! "${understandsSubtopics["${1:-}"]}" ] && exit 1; printf 1; exit 0; }
+			parameter() { [ $# -eq 0 -a ${#understandsSubtopics[@]} -gt 0 -a ! "${understandsSubtopics["${1:-}"]}" ] && exit 1; printf 2; exit 0; }
+			endOfOptionsAndParameters() { exit 99; }
+			noUnderstand() { exit 1; }
+			;;
 
 	--field-separator|-F)
-			shift; IFS="$1"; shift;;
+			shift; IFS="$1"; shift; parameter;;
 	--keep-timespan|-k)
-			shift; isKeepTimespan=t;;
-	--shorter)	shift; age=$(durationToSeconds -- "${1:?}") || { printf >&2 'ERROR: Illegal TIMESPAN: %s\n' "$1"; exit 2; }; shift; compareOp=-lt;;
-	--longer)	shift; age=$(durationToSeconds -- "${1:?}") || { printf >&2 'ERROR: Illegal TIMESPAN: %s\n' "$1"; exit 2; }; shift; compareOp=-gt;;
+			shift; isKeepTimespan=t; option;;
+	--shorter)	shift; age=$(durationToSeconds -- "${1:?}") || { printf >&2 'ERROR: Illegal TIMESPAN: %s\n' "$1"; exit 2; }; shift; compareOp=-lt; parameter compare;;
+	--longer)	shift; age=$(durationToSeconds -- "${1:?}") || { printf >&2 'ERROR: Illegal TIMESPAN: %s\n' "$1"; exit 2; }; shift; compareOp=-gt; parameter compare;;
 	-lt|-le|-eq|-ne|-ge|-gt)
-			compareOp="$1"; shift; age=$(durationToSeconds -- "${1:?}") || { printf >&2 'ERROR: Illegal TIMESPAN: %s\n' "$1"; exit 2; }; shift;;
-	--)		shift; break;;
-	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
-	*)		break;;
+			compareOp="$1"; shift; age=$(durationToSeconds -- "${1:?}") || { printf >&2 'ERROR: Illegal TIMESPAN: %s\n' "$1"; exit 2; }; shift; parameter compare;;
+	--)		endOfOptionsAndParameters; shift; break;;
+	-*)		noUnderstand; { echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		endOfOptionsAndParameters; break;;
     esac
 done
 if [ $# -ne 0 -o -z "$compareOp" ]; then
