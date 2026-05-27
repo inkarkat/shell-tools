@@ -88,7 +88,7 @@ addDebug()
 addDebugCommand()
 {
     local cmd="${1:?}"; shift
-    commandName="$(commandName --no-interpreter --eval "$cmd")"
+    commandName="$(COMMANDNAME_WRAPPERS='' commandName --no-interpreter --eval "$cmd")"
     if [ -z "$commandName" ]; then
 	printf >&2 'ERROR: Could not determine command name for %s\n' "$cmd"
 	return 1
