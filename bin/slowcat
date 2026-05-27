@@ -90,11 +90,7 @@ if [ -n "$total" ]; then
     fi >&2
 
     requiredSteps=$(cat -- "$@" | wc $totaller) || exit $?
-    delay=$((total / requiredSteps))
-    if [ $delay -eq 0 ]; then
-	delay=000$((1000 * total / requiredSteps))
-	delay=.${delay: -3}
-    fi
+    delay=$(bc <<<"scale=10; $total / $requiredSteps") || exit 3
     eval "$totalTargetDelay=$delay"
 fi
 [ -n "$charDelay" -a -z "$consumer" ] && consumer=lineReader
