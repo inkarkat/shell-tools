@@ -167,6 +167,7 @@ lineDelay()
 	    adjustLineDelay
 	done
     done
+    return 0
 }
 
 charDelay()
