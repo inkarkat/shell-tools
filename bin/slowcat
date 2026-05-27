@@ -1,14 +1,15 @@
 #!/bin/bash
 set -o pipefail
-shopt -qs extglob
+
+export DURATIONWITHADJUSTMENTTOSECONDS_ACCEPT_FRACTIONAL=t DURATIONTOSECONDS_ACCEPT_FRACTIONAL=t
 
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" '[-i|--initial NUMBER[SUFFIX]] [-l|--line NUMBER[SUFFIX]|TIMESPAN[SUFFIX][ADJUSTMENT]] [-c|--char NUMBER[SUFFIX]|TIMESPAN[SUFFIX][ADJUSTMENT]] FILE [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[-i|--initial TIMESPAN] [-l|--line TIMESPAN[ADJUSTMENT]] [-c|--char TIMESPAN[ADJUSTMENT]] FILE [...] [-?|-h|--help]"
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" '[-i|--initial NUMBER[SUFFIX]] [-L|--line-total|-C|--char-total TIMESPAN[SUFFIX]] FILE [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[-i|--initial TIMESPAN] [-L|--line-total|-C|--char-total TIMESPAN] FILE [...] [-?|-h|--help]"
     echo
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[...]'
 }
@@ -28,98 +29,24 @@ Print file contents on standard output with delay(s).
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
+    echo
+    local -r timespanFormat="$(durationToSeconds --get-short-usage format 2>/dev/null || echo TIMESPAN)"
     cat <<HELPTEXT
-    --initial|-i NUMBER[SUFFIX]	Delay before doing any output at all.
-    --line|-l NUMBER[SUFFIX]|TIMESPAN[SUFFIX][ADJUSTMENT]
-				Delay after each complete line (line); this also
-				considers inner carriage returns.
-    --char|-c NUMBER[SUFFIX]|TIMESPAN[SUFFIX][ADJUSTMENT]
-				Delay after each individual character (char)
-				other than newlines.
-    --line-total|-L TIMESPAN[SUFFIX]
-				Delay individual lines so that the total output
-				time of all FILE(s) is about TIMESPAN.
-    --char-total|-C TIMESPAN[SUFFIX]
-				Delay individual characters so that the total
-				output time of all FILE(s) is about TIMESPAN.
-    NUMBER may be an arbitrary floating-point number, TIMESPAN must be an
-    integer. SUFFIX may be 's' for seconds (the default), 'm' for minutes, 'h'
-    for hours or 'd' for days.
-    ADJUSTMENT can change the original value after every iteration. It starts
-    with either + or -, followed by another TIMESPAN, optionally followed by
-    either SUFFIX or %. For example, 10m+30s starts with 10 minutes and then
-    increases that by 30 seconds on every iteration. 10-5% starts with 10
-    seconds and then continually decreases that by 5 percent.
+    --initial|-i $timespanFormat
+			Delay before doing any output at all.
 HELPTEXT
-}
-
-timeToSeconds()
-{
-    case "$1" in
-	*([0-9]).+([0-9]))
-			if [ -n "$adjustment" ]; then
-			    echo >&2 "ERROR: Cannot combine floating point ${2:-timespan} with adjustment."
-			    exit 2
-			fi
-			time="$1"
-			;;
-	+([0-9])?(s))   time="${1%s}";;
-	+([0-9])m)	time=$((${1%m} * 60));;
-	+([0-9])h)	time=$((${1%h} * 3600));;
-	+([0-9])d)	time=$((${1%d} * 86400));;
-	*)		printf >&2 "ERROR: Illegal ${2:-timespan}: %s\\n" "$1"; exit 2;;
-    esac
-    printf %s "$time"
-}
-timeWithAdjustmentToSeconds()
-{
-    local adjustment="${1##+([0-9.])?([smhd])}"
-    local time="${1:0:$((${#1} - ${#adjustment}))}"
-    if [ -z "$time" ]; then
-	printf >&2 "ERROR: Empty ${2:-timespan}: %s\\n" "$time"; exit 2;
-    fi
-    case "$adjustment" in
-	'')		    ;;
-	[+-]+([0-9])?(%))   ;;
-	++([0-9])[smhd])    adjustment="+$(timeToSeconds "${adjustment#+}" adjustment)" || return $?;;
-	-+([0-9])[smhd])    adjustment="-$(timeToSeconds "${adjustment#-}" adjustment)" || return $?;;
-	*)		    printf >&2 'ERROR: Illegal adjustment: %s\n' "$adjustment"; exit 2;;
-    esac
-    time="$(timeToSeconds "$time" "$2")" || exit $?
-    printf '%s\t%s\n' "$time" "$adjustment"
-}
-adjust()
-{
-    local var="${1?}"; shift
-    local adjustment="$1"; shift
-    eval "local value=\$$var"
-    local newValue
-    case "$adjustment" in
-	'')	    return;;
-	[+-]0?(%))  return;;
-	++([0-9]))  newValue="$((value + ${adjustment#+}))";;
-	-+([0-9]))  newValue="$((value - ${adjustment#-}))";;
-	[+-]+([0-9])%)
-		    # As Bash doesn't support floating point math yet, multiply
-		    # with 100, add the percentage change, and divide back and
-		    # round.
-		    # To avoid that the rounding truncates small changes and
-		    # therefore never lets the real value change, store the cent
-		    # value in a global variable, and re-use that instead.
-		    eval "local centValue=\$${var}CentValue"
-		    [ "$centValue" ] || centValue=$((value * 100))
-
-		    local change=$((${adjustment:1:-1} * value))
-		    [ "${adjustment:0:1}" = '+' ] && let centValue+=$change || let centValue-=$change
-		    newValue=$(((centValue + 50) / 100))
-
-		    eval "${var}CentValue=\$centValue"
-		    ;;
-	*)	    printf >&2 'ASSERT: Invalid adjustment: %s\n' "$adjustment"; exit 3;;
-    esac
-
-    [ $newValue -lt 0 ] && newValue=0
-    eval "$var=\$newValue"
+	durationWithAdjustmentToSeconds --get-long-usage '--line|-l' 'Delay after each complete line (line); this also
+			considers inner carriage returns.'
+	durationWithAdjustmentToSeconds --get-long-usage '--char|-c' 'Delay after each individual character (char) other
+			than newlines.'
+    cat <<HELPTEXT
+    --line-total|-L $timespanFormat
+			Delay individual lines so that the total output time of
+			all FILE(s) is about TIMESPAN.
+    --char-total|-C $timespanFormat
+			Delay individual characters so that the total output
+			time of all FILE(s) is about TIMESPAN.
+HELPTEXT
 }
 
 initialDelay=
@@ -136,13 +63,14 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
-	--initial|-i)	shift; initialDelay="$1"; shift;;
-	--line|-l)	shift; < <(timeWithAdjustmentToSeconds "$1") IFS=$'\t' read -r lineDelay lineDelayAdjustment || exit 2; shift; consumer=lineDelay;;
-	--char|-c)	shift; < <(timeWithAdjustmentToSeconds "$1") IFS=$'\t' read -r charDelay charDelayAdjustment || exit 2; shift; linePrinter=charDelay;;
+	--initial|-i)	shift; initialDelay=$(durationToSeconds -- "${1:?}") || { printf >&2 'ERROR: Illegal TIMESPAN: %s\n' "$1"; exit 2; }; shift;;
+
+	--line|-l)	shift; < <(durationWithAdjustmentToSeconds --no-adjustment "${1:?}") IFS=$'\t' read -r lineDelay lineDelayAdjustment || exit 2; shift; consumer=lineDelay;;
+	--char|-c)	shift; < <(durationWithAdjustmentToSeconds --no-adjustment "${1:?}") IFS=$'\t' read -r charDelay charDelayAdjustment || exit 2; shift; linePrinter=charDelay;;
 	--line-total|-L)
-			shift; total="$(timeToSeconds "$1")" || exit $?; shift; totaller=-l; totalTargetDelay=lineDelay; consumer=lineDelay;;
+			shift; total=$(DURATIONTOSECONDS_ACCEPT_FRACTIONAL=t durationToSeconds -- "${1:?}") || { printf >&2 'ERROR: Illegal TIMESPAN: %s\n' "$1"; exit 2; }; shift; totaller=-l; totalTargetDelay=lineDelay; consumer=lineDelay;;
 	--char-total|-C)
-			shift; total="$(timeToSeconds "$1")" || exit $?; shift; totaller=-c; totalTargetDelay=charDelay; linePrinter=charDelay;;
+			shift; total=$(DURATIONTOSECONDS_ACCEPT_FRACTIONAL=t durationToSeconds -- "${1:?}") || { printf >&2 'ERROR: Illegal TIMESPAN: %s\n' "$1"; exit 2; }; shift; totaller=-c; totalTargetDelay=charDelay; linePrinter=charDelay;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
@@ -171,6 +99,33 @@ if [ -n "$total" ]; then
 fi
 [ -n "$charDelay" -a -z "$consumer" ] && consumer=lineReader
 
+
+typeset -a ADJUSTER=()
+adjustInto()
+{
+    local -n resultRef="${1:?}"; shift
+    local input="${1:?}"; shift
+
+    [ ${#ADJUSTER[@]} -gt 0 ] \
+	|| coproc ADJUSTER { durationWithAdjustmentToSeconds; } # Start a coproc to adjust individual timespans and manage expiration; this is much more efficient than starting a new process for each timespan.
+
+    printf '%s\n' "$input" >&"${ADJUSTER[1]}"
+    IFS=$'\n' read -r -u "${ADJUSTER[0]}" resultRef \
+    || { printf >&2 'ASSERT: Adjustment succeeds: %s\n' "$input"; exit 3; }
+    case ",${DEBUG:-}," in *,slowcat:adjuster,*) printf >&2 '%sslowcat (adjuster): %s -> %s\n' "$PS5" "$input" "$resultRef";; esac
+}
+adjustLineDelay()
+{
+    [ -n "$lineDelayAdjustment" ] || return 1
+    adjustInto lineDelay "${lineDelay}${lineDelayAdjustment}"
+    [ "$lineDelay" != 0 ] || lineDelayAdjustment=''    # Optimization: Once the timespan has been reduced to zero, it's not gonna increase again, so we can stop adjusting.
+}
+adjustCharDelay()
+{
+    [ -n "$charDelayAdjustment" ] || return 1
+    adjustInto charDelay "${charDelay}${charDelayAdjustment}"
+    [ "$charDelay" != 0 ] || charDelayAdjustment=''    # Optimization: Once the timespan has been reduced to zero, it's not gonna increase again, so we can stop adjusting.
+}
 
 
 lineReader()
@@ -213,7 +168,7 @@ lineDelay()
 	    fi
 
 	    sleep "$lineDelay"
-	    adjust lineDelay "$lineDelayAdjustment"
+	    adjustLineDelay
 	done
     done
 }
@@ -227,10 +182,14 @@ charDelay()
 	printf %s "${line:i:1}"
 
 	sleep "$charDelay"
-	adjust charDelay "$charDelayAdjustment"
+	adjustCharDelay
     done
 }
 
 
-[ "$initialDelay" ] && sleep "$initialDelay"
-eval cat -- '"$@"' "${consumer:+|} $consumer"
+[ -z "$initialDelay" ] || sleep "$initialDelay"
+eval cat -- '"$@"' \
+    "${consumer:+|} $consumer"; status=$?
+
+[ ${#ADJUSTER[@]} -eq 0 ] || exec {ADJUSTER[1]}>&- {ADJUSTER[0]}<&-; ADJUSTER=()
+    exit $status
