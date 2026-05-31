@@ -3,7 +3,7 @@
 load fixture
 
 @test "csplit dashdash delimited file" {
-    run -0 eachCsplit --suppress-matched '/^--$/' '{*}' --input "${BATS_TEST_DIRNAME}/inputs/dashdash-delimited.txt" -- "${SECTION_PREFIXER_COMMAND[@]}"
+    run -0 eachCsplit --suppress-matched '/^--$/' '{*}' --file "${BATS_TEST_DIRNAME}/inputs/dashdash-delimited.txt" -- "${SECTION_PREFIXER_COMMAND[@]}"
     assert_output - <<'EOF'
 28
 45

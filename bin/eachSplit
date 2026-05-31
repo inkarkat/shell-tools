@@ -21,7 +21,7 @@ printShortUsage()
     # skim the long one.
     printf 'Usage: %q %s\n' "$(basename "$1")" "[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}] [SPLIT-OPTIONS ...]${hasProgressNotification:+ [--progress SINK]} [--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] --section-info-extractor CMD [...]${extractorMarker:+ [}${extractorMarker}${extractorMarker:+] [...]} ${EACHSPLIT_EXTRACTOR_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...]${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--exec ...] | -- SIMPLECOMMAND [...] [-?|-h|--help] ..."
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '...'
-    printf 'Usage: %q %s\n' "$(basename "$1")" '-i|--input FILE ...'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-f|--file FILE ...'
 }
 printUsage()
 {
@@ -68,7 +68,7 @@ HELPTEXT
 			be arguments to the CMD until an argument consisting of
 			'${EACHSPLIT_EXTRACTOR_END}' is encountered. FILEs ${fileMarker:+either }are appended${extractorMarker:+ or replace
 			any $extractorMarker marker} inside COMMANDLINE.
-    --input|-i FILE	Split sections from FILE instead of standard input.
+    --file|-f FILE	Split sections from FILE instead of standard input.
     --command|-c CMD	Execute CMD as a command-line. FILEs ${fileMarker:+either }are appended
 			${fileMarker:+or replace any $fileMarker marker }inside COMMANDLINE.
     --exec CMD [...] ${EACHSPLIT_EXEC_END}	Execute CMD; all following arguments are taken to be
@@ -89,7 +89,7 @@ progressSink=
 with=
 errorRedir='2>&1'
 typeset -a colorArg=()
-inputFilespec=-
+filespec=-
 additionalSuccessStatus=
 commands=
 typeset -a splitCommand=(split OPTIONS ARGS FILE PREFIX)
@@ -116,7 +116,9 @@ do
 			    exit 2
 			fi >&2
 			;;
-	--input|-i)	shift; inputFilespec="${1:?}"; shift;;
+	--file|-f)	shift; filespec="${1:?}"; shift;;
+	--file=*)	filespec="${1#--file=}"; shift;;
+	-f*)		filespec="${1#-f}"; shift;;
 	--progress)	shift; progressSink="$1"; shift;;
 	--with-header)	shift; with=header;;
 	--separate-errors)
@@ -208,7 +210,7 @@ do
     esac
 done
 splitCommand=("${tempArray[@]}")
-splitCommand=("${splitCommand[@]//FILE/"$inputFilespec"}")
+splitCommand=("${splitCommand[@]//FILE/"$filespec"}")
 splitCommand=("${splitCommand[@]//PREFIX/"${tempDirspec}/${EACHSPLIT_FILE_PREFIX}"}")
 
 "${splitCommand[@]}" || exit $?

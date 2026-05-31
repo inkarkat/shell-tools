@@ -3,7 +3,7 @@
 load fixture
 
 @test "split two-liners and prefix" {
-    run -0 eachSplit --lines=2 --input "${BATS_TEST_DIRNAME}/inputs/two-liners.txt" -- "${SECTION_PREFIXER_COMMAND[@]}"
+    run -0 eachSplit --lines=2 --file "${BATS_TEST_DIRNAME}/inputs/two-liners.txt" -- "${SECTION_PREFIXER_COMMAND[@]}"
     assert_output - <<'EOF'
 aa: The opener
 aa: Is a simple one.
@@ -17,7 +17,7 @@ EOF
 }
 
 @test "split two-liners and count characters" {
-    run -0 eachSplit --lines=2 --input "${BATS_TEST_DIRNAME}/inputs/two-liners.txt" --command 'cat {} | wc --chars'
+    run -0 eachSplit --lines=2 --file "${BATS_TEST_DIRNAME}/inputs/two-liners.txt" --command 'cat {} | wc --chars'
     assert_output - <<'EOF'
 28
 27
@@ -27,6 +27,6 @@ EOF
 }
 
 @test "split two-liners and exit with character count, giving the highest count" {
-    run -35 eachSplit --lines=2 --input "${BATS_TEST_DIRNAME}/inputs/two-liners.txt" --command '(exit $(cat {} | wc --chars)) #'
+    run -35 eachSplit --lines=2 --file "${BATS_TEST_DIRNAME}/inputs/two-liners.txt" --command '(exit $(cat {} | wc --chars)) #'
     assert_output ''
 }
