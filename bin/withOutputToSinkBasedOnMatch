@@ -10,7 +10,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "-m|--match-command PATTERN SINK-COMMANDLINE | -M|--match-exec PATTERN SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END -v|--no-match-command PATTERN SINK-COMMANDLINE | -V|--no-match-exec PATTERN SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END [...] [-t|--tee] [-1|--stdout|-2|--stderr] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "-m|--match-command PATTERN SINK-COMMANDLINE | -M|--match-exec PATTERN SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END -v|--no-match-command PATTERN SINK-COMMANDLINE | -V|--no-match-exec PATTERN SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END [...] | -d|--default-command SINK-COMMANDLINE | -D|--default-exec SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END [-t|--tee] [-1|--stdout|-2|--stderr] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
     echo
     printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" "[...] [--bare|$(runWithPrompt --get-short-usage 2>/dev/null)]"
     echo
@@ -62,6 +62,18 @@ HELPDESCRIPTION
 			steps.
 			PATTERN is a grep-style unanchored basic regular
 			expression.
+    --default-command|-d SINK-COMMANDLINE
+			Execute SINK-COMMAND with the output piped into it if
+			no other SINK-COMMAND [did not] match the output.
+			Multiple SINK-COMMANDs are joined with | as pipeline
+			steps.
+    --default-exec|-D SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END
+			Execute SINK-COMMAND with the output piped into it if no
+			other SINK-COMMAND [did not] match the output; all
+			following arguments are taken to be arguments to the
+			SINK-COMMAND until an argument consisting of '${WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END}' is
+			encountered. Multiple SINK-COMMANDs are joined with | as
+			pipeline steps.
     --tee|-t		Also print the output in addition to piping it.
     --stdout|-1		Only pipe output to standard output; error output is
 			output normally.
@@ -96,6 +108,7 @@ teeSuffix=
 isBare=
 typeset -A matchSinkCommands=()
 typeset -A nonMatchSinkCommands=()
+defaultSinkCommands=
 commands=
 typeset -a bashArgs=()
 runWithCommand=runWithPrompt
@@ -115,6 +128,9 @@ do
 			shift
 			pattern="$1"; shift
 			nonMatchSinkCommands["$pattern"]+="${nonMatchSinkCommands["$pattern"]:+ $WITHOUTPUTTOSINKBASEDONMATCH_SINKCOMMAND_JOINER }$1"; shift;;
+	--default-command|-d)
+			shift
+			defaultSinkCommands+="${defaultSinkCommands:+ $WITHOUTPUTTOSINKBASEDONMATCH_SINKCOMMAND_JOINER }$1"; shift;;
 	--match-exec|-M)
 			shift
 			pattern="$1"; shift
@@ -148,6 +164,22 @@ do
 			fi >&2
 			shift
 			nonMatchSinkCommands["$pattern"]+="${nonMatchSinkCommands["$pattern"]:+ $WITHOUTPUTTOSINKBASEDONMATCH_SINKCOMMAND_JOINER }$cmd"
+			;;
+	--default-exec|-D)
+			shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != "$WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END" ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd="${cmd}${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: -D|--default-exec command must be concluded with '${WITHOUTPUTTOSINKBASEDONMATCH_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			defaultSinkCommands+="${defaultSinkCommands:+ $WITHOUTPUTTOSINKBASEDONMATCH_SINKCOMMAND_JOINER }$cmd"
 			;;
 	--command|-c)	shift; commands+="${commands:+ $WITHOUTPUTTOSINKBASEDONMATCH_COMMAND_JOINER }$1"; shift;;
 	--exec)		shift
@@ -224,14 +256,22 @@ typeset -a states=("${PIPESTATUS[@]}")
 [ ${states[1]:-0} -eq 0 ] || exit 3 # Bail on tee failure.
 status=${states[0]}
 
+hasMatch=
 for pattern in "${!matchSinkCommands[@]}"
 do
-    grep --quiet -e "$pattern" -- "$TMPFILE" \
-	&& sinkExecute "${matchSinkCommands["$pattern"]}"
+    if grep --quiet -e "$pattern" -- "$TMPFILE"; then
+	hasMatch=t
+	sinkExecute "${matchSinkCommands["$pattern"]}"
+    fi
 done
 for pattern in "${!nonMatchSinkCommands[@]}"
 do
-    grep --quiet -e "$pattern" -- "$TMPFILE" \
-	|| sinkExecute "${nonMatchSinkCommands["$pattern"]}"
+    if ! grep --quiet -e "$pattern" -- "$TMPFILE"; then
+	hasMatch=t
+	sinkExecute "${nonMatchSinkCommands["$pattern"]}"
+    fi
 done
+if [ ! "$hasMatch" ] && [ -n "$defaultSinkCommands" ]; then
+    sinkExecute "$defaultSinkCommands"
+fi
 exit $status

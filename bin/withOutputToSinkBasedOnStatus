@@ -10,7 +10,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "--success-command SINK-COMMANDLINE | --success-exec SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END | --fail-command SINK-COMMANDLINE | --fail-exec SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END | -s|--status-command STATUS|-S|[!]S|S+|S-T|S%T SINK-COMMANDLINE | -S|--status-exec STATUS|-S|[!]S|S+|S-T|S%T SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END [...] [-t|--tee] [-1|--stdout|-2|--stderr] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "--success-command SINK-COMMANDLINE | --success-exec SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END | --fail-command SINK-COMMANDLINE | --fail-exec SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END | -s|--status-command STATUS|-S|[!]S|S+|S-T|S%T SINK-COMMANDLINE | -S|--status-exec STATUS|-S|[!]S|S+|S-T|S%T SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END [...] | --default-command SINK-COMMANDLINE | --default-exec SIMPLE-SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END [-t|--tee] [-1|--stdout|-2|--stderr] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
     echo
     printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" "[...] [--bare|$(runWithPrompt --get-short-usage 2>/dev/null)]"
     echo
@@ -70,6 +70,19 @@ HELPDESCRIPTION
 			taken to be arguments to the SINK-COMMAND until an
 			argument consisting of '${WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END}' is encountered. Multiple
 			SINK-COMMANDs are joined with | as pipeline steps.
+    --default-command SINK-COMMAND
+			Execute SINK-COMMAND with the output piped into it if
+			no other --success-command, --fail-command, or
+			--status-command has been applied.
+			Multiple SINK-COMMANDs are joined with | as pipeline
+			steps.
+    --default-exec SINK-COMMAND [...] $WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END
+			Execute SINK-COMMAND with the output piped into it if
+			no other --success-exec, --fail-exec, or --status-exec
+			has been applied; all following arguments are taken to
+			be arguments to the SINK-COMMAND until an argument
+			consisting of '${WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END}' is encountered. Multiple SINK-COMMANDs
+			are joined with | as pipeline steps.
     --tee|-t		Also print the output in addition to piping it.
     --stdout|-1		Only pipe output to standard output; error output is
 			output normally.
@@ -127,6 +140,8 @@ do
 			status="$1"; shift
 			sinkRanges+=("$status")
 			statusSinkCommands["$status"]+="${statusSinkCommands["$status"]:+ $WITHOUTPUTTOSINKBASEDONSTATUS_SINKCOMMAND_JOINER }$1"; shift;;
+	--default-command) shift
+			statusSinkCommands['default']+="${statusSinkCommands['default']:+ $WITHOUTPUTTOSINKBASEDONSTATUS_SINKCOMMAND_JOINER }$1"; shift;;
 	--success-exec) shift
 			cmd=
 			while [ $# -gt 0 -a "$1" != "$WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END" ]
@@ -176,6 +191,21 @@ do
 			shift
 			sinkRanges+=("$status")
 			statusSinkCommands["$status"]+="${statusSinkCommands["$status"]:+ $WITHOUTPUTTOSINKBASEDONSTATUS_SINKCOMMAND_JOINER }$cmd"
+			;;
+	--default-exec)	shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != "$WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END" ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd="${cmd}${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --default-exec command must be concluded with '${WITHOUTPUTTOSINKBASEDONSTATUS_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			statusSinkCommands['default']+="${statusSinkCommands['default']:+ $WITHOUTPUTTOSINKBASEDONSTATUS_SINKCOMMAND_JOINER }$cmd"
 			;;
 	--command|-c)	shift; commands+="${commands:+ $WITHOUTPUTTOSINKBASEDONSTATUS_COMMAND_JOINER }$1"; shift;;
 	--exec)		shift
@@ -273,4 +303,7 @@ do
 			    ;;
     esac
 done
+
+[ -z "${statusSinkCommands[default]}" ] \
+    || range=default sinkExecute
 exit 99
