@@ -139,7 +139,7 @@ execute()
 	if [ "$isBare" ] && [ ${#runWithPromptArgs[@]} -eq 0 -o "${#runWithPromptArgs[*]}" = --exit-on-failure ]; then
 	    bash "${bashArgs[@]}" -
 	else
-	    ${runWithCommand:?} "${runWithPromptArgs[@]}"
+	    RUNWITHPROMPT_SINK="${RUNWITHPROMPT_SINK-/dev/tty}" ${runWithCommand:?} "${runWithPromptArgs[@]}"
 	fi
     else
 	eval "$commands"
