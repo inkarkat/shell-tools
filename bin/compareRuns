@@ -8,11 +8,33 @@ shopt -qs extglob
 : ${COMPARERUNS_EXEC_END=;}
 : ${COMPARERUNS_DISCREPANCY_SIGIL='⇄ '}
 
+readonly generalArgs='[-S|--ignore-status] [-O|--ignore-output| DIFF-ARGS [...] [-t|--tee] [-1|--stdout|-2|--stderr]] [-T|--ignore-time]'
+getShortUsage()
+{
+    printf %s "$generalArgs"
+}
+getLongUsage()
+{
+    cat <<HELPTEXT
+    --ignore-output|-O	Do not compare the output of the two runs.
+			By default, diff statistics are printed.
+    DIFF-ARGS		Customize the output comparison by passing arguments to
+			diff. This overrides the default diff statistics output.
+    --tee|-t		Also print the output in addition to comparing it.
+    --stdout|-1		Only compare output to standard output; error output is
+			output normally.
+    --stderr|-2		Only compare error output; other output is output
+			normally.
+    --ignore-status|-S	Do not compare the exit status of the two runs.
+    --ignore-time|-T	Do not compare the run time of the two runs.
+
+HELPTEXT
+}
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[--setup-command SETUP-COMMANDLINE | --setup-exec SIMPLE-SETUP-COMMAND [...] $COMPARERUNS_EXEC_END] [--reset-command RESET-COMMANDLINE | --reset-exec SIMPLE-RESET-COMMAND [...] $COMPARERUNS_EXEC_END] [--clean-command CLEAN-COMMANDLINE | --clean-exec SIMPLE-CLEAN-COMMAND [...] $COMPARERUNS_EXEC_END] [-S|--ignore-status] [-O|--ignore-output| DIFF-ARGS [...] [-t|--tee] [-1|--stdout|-2|--stderr]] [-T|--ignore-time] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${COMPARERUNS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[--setup-command SETUP-COMMANDLINE | --setup-exec SIMPLE-SETUP-COMMAND [...] $COMPARERUNS_EXEC_END] [--reset-command RESET-COMMANDLINE | --reset-exec SIMPLE-RESET-COMMAND [...] $COMPARERUNS_EXEC_END] [--clean-command CLEAN-COMMANDLINE | --clean-exec SIMPLE-CLEAN-COMMAND [...] $COMPARERUNS_EXEC_END] $generalArgs -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${COMPARERUNS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
     echo
     printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" "[...] [--bare|$(runWithPrompt --get-short-usage 2>/dev/null)]"
     echo
@@ -79,19 +101,9 @@ HELPDESCRIPTION
 			the COMMAND.
 HELPTEXT
     runWithPrompt --get-long-usage 2>/dev/null
+    getLongUsage
+    echo
     cat <<HELPTEXT
-    --ignore-output|-O	Do not compare the output of the two runs.
-			By default, diff statistics are printed.
-    DIFF-ARGS		Customize the output comparison by passing arguments to
-			diff. This overrides the default diff statistics output.
-    --tee|-t		Also print the output in addition to comparing it.
-    --stdout|-1		Only compare output to standard output; error output is
-			output normally.
-    --stderr|-2		Only compare error output; other output is output
-			normally.
-    --ignore-status|-S	Do not compare the exit status of the two runs.
-    --ignore-time|-T	Do not compare the run time of the two runs.
-
 EXIT STATUS:
     0	Both runs of COMMAND produced the same measured results.
 	This includes the run time of the second run being
@@ -123,6 +135,11 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--get-short-usage)
+			shift; getShortUsage "$@"; exit $?;;
+	--get-long-usage)
+			shift; getLongUsage "$@"; exit $?;;
+
 	--ignore-output|-O)
 			shift; outputCompare=:;;
 	--ignore-status|-S)
