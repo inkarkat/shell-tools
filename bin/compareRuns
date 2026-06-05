@@ -35,7 +35,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[--setup-command SETUP-COMMANDLINE | --setup-exec SIMPLE-SETUP-COMMAND [...] $COMPARERUNS_EXEC_END] [--reset-command RESET-COMMANDLINE | --reset-exec SIMPLE-RESET-COMMAND [...] $COMPARERUNS_EXEC_END] [--clean-command CLEAN-COMMANDLINE | --clean-exec SIMPLE-CLEAN-COMMAND [...] $COMPARERUNS_EXEC_END] [--run1 NAME] [--run2 NAME] $generalArgs -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${COMPARERUNS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[--setup-command SETUP-COMMANDLINE | --setup-exec SIMPLE-SETUP-COMMAND [...] $COMPARERUNS_EXEC_END] [--reset-command RESET-COMMANDLINE | --reset-exec SIMPLE-RESET-COMMAND [...] $COMPARERUNS_EXEC_END] [--clean-command CLEAN-COMMANDLINE | --clean-exec SIMPLE-CLEAN-COMMAND [...] $COMPARERUNS_EXEC_END] [--run1 NAME] [--run2 NAME] $generalArgs -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${COMPARERUNS_EXEC_END} [--exec ...] | --fallback-command \"COMMANDLINE\" [--fallback-command ...] | --fallback-exec SIMPLECOMMAND [...] ${COMPARERUNS_EXEC_END} [--fallback-exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
     echo
     printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" "[...] [--bare|$(runWithPrompt --get-short-usage 2>/dev/null)]"
     echo
@@ -102,6 +102,15 @@ HELPDESCRIPTION
     --exec CMD [...] ${COMPARERUNS_EXEC_END}	Execute CMD twice; all following arguments are taken to
 			be arguments to the CMD until an argument consisting of
 			'${COMPARERUNS_EXEC_END}' is encountered.
+    --fallback-command CMD
+			Execute CMD as a command-line twice if no --command or
+			--exec or SIMPLECOMMAND is given (instead of reading
+			commands from stdin).
+    --fallback-exec CMD [...] ${COMPARERUNS_EXEC_END}
+			Execute CMD as a command-line twice if no --command or
+			--exec or SIMPLECOMMAND is given; all following
+			arguments are taken to be arguments to the CMD until an
+			argument consisting of '${COMPARERUNS_EXEC_END}' is encountered.
     --bare		Do not print a status line before and after launching
 			the COMMAND.
 HELPTEXT
@@ -132,6 +141,7 @@ setupCommands=
 resetCommands=
 cleanCommands=
 commands=
+fallbackCommands=
 typeset -a bashArgs=()
 runWithCommand=runWithPrompt
 typeset -a runWithPromptArgs=()
@@ -226,6 +236,24 @@ do
 			shift
 			commands+="${commands:+ $COMPARERUNS_COMMAND_JOINER }${cmd}"
 			;;
+	--fallback-command)
+			shift; fallbackCommands+="${fallbackCommands:+ $COMPARERUNS_COMMAND_JOINER }$1"; shift;;
+	--fallback-exec)
+			shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != "$COMPARERUNS_EXEC_END" ]
+			do
+			    printf -v quotedArg %q "$1"
+			    cmd+="${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --fallback-exec command must be concluded with '${COMPARERUNS_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			fallbackCommands+="${fallbackCommands:+ $COMPARERUNS_COMMAND_JOINER }${cmd}"
+			;;
 	--bare)		shift; isBare=t; runWithCommand=runWith;;
 	--exit-on-failure)
 			bashArgs+=(-e); runWithPromptArgs+=("$1"); shift;;
@@ -278,6 +306,7 @@ if [ -z "$setupCommands" ] && [ -z "$resetCommands" ] && [ -z "$cleanCommands" ]
     printUsage "$0"
     exit 2
 fi >&2
+: ${commands:=$fallbackCommands}
 
 typeset -a tempFilespecs=()
 temp1Filespec="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM")"; tempFilespecs+=("$temp1Filespec")
