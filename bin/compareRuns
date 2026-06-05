@@ -35,7 +35,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[--setup-command SETUP-COMMANDLINE | --setup-exec SIMPLE-SETUP-COMMAND [...] $COMPARERUNS_EXEC_END] [--reset-command RESET-COMMANDLINE | --reset-exec SIMPLE-RESET-COMMAND [...] $COMPARERUNS_EXEC_END] [--clean-command CLEAN-COMMANDLINE | --clean-exec SIMPLE-CLEAN-COMMAND [...] $COMPARERUNS_EXEC_END] $generalArgs -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${COMPARERUNS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[--setup-command SETUP-COMMANDLINE | --setup-exec SIMPLE-SETUP-COMMAND [...] $COMPARERUNS_EXEC_END] [--reset-command RESET-COMMANDLINE | --reset-exec SIMPLE-RESET-COMMAND [...] $COMPARERUNS_EXEC_END] [--clean-command CLEAN-COMMANDLINE | --clean-exec SIMPLE-CLEAN-COMMAND [...] $COMPARERUNS_EXEC_END] [--run1 NAME] [--run2 NAME] $generalArgs -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${COMPARERUNS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
     echo
     printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" "[...] [--bare|$(runWithPrompt --get-short-usage 2>/dev/null)]"
     echo
@@ -94,6 +94,10 @@ HELPDESCRIPTION
 			arguments are taken to be arguments to the
 			CLEAN-COMMAND until an argument consisting of
 			'${COMPARERUNS_EXEC_END}' is encountered.
+    --run1 NAME		Use NAME instead of "run 1" for the execution under the
+			setup commands in the reporting.
+    --run2 NAME		Use NAME instead of "run 2" for the execution under the
+			reset commands in the reporting.
     --command|-c CMD	Execute CMD as a command-line twice.
     --exec CMD [...] ${COMPARERUNS_EXEC_END}	Execute CMD twice; all following arguments are taken to
 			be arguments to the CMD until an argument consisting of
@@ -122,6 +126,8 @@ timeCompare=compareTime
 teePipe='>'
 teePrefix='2>&1'
 teeSuffix=
+run1Name='run 1'
+run2Name='run 2'
 setupCommands=
 resetCommands=
 cleanCommands=
@@ -150,6 +156,8 @@ do
 	--tee|-t)	shift; teePipe='| tee'; reportSeparator="${COMPARERUNS_REPORT_SEPARATOR}${COMPARERUNS_REPORT_SEPARATOR:+$'\n'}";;
 	--stdout|-1)	shift; teePrefix='';;
 	--stderr|-2)	shift; teePrefix='3>&1 1>&2 2>&3 3>&-'; teeSuffix='3>&1 1>&2 2>&3 3>&-';;
+	--run1)		shift; run1Name="${1:?}"; shift;;
+	--run2)		shift; run2Name="${1:?}"; shift;;
 
 	--setup-command)
 			shift; setupCommands+="${setupCommands:+ $COMPARERUNS_COMMAND_JOINER }$1"; shift;;
@@ -333,7 +341,7 @@ compareOutput()
 {
     if [ ${#diffLabelArgs[@]} -eq 0 ]; then
 	local commandName="$(commandName --undefined 'commands' --eval "$commands" 2>/dev/null || printf 'commands')"
-	diffLabelArgs=(--label "$commandName (run 1)" --label "$commandName (run 2)")
+	diffLabelArgs=(--label "$commandName (${run1Name})" --label "$commandName (${run2Name})")
     fi
 
     if [ ${#diffTypeArgs[@]} -gt 0 ]; then
@@ -351,7 +359,10 @@ compareStatus()
 {
     [ $status1 -eq $status2 ] && return 0
 
-    printf '%s%sExit status: %d vs %d\n' "$reportSeparator" "$COMPARERUNS_DISCREPANCY_SIGIL" $status1 $status2
+    printf '%s%sExit status: %d (%s) vs. %d (%s)\n' \
+	    "$reportSeparator" "$COMPARERUNS_DISCREPANCY_SIGIL" \
+	    $status1 "$run1Name" \
+	    $status2 "$run2Name"
     reportSeparator=''
     return 1
 }
@@ -362,7 +373,11 @@ compareTime()
     { [ -z "$COMPARERUNS_MIN_PERCENT" ] || [ $percent -ge $COMPARERUNS_MIN_PERCENT ]; } \
 	&& { [ -z "$COMPARERUNS_MAX_PERCENT" ] || [ $percent -le $COMPARERUNS_MAX_PERCENT ]; } && return 0
 
-    printf '%s%sRuntime: %d seconds vs %d seconds (%d%%) deviating more than %s\n' "$reportSeparator" "$COMPARERUNS_DISCREPANCY_SIGIL" $time1 $time2 $percent "${COMPARERUNS_MIN_PERCENT}..${COMPARERUNS_MAX_PERCENT}%"
+    printf '%s%sRuntime: %d seconds (%s) vs. %d seconds (%s) - %d%% deviating more than %s\n' \
+	    "$reportSeparator" "$COMPARERUNS_DISCREPANCY_SIGIL" \
+	    $time1 "$run1Name" \
+	    $time2 "$run2Name" \
+	    $percent "${COMPARERUNS_MIN_PERCENT}..${COMPARERUNS_MAX_PERCENT}%"
     reportSeparator=''
     return 1
 }
