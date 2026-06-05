@@ -7,6 +7,7 @@ shopt -qs extglob
 : ${COMPARERUNS_COMMAND_JOINER=;}
 : ${COMPARERUNS_EXEC_END=;}
 : ${COMPARERUNS_DISCREPANCY_SIGIL='⇄ '}
+: ${COMPARERUNS_REPORT_SEPARATOR='---'}
 
 readonly generalArgs='[-S|--ignore-status] [-O|--ignore-output| DIFF-ARGS [...] [-t|--tee] [-1|--stdout|-2|--stderr]] [-T|--ignore-time]'
 getShortUsage()
@@ -146,7 +147,7 @@ do
 			shift; statusCompare=:;;
 	--ignore-time|-T)
 			shift; timeCompare=:;;
-	--tee|-t)	shift; teePipe='| tee';;
+	--tee|-t)	shift; teePipe='| tee'; reportSeparator="${COMPARERUNS_REPORT_SEPARATOR}${COMPARERUNS_REPORT_SEPARATOR:+$'\n'}";;
 	--stdout|-1)	shift; teePrefix='';;
 	--stderr|-2)	shift; teePrefix='3>&1 1>&2 2>&3 3>&-'; teeSuffix='3>&1 1>&2 2>&3 3>&-';;
 
@@ -339,14 +340,19 @@ compareOutput()
 	${DIFF:-diff} "${diffTypeArgs[@]}" "${diffLabelArgs[@]}" "${diffFormatArgs[@]}" -- "$temp1Filespec" "$temp2Filespec"
     else
 	local diffStat; diffStat="$(diff --context "${diffLabelArgs[@]}" -- "$temp1Filespec" "$temp2Filespec" | diffstat -q -s -f 0)"
-	[ -z "$diffStat" ] || printf '%sOutput: %s\n' "$COMPARERUNS_DISCREPANCY_SIGIL" "${diffStat#*( )1 file changed, }"
+	if [ -n "$diffStat" ]; then
+	    printf '%s%sOutput: %s\n' "$reportSeparator" "$COMPARERUNS_DISCREPANCY_SIGIL" "${diffStat#*( )1 file changed, }"
+	    reportSeparator=''
+	fi
     fi
 }
 
 compareStatus()
 {
     [ $status1 -eq $status2 ] && return 0
-    printf '%sExit status: %d vs %d\n' "$COMPARERUNS_DISCREPANCY_SIGIL" $status1 $status2
+
+    printf '%s%sExit status: %d vs %d\n' "$reportSeparator" "$COMPARERUNS_DISCREPANCY_SIGIL" $status1 $status2
+    reportSeparator=''
     return 1
 }
 
@@ -355,7 +361,9 @@ compareTime()
     local percent=$((time2 * 100 / time1))
     { [ -z "$COMPARERUNS_MIN_PERCENT" ] || [ $percent -ge $COMPARERUNS_MIN_PERCENT ]; } \
 	&& { [ -z "$COMPARERUNS_MAX_PERCENT" ] || [ $percent -le $COMPARERUNS_MAX_PERCENT ]; } && return 0
-    printf '%sRuntime: %d seconds vs %d seconds (%d%%) deviating more than %s\n' "$COMPARERUNS_DISCREPANCY_SIGIL" $time1 $time2 $percent "${COMPARERUNS_MIN_PERCENT}..${COMPARERUNS_MAX_PERCENT}%"
+
+    printf '%s%sRuntime: %d seconds vs %d seconds (%d%%) deviating more than %s\n' "$reportSeparator" "$COMPARERUNS_DISCREPANCY_SIGIL" $time1 $time2 $percent "${COMPARERUNS_MIN_PERCENT}..${COMPARERUNS_MAX_PERCENT}%"
+    reportSeparator=''
     return 1
 }
 
