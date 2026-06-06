@@ -35,7 +35,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[--setup-command SETUP-COMMANDLINE | --setup-exec SIMPLE-SETUP-COMMAND [...] $COMPARERUNS_EXEC_END] [--reset-command RESET-COMMANDLINE | --reset-exec SIMPLE-RESET-COMMAND [...] $COMPARERUNS_EXEC_END] [--clean-command CLEAN-COMMANDLINE | --clean-exec SIMPLE-CLEAN-COMMAND [...] $COMPARERUNS_EXEC_END] [--run1 NAME] [--run2 NAME] $generalArgs -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${COMPARERUNS_EXEC_END} [--exec ...] | --fallback-command \"COMMANDLINE\" [--fallback-command ...] | --fallback-exec SIMPLECOMMAND [...] ${COMPARERUNS_EXEC_END} [--fallback-exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[--setup-command SETUP-COMMANDLINE | --setup-exec SIMPLE-SETUP-COMMAND [...] $COMPARERUNS_EXEC_END] [--reset-command RESET-COMMANDLINE | --reset-exec SIMPLE-RESET-COMMAND [...] $COMPARERUNS_EXEC_END] [--clean-command CLEAN-COMMANDLINE | --clean-exec SIMPLE-CLEAN-COMMAND [...] $COMPARERUNS_EXEC_END] [--run1 NAME] [--run2 NAME] [--subject NAME] $generalArgs -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${COMPARERUNS_EXEC_END} [--exec ...] | --fallback-command \"COMMANDLINE\" [--fallback-command ...] | --fallback-exec SIMPLECOMMAND [...] ${COMPARERUNS_EXEC_END} [--fallback-exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
     echo
     printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" "[...] [--bare|$(runWithPrompt --get-short-usage 2>/dev/null)]"
     echo
@@ -98,6 +98,9 @@ HELPDESCRIPTION
 			setup commands in the reporting.
     --run2 NAME		Use NAME instead of "run 2" for the execution under the
 			reset commands in the reporting.
+    --subject NAME	Print NAME as a summary of the environment change (e.g.
+			different settings, files that were modified) in the
+			reporting when differences are detected.
     --command|-c CMD	Execute CMD as a command-line twice.
     --exec CMD [...] ${COMPARERUNS_EXEC_END}	Execute CMD twice; all following arguments are taken to
 			be arguments to the CMD until an argument consisting of
@@ -137,6 +140,7 @@ teePrefix='2>&1'
 teeSuffix=
 run1Name='run 1'
 run2Name='run 2'
+subject=
 setupCommands=
 resetCommands=
 cleanCommands=
@@ -168,6 +172,7 @@ do
 	--stderr|-2)	shift; teePrefix='3>&1 1>&2 2>&3 3>&-'; teeSuffix='3>&1 1>&2 2>&3 3>&-';;
 	--run1)		shift; run1Name="${1:?}"; shift;;
 	--run2)		shift; run2Name="${1:?}"; shift;;
+	--subject)	shift; subject="${1?}"; shift;;
 
 	--setup-command)
 			shift; setupCommands+="${setupCommands:+ $COMPARERUNS_COMMAND_JOINER }$1"; shift;;
@@ -415,4 +420,5 @@ overallStatus=0
 $outputCompare || overallStatus=1
 $statusCompare || overallStatus=1
 $timeCompare || overallStatus=1
+[ "$overallStatus" -eq 1 -a -n "$subject" ] && printf '%s%s\n' "$COMPARERUNS_DISCREPANCY_SIGIL" "$subject"
 exit $overallStatus
