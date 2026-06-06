@@ -12,11 +12,17 @@ shopt -qs extglob
 readonly generalArgs='[-S|--ignore-status] [-O|--ignore-output| DIFF-ARGS [...] [-t|--tee] [-1|--stdout|-2|--stderr]] [-T|--ignore-time]'
 getShortUsage()
 {
-    printf %s "$generalArgs"
+    case "$1" in
+	'') printf %s "$generalArgs";;
+	*)  echo "ERROR: Unknown short usage topic \"$1\"!" >&2; return 2;;
+    esac
 }
 getLongUsage()
 {
-    cat <<HELPTEXT
+    local topic="$1"; shift
+    case "$topic" in
+	'')
+	    cat <<HELPTEXT
     --ignore-output|-O	Do not compare the output of the two runs.
 			By default, diff statistics are printed.
     DIFF-ARGS		Customize the output comparison by passing arguments to
@@ -28,8 +34,18 @@ getLongUsage()
 			normally.
     --ignore-status|-S	Do not compare the exit status of the two runs.
     --ignore-time|-T	Do not compare the run time of the two runs.
-
 HELPTEXT
+	    ;;
+	exitstatus)
+	    cat <<HELPTEXT
+    0	Both runs of COMMAND produced the same measured results.
+	This includes the run time of the second run being
+	between ${COMPARERUNS_MIN_PERCENT:-0}% and ${COMPARERUNS_MAX_PERCENT:-anywhere}${COMPARERUNS_MAX_PERCENT:+%} of the run time of the first run.
+    1	Differences in output / exit status / run time were detected.
+HELPTEXT
+	    ;;
+	*)  echo "ERROR: Unknown long usage topic \"$1\"!" >&2; return 2;;
+    esac
 }
 printShortUsage()
 {
@@ -118,14 +134,14 @@ HELPDESCRIPTION
 			the COMMAND.
 HELPTEXT
     runWithPrompt --get-long-usage 2>/dev/null
-    getLongUsage
+    getLongUsage ''
     echo
     cat <<HELPTEXT
 EXIT STATUS:
-    0	Both runs of COMMAND produced the same measured results.
-	This includes the run time of the second run being
-	between ${COMPARERUNS_MIN_PERCENT:-0}% and ${COMPARERUNS_MAX_PERCENT:-anywhere}${COMPARERUNS_MAX_PERCENT:+%} of the run time of the first run.
-    1	Differences in output / exit status / run time were detected.
+HELPTEXT
+    getLongUsage exitstatus
+HELPTEXT
+    cat <<HELPTEXT
     2	Bad invocation, wrong or missing command-line arguments.
     3	Internal error or failed assertion.
     4	Failing SETUP-COMMAND or RESET-COMMAND or CLEAN-COMMAND.
