@@ -191,7 +191,7 @@ do
 	--subject)	shift; subject="${1?}"; shift;;
 
 	--setup-command)
-			shift; setupCommands+="${setupCommands:+ $COMPARERUNS_COMMAND_JOINER }$1"; shift;;
+			shift; setupCommands+="${setupCommands:+ ${COMPARERUNS_SETUP_COMMAND_JOINER-COMPARERUNS_COMMAND_JOINER} }$1"; shift;;
 	--setup-exec)	shift
 			cmd=
 			while [ $# -gt 0 -a "$1" != "$COMPARERUNS_EXEC_END" ]
@@ -205,10 +205,10 @@ do
 			    exit 2
 			fi >&2
 			shift
-			setupCommands+="${setupCommands:+ $COMPARERUNS_COMMAND_JOINER }${cmd}"
+			setupCommands+="${setupCommands:+ ${COMPARERUNS_SETUP_COMMAND_JOINER-COMPARERUNS_COMMAND_JOINER} }${cmd}"
 			;;
 	--reset-command)
-			shift; resetCommands+="${resetCommands:+ $COMPARERUNS_COMMAND_JOINER }$1"; shift;;
+			shift; resetCommands+="${resetCommands:+ ${COMPARERUNS_RESET_COMMAND_JOINER-COMPARERUNS_COMMAND_JOINER} }$1"; shift;;
 	--reset-exec)	shift
 			cmd=
 			while [ $# -gt 0 -a "$1" != "$COMPARERUNS_EXEC_END" ]
@@ -222,10 +222,10 @@ do
 			    exit 2
 			fi >&2
 			shift
-			resetCommands+="${resetCommands:+ $COMPARERUNS_COMMAND_JOINER }${cmd}"
+			resetCommands+="${resetCommands:+ ${COMPARERUNS_RESET_COMMAND_JOINER-COMPARERUNS_COMMAND_JOINER} }${cmd}"
 			;;
 	--clean-command)
-			shift; cleanCommands+="${cleanCommands:+ $COMPARERUNS_COMMAND_JOINER }$1"; shift;;
+			shift; cleanCommands+="${cleanCommands:+ ${COMPARERUNS_CLEAN_COMMAND_JOINER-COMPARERUNS_COMMAND_JOINER} }$1"; shift;;
 	--clean-exec)	shift
 			cmd=
 			while [ $# -gt 0 -a "$1" != "$COMPARERUNS_EXEC_END" ]
@@ -239,7 +239,7 @@ do
 			    exit 2
 			fi >&2
 			shift
-			cleanCommands+="${cleanCommands:+ $COMPARERUNS_COMMAND_JOINER }${cmd}"
+			cleanCommands+="${cleanCommands:+ ${COMPARERUNS_CLEAN_COMMAND_JOINER-COMPARERUNS_COMMAND_JOINER} }${cmd}"
 			;;
 	--command|-c)	shift; commands+="${commands:+ $COMPARERUNS_COMMAND_JOINER }$1"; shift;;
 	--exec)		shift
@@ -258,7 +258,7 @@ do
 			commands+="${commands:+ $COMPARERUNS_COMMAND_JOINER }${cmd}"
 			;;
 	--fallback-command)
-			shift; fallbackCommands+="${fallbackCommands:+ $COMPARERUNS_COMMAND_JOINER }$1"; shift;;
+			shift; fallbackCommands+="${fallbackCommands:+ ${COMPARERUNS_FALLBACK_COMMAND_JOINER-COMPARERUNS_COMMAND_JOINER} }$1"; shift;;
 	--fallback-exec)
 			shift
 			cmd=
@@ -273,7 +273,7 @@ do
 			    exit 2
 			fi >&2
 			shift
-			fallbackCommands+="${fallbackCommands:+ $COMPARERUNS_COMMAND_JOINER }${cmd}"
+			fallbackCommands+="${fallbackCommands:+ ${COMPARERUNS_FALLBACK_COMMAND_JOINER-COMPARERUNS_COMMAND_JOINER} }${cmd}"
 			;;
 	--bare)		shift; isBare=t; runWithCommand=runWith;;
 	--exit-on-failure)
