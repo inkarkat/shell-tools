@@ -1,0 +1,440 @@
+#!/bin/bash
+set -o pipefail
+shopt -qs extglob
+
+: ${COMPARERUNS_MIN_PERCENT=50}
+: ${COMPARERUNS_MAX_PERCENT=200}
+: ${COMPARERUNS_COMMAND_JOINER=;}
+: ${COMPARERUNS_EXEC_END=;}
+: ${COMPARERUNS_DISCREPANCY_SIGIL='⇄ '}
+: ${COMPARERUNS_REPORT_SEPARATOR='---'}
+
+readonly generalArgs='[-S|--ignore-status] [-O|--ignore-output| DIFF-ARGS [...] [-t|--tee] [-1|--stdout|-2|--stderr]] [-T|--ignore-time]'
+getShortUsage()
+{
+    case "$1" in
+	'') printf %s "$generalArgs";;
+	*)  echo "ERROR: Unknown short usage topic \"$1\"!" >&2; return 2;;
+    esac
+}
+getLongUsage()
+{
+    local topic="$1"; shift
+    case "$topic" in
+	'')
+	    cat <<HELPTEXT
+    --ignore-output|-O	Do not compare the output of the two runs.
+			By default, diff statistics are printed.
+    DIFF-ARGS		Customize the output comparison by passing arguments to
+			diff. This overrides the default diff statistics output.
+    --tee|-t		Also print the output in addition to comparing it.
+    --stdout|-1		Only compare output to standard output; error output is
+			output normally.
+    --stderr|-2		Only compare error output; other output is output
+			normally.
+    --ignore-status|-S	Do not compare the exit status of the two runs.
+    --ignore-time|-T	Do not compare the run time of the two runs.
+HELPTEXT
+	    ;;
+	exitstatus)
+	    cat <<HELPTEXT
+    0	Both runs of COMMAND produced the same measured results.
+	This includes the run time of the second run being
+	between ${COMPARERUNS_MIN_PERCENT:-0}% and ${COMPARERUNS_MAX_PERCENT:-anywhere}${COMPARERUNS_MAX_PERCENT:+%} of the run time of the first run.
+    1	Differences in output / exit status / run time were detected.
+HELPTEXT
+	    ;;
+	*)  echo "ERROR: Unknown long usage topic \"$1\"!" >&2; return 2;;
+    esac
+}
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[--setup-command SETUP-COMMANDLINE | --setup-exec SIMPLE-SETUP-COMMAND [...] $COMPARERUNS_EXEC_END] [--reset-command RESET-COMMANDLINE | --reset-exec SIMPLE-RESET-COMMAND [...] $COMPARERUNS_EXEC_END] [--clean-command CLEAN-COMMANDLINE | --clean-exec SIMPLE-CLEAN-COMMAND [...] $COMPARERUNS_EXEC_END] [--run1 NAME] [--run2 NAME] [--subject NAME] $generalArgs -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${COMPARERUNS_EXEC_END} [--exec ...] | --fallback-command \"COMMANDLINE\" [--fallback-command ...] | --fallback-exec SIMPLECOMMAND [...] ${COMPARERUNS_EXEC_END} [--fallback-exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    echo
+    printf 'Usage: echo COMMANDLINES | %q %s\n' "$(basename "$1")" "[...] [--bare|$(runWithPrompt --get-short-usage 2>/dev/null)]"
+    echo
+    printf 'Usage: %q %s <<EOF\n  COMMANDLINE\n...\nEOF\n' "$(basename "$1")" '[...]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Run COMMAND(s) twice, once after SETUP-COMMAND(s) and once after
+RESET-COMMAND(s) (followed by CLEAN-COMMAND(s)), and then compare exit status,
+run time, and output.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --setup-command SETUP-COMMAND
+			Execute SETUP-COMMAND before the first run of COMMAND.
+			This is meant to temporarily change the environment for
+			the first run, e.g. by setting environment variables or
+			modifying files.
+    --setup-exec SETUP-COMMAND [...] $COMPARERUNS_EXEC_END
+			Execute SETUP-COMMAND before the first run of COMMAND;
+			all following arguments are taken to be arguments to the
+			SETUP-COMMAND until an argument consisting of
+			'${COMPARERUNS_EXEC_END}' is encountered.
+    --reset-command RESET-COMMAND
+			Execute RESET-COMMAND between the first and second runs
+			of COMMAND.
+			This is meant to undo the temporary changes done by
+			SETUP-COMMAND, or to temporarily change the environment
+			(again) for the second run.
+    --reset-exec RESET-COMMAND [...] $COMPARERUNS_EXEC_END
+			Execute RESET-COMMAND between the first and second runs
+			of COMMAND; all following arguments are taken to be
+			arguments to the RESET-COMMAND until an argument
+			consisting of '${COMPARERUNS_EXEC_END}' is encountered.
+    --clean-command CLEAN-COMMAND
+			Execute CLEAN-COMMAND after the second run of COMMAND
+			(or after a failing RESET-COMMAND).
+			This is meant to undo the temporary changes by both
+			SETUP-COMMAND and RESET-COMMAND e.g. by removing created
+			files.
+    --clean-exec CLEAN-COMMAND [...] $COMPARERUNS_EXEC_END
+			Execute CLEAN-COMMAND after the second run of COMMAND
+			(or after a failing RESET-COMMAND); all following
+			arguments are taken to be arguments to the
+			CLEAN-COMMAND until an argument consisting of
+			'${COMPARERUNS_EXEC_END}' is encountered.
+    --run1 NAME		Use NAME instead of "run 1" for the execution under the
+			setup commands in the reporting.
+    --run2 NAME		Use NAME instead of "run 2" for the execution under the
+			reset commands in the reporting.
+    --subject NAME	Print NAME as a summary of the environment change (e.g.
+			different settings, files that were modified) in the
+			reporting when differences are detected.
+    --command|-c CMD	Execute CMD as a command-line twice.
+    --exec CMD [...] ${COMPARERUNS_EXEC_END}	Execute CMD twice; all following arguments are taken to
+			be arguments to the CMD until an argument consisting of
+			'${COMPARERUNS_EXEC_END}' is encountered.
+    --fallback-command CMD
+			Execute CMD as a command-line twice if no --command or
+			--exec or SIMPLECOMMAND is given (instead of reading
+			commands from stdin).
+    --fallback-exec CMD [...] ${COMPARERUNS_EXEC_END}
+			Execute CMD as a command-line twice if no --command or
+			--exec or SIMPLECOMMAND is given; all following
+			arguments are taken to be arguments to the CMD until an
+			argument consisting of '${COMPARERUNS_EXEC_END}' is encountered.
+    --bare		Do not print a status line before and after launching
+			the COMMAND.
+HELPTEXT
+    runWithPrompt --get-long-usage 2>/dev/null
+    getLongUsage ''
+    echo
+    cat <<HELPTEXT
+EXIT STATUS:
+HELPTEXT
+    getLongUsage exitstatus
+HELPTEXT
+    cat <<HELPTEXT
+    2	Bad invocation, wrong or missing command-line arguments.
+    3	Internal error or failed assertion.
+    4	Failing SETUP-COMMAND or RESET-COMMAND or CLEAN-COMMAND.
+HELPTEXT
+}
+
+outputCompare=compareOutput
+statusCompare=compareStatus
+timeCompare=compareTime
+teePipe='>'
+teePrefix='2>&1'
+teeSuffix=
+run1Name='run 1'
+run2Name='run 2'
+subject=
+setupCommands=
+resetCommands=
+cleanCommands=
+commands=
+fallbackCommands=
+typeset -a bashArgs=()
+runWithCommand=runWithPrompt
+typeset -a runWithPromptArgs=()
+typeset -a diffTypeArgs=()
+typeset -a diffFormatArgs=()
+typeset -a diffLabelArgs=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--get-short-usage)
+			shift; getShortUsage "$@"; exit $?;;
+	--get-long-usage)
+			shift; getLongUsage "$@"; exit $?;;
+
+	--ignore-output|-O)
+			shift; outputCompare=:;;
+	--ignore-status|-S)
+			shift; statusCompare=:;;
+	--ignore-time|-T)
+			shift; timeCompare=:;;
+	--tee|-t)	shift; teePipe='| tee'; reportSeparator="${COMPARERUNS_REPORT_SEPARATOR}${COMPARERUNS_REPORT_SEPARATOR:+$'\n'}";;
+	--stdout|-1)	shift; teePrefix='';;
+	--stderr|-2)	shift; teePrefix='3>&1 1>&2 2>&3 3>&-'; teeSuffix='3>&1 1>&2 2>&3 3>&-';;
+	--run1)		shift; run1Name="${1:?}"; shift;;
+	--run2)		shift; run2Name="${1:?}"; shift;;
+	--subject)	shift; subject="${1?}"; shift;;
+
+	--setup-command)
+			shift; setupCommands+="${setupCommands:+ ${COMPARERUNS_SETUP_COMMAND_JOINER-COMPARERUNS_COMMAND_JOINER} }$1"; shift;;
+	--setup-exec)	shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != "$COMPARERUNS_EXEC_END" ]
+			do
+			    printf -v quotedArg %q "$1"
+			    cmd+="${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --setup-exec command must be concluded with '${COMPARERUNS_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			setupCommands+="${setupCommands:+ ${COMPARERUNS_SETUP_COMMAND_JOINER-COMPARERUNS_COMMAND_JOINER} }${cmd}"
+			;;
+	--reset-command)
+			shift; resetCommands+="${resetCommands:+ ${COMPARERUNS_RESET_COMMAND_JOINER-COMPARERUNS_COMMAND_JOINER} }$1"; shift;;
+	--reset-exec)	shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != "$COMPARERUNS_EXEC_END" ]
+			do
+			    printf -v quotedArg %q "$1"
+			    cmd+="${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --reset-exec command must be concluded with '${COMPARERUNS_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			resetCommands+="${resetCommands:+ ${COMPARERUNS_RESET_COMMAND_JOINER-COMPARERUNS_COMMAND_JOINER} }${cmd}"
+			;;
+	--clean-command)
+			shift; cleanCommands+="${cleanCommands:+ ${COMPARERUNS_CLEAN_COMMAND_JOINER-COMPARERUNS_COMMAND_JOINER} }$1"; shift;;
+	--clean-exec)	shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != "$COMPARERUNS_EXEC_END" ]
+			do
+			    printf -v quotedArg %q "$1"
+			    cmd+="${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --clean-exec command must be concluded with '${COMPARERUNS_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			cleanCommands+="${cleanCommands:+ ${COMPARERUNS_CLEAN_COMMAND_JOINER-COMPARERUNS_COMMAND_JOINER} }${cmd}"
+			;;
+	--command|-c)	shift; commands+="${commands:+ $COMPARERUNS_COMMAND_JOINER }$1"; shift;;
+	--exec)		shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != "$COMPARERUNS_EXEC_END" ]
+			do
+			    printf -v quotedArg %q "$1"
+			    cmd+="${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${COMPARERUNS_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			commands+="${commands:+ $COMPARERUNS_COMMAND_JOINER }${cmd}"
+			;;
+	--fallback-command)
+			shift; fallbackCommands+="${fallbackCommands:+ ${COMPARERUNS_FALLBACK_COMMAND_JOINER-COMPARERUNS_COMMAND_JOINER} }$1"; shift;;
+	--fallback-exec)
+			shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != "$COMPARERUNS_EXEC_END" ]
+			do
+			    printf -v quotedArg %q "$1"
+			    cmd+="${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --fallback-exec command must be concluded with '${COMPARERUNS_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			fallbackCommands+="${fallbackCommands:+ ${COMPARERUNS_FALLBACK_COMMAND_JOINER-COMPARERUNS_COMMAND_JOINER} }${cmd}"
+			;;
+	--bare)		shift; isBare=t; runWithCommand=runWith;;
+	--exit-on-failure)
+			bashArgs+=(-e); runWithPromptArgs+=("$1"); shift;;
+
+	-[qu])
+			diffTypeArgs+=("$1"); shift;;
+	--@(normal|brief|context|unified|ed|rcs|side-by-side))
+			diffTypeArgs+=("$1"); shift;;
+	--@(context|unified)=*)
+			diffTypeArgs+=("$1"); shift;;
+	-[CU])
+			diffTypeArgs+=("$1" "${2?}"); shift; shift;;
+	-+([aBbdEeIinsTtwyZ]))
+			diffFormatArgs+=("$1"); shift;;
+	--@(expand-tabs|ignore-all-space|ignore-blank-lines|ignore-case|ignore-file-name-case|ignore-space-change|ignore-tab-expansion|ignore-trailing-space|initial-tab|left-column|minimal|no-dereference|no-ignore-file-name-case|report-identical-files|speed-large-files|strip-trailing-cr|suppress-blank-empty|suppress-common-lines|text|unidirectional-new-file))
+			diffFormatArgs+=("$1"); shift;;
+	-[DFlNprSWXx])
+			diffFormatArgs+=("$1" "${2?}"); shift; shift;;
+	--@(color|exclude-from|exclude|from-file|GTYPE-group-format|horizon-lines|ifdef|ignore-matching-lines|line-format|LTYPE-line-format|new-file|paginate|palette|recursive|show-c-function|show-function-line|starting-file|tabsize|to-file|width)=*)
+			diffFormatArgs+=("$1"); shift;;
+	--@(exclude-from|exclude|from-file|GTYPE-group-format|horizon-lines|ifdef|ignore-matching-lines|line-format|LTYPE-line-format|new-file|paginate|palette|recursive|show-c-function|show-function-line|starting-file|tabsize|to-file|width))
+			diffFormatArgs+=("$1" "${2?}"); shift; shift;;
+	--label)	diffLabelArgs+=("$1" "${2?}"); shift; shift;;
+	--label=*)	diffLabelArgs+=("$1"); shift;;
+
+	--)		shift; break;;
+	-*)		if argCount=$(runWithPrompt --understands "$@"); then
+			    while ((argCount-- > 0))
+			    do
+				runWithPromptArgs+=("$1"); shift
+			    done
+			elif [ $? -eq 2 ]; then
+			    exit 2
+			else
+			    { echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2
+			fi
+			;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    commands+="${commands:+ $COMPARERUNS_COMMAND_JOINER }${quotedSimpleCommand% }"
+fi
+if [ -z "$setupCommands" ] && [ -z "$resetCommands" ] && [ -z "$cleanCommands" ]; then
+    echo 'ERROR: Must pass at least one of SETUP-COMMAND, RESET-COMMAND, or CLEAN-COMMAND.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+: ${commands:=$fallbackCommands}
+
+typeset -a tempFilespecs=()
+temp1Filespec="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM")"; tempFilespecs+=("$temp1Filespec")
+temp2Filespec="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM")"; tempFilespecs+=("$temp2Filespec")
+if [ -z "$commands" ]; then
+    commandsFilespec="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM")"; tempFilespecs+=("$commandsFilespec")
+fi
+[ "${DEBUG:-}" ] || trap 'rm -f -- "${tempFilespecs[@]}" 2>/dev/null' EXIT
+
+executeInput()
+{
+    local run="${1:?}"; shift
+    if [ "$isBare" ] && [ ${#runWithPromptArgs[@]} -eq 0 -o "${#runWithPromptArgs[*]}" = --exit-on-failure ]; then
+	bash "${bashArgs[@]}" -
+    else
+	RUNWITHPROMPT_SINK="${RUNWITHPROMPT_SINK-/dev/tty}" ${runWithCommand:?} --comment "${run}:\$count" "${runWithPromptArgs[@]}"
+    fi
+}
+execute1()
+{
+    if [ -z "$commands" ]; then
+	while IFS=$'\n' read -r line || [ -n "$line" ]
+	do
+	    printf '%s\n' "$line" >> "${commandsFilespec:?}"
+	    printf '%s\n' "$line"
+	done \
+	    | executeInput 1
+    else
+	eval "$commands"
+    fi
+}
+execute2()
+{
+    if [ -z "$commands" ]; then
+	cat -- "${commandsFilespec:?}" | executeInput 2
+    else
+	eval "$commands"
+    fi
+}
+
+eval "$setupCommands" || exit 4
+
+SECONDS=0
+eval "{ { execute1 $teePrefix; } $teePipe \"\$temp1Filespec\"; } ${teeSuffix}"
+status1=${PIPESTATUS[0]}
+time1=$((SECONDS > 0 ? SECONDS : 1))
+
+if ! eval "$resetCommands"; then
+    eval "$cleanCommands"
+    exit 4
+fi
+
+SECONDS=0
+eval "{ { execute2 $teePrefix; } $teePipe \"\$temp2Filespec\"; } ${teeSuffix}"
+status2=${PIPESTATUS[0]}
+time2=$((SECONDS > 0 ? SECONDS : 1))
+
+eval "$cleanCommands" || exit 4
+
+compareOutput()
+{
+    if [ ${#diffLabelArgs[@]} -eq 0 ]; then
+	local commandName="$(commandName --undefined 'commands' --eval "$commands" 2>/dev/null || printf 'commands')"
+	diffLabelArgs=(--label "$commandName (${run1Name})" --label "$commandName (${run2Name})")
+    fi
+
+    if [ ${#diffTypeArgs[@]} -gt 0 ]; then
+	${DIFF:-diff} "${diffTypeArgs[@]}" "${diffLabelArgs[@]}" "${diffFormatArgs[@]}" -- "$temp1Filespec" "$temp2Filespec"
+    else
+	local diffStat; diffStat="$(diff --context "${diffLabelArgs[@]}" -- "$temp1Filespec" "$temp2Filespec" | diffstat -q -s -f 0)"
+	if [ -n "$diffStat" ]; then
+	    printf '%s%sOutput: %s\n' "$reportSeparator" "$COMPARERUNS_DISCREPANCY_SIGIL" "${diffStat#*( )1 file changed, }"
+	    reportSeparator=''
+	fi
+    fi
+}
+
+compareStatus()
+{
+    [ $status1 -eq $status2 ] && return 0
+
+    printf '%s%sExit status: %d (%s) vs. %d (%s)\n' \
+	    "$reportSeparator" "$COMPARERUNS_DISCREPANCY_SIGIL" \
+	    $status1 "$run1Name" \
+	    $status2 "$run2Name"
+    reportSeparator=''
+    return 1
+}
+
+compareTime()
+{
+    local percent=$((time2 * 100 / time1))
+    { [ -z "$COMPARERUNS_MIN_PERCENT" ] || [ $percent -ge $COMPARERUNS_MIN_PERCENT ]; } \
+	&& { [ -z "$COMPARERUNS_MAX_PERCENT" ] || [ $percent -le $COMPARERUNS_MAX_PERCENT ]; } && return 0
+
+    printf '%s%sRuntime: %d seconds (%s) vs. %d seconds (%s) - %d%% deviating more than %s\n' \
+	    "$reportSeparator" "$COMPARERUNS_DISCREPANCY_SIGIL" \
+	    $time1 "$run1Name" \
+	    $time2 "$run2Name" \
+	    $percent "${COMPARERUNS_MIN_PERCENT}..${COMPARERUNS_MAX_PERCENT}%"
+    reportSeparator=''
+    return 1
+}
+
+overallStatus=0
+$outputCompare || overallStatus=1
+$statusCompare || overallStatus=1
+$timeCompare || overallStatus=1
+[ "$overallStatus" -eq 1 -a -n "$subject" ] && printf '%s%s\n' "$COMPARERUNS_DISCREPANCY_SIGIL" "$subject"
+exit $overallStatus
