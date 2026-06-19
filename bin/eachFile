@@ -199,9 +199,9 @@ parseTail()
 
     case "$1" in
 	--find|-f)
-	    shift; findArgs=("$@"); set --; fileSource='finder'; isFixedNumberOfFiles=;;
+	    shift; findArgs=("$@"); fileSource='finder'; isFixedNumberOfFiles=;;
 	--) shift;&
-	*)  files+=("$@"); set --;;
+	*)  files+=("$@");;
     esac
 }
 while [ $# -ne 0 ]
@@ -286,7 +286,7 @@ do
 
 	--status-99-is-noop)
 			runWithPromptArgs+=("$1"); shift; additionalSuccessStatus=99;;
-	--)		parseTail "$@"; shift; break;;
+	--)		parseTail "$@"; set --; break;;
 	-*)		if argCount=$(runWithPrompt --understands "$@"); then
 			    while ((argCount-- > 0))
 			    do
@@ -299,7 +299,7 @@ do
 			    { echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2
 			fi
 			;;
-	*)		parseTail "$@"; break;;
+	*)		parseTail "$@"; set --; break;;
     esac
 done
 if [ -z "$commands" ]; then
