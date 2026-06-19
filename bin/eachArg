@@ -193,7 +193,7 @@ if [ ${#arguments[@]} -eq 0 ]; then
 fi
 
 if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
-    typeset -a progressNotificationCommand=(progressNotification --to "$progressSink" ${EACHARG_ARG_WHAT:+--prepend-count "$EACHARG_ARG_WHAT"} --count-to $#)
+    typeset -a progressNotificationCommand=(progressNotification --to "$progressSink" ${EACHARG_ARG_WHAT:+--prepend-count "$EACHARG_ARG_WHAT"} --count-to ${#arguments[@]})
 fi
 
 setStatus()

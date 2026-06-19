@@ -325,7 +325,7 @@ if [ ${#files[@]} -eq 0 -a ${#findArgs[@]} -eq 0 ]; then
 fi
 
 if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
-    typeset -a progressCountToArgs=(--count-to $#); [ "$isFixedNumberOfFiles" ] || progressCountToArgs=()
+    typeset -a progressCountToArgs=(--count-to ${#arguments[@]}); [ "$isFixedNumberOfFiles" ] || progressCountToArgs=()
     typeset -a progressNotificationCommand=(progressNotification --to "$progressSink" ${EACHFILE_FILE_WHAT:+--prepend-count "$EACHFILE_FILE_WHAT"} "${progressCountToArgs[@]}")
 fi
 

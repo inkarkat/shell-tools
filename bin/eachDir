@@ -287,7 +287,7 @@ if [ ${#directories[@]} -eq 0 -a ${#findArgs[@]} -eq 0 ]; then
 fi
 
 if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
-    typeset progressCountToArgs=(--count-to $#); [ "$isFixedNumberOfDirs" ] || progressCountToArgs=()
+    typeset progressCountToArgs=(--count-to ${#arguments[@]}); [ "$isFixedNumberOfDirs" ] || progressCountToArgs=()
     typeset -a progressNotificationCommand=(progressNotification --to "$progressSink" ${EACHDIR_DIR_WHAT:+--prepend-count "$EACHDIR_DIR_WHAT"} "${progressCountToArgs[@]}")
 fi
 
