@@ -102,7 +102,7 @@ parseTail()
 	[ "$1" = -- ] && shift
     fi
 
-    arguments+=("$@"); set --
+    arguments+=("$@")
 }
 while [ $# -ne 0 ]
 do
@@ -154,7 +154,7 @@ do
 
 	--status-99-is-noop)
 			runWithPromptArgs+=("$1"); shift; additionalSuccessStatus=99;;
-	--)		shift; parseTail "$@"; shift; break;;
+	--)		shift; parseTail "$@"; set --; break;;
 	-*)		if argCount=$(runWithPrompt --understands "$@"); then
 			    while ((argCount-- > 0))
 			    do
@@ -167,7 +167,7 @@ do
 			    { echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2
 			fi
 			;;
-	*)		parseTail "$@"; break;;
+	*)		parseTail "$@"; set --; break;;
     esac
 done
 if [ -z "$commands" ]; then
@@ -193,7 +193,7 @@ if [ ${#arguments[@]} -eq 0 ]; then
 fi
 
 if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
-    typeset -a progressNotificationCommand=(progressNotification --to "$progressSink" ${EACHARG_ARG_WHAT:+--prepend-count "$EACHARG_ARG_WHAT"} --count-to $#)
+    typeset -a progressNotificationCommand=(progressNotification --to "$progressSink" ${EACHARG_ARG_WHAT:+--prepend-count "$EACHARG_ARG_WHAT"} --count-to ${#arguments[@]})
 fi
 
 setStatus()

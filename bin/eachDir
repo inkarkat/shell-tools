@@ -169,9 +169,9 @@ parseTail()
 
     case "$1" in
 	--find|-f)
-	    shift; findArgs=("$@"); set --; dirSource='finder'; isFixedNumberOfDirs=;;
+	    shift; findArgs=("$@"); dirSource='finder'; isFixedNumberOfDirs=;;
 	--) shift;&
-	*)  directories+=("$@"); set --;;
+	*)  directories+=("$@");;
     esac
 }
 while [ $# -ne 0 ]
@@ -248,7 +248,7 @@ do
 
 	--status-99-is-noop)
 			runWithPromptArgs+=("$1"); shift; additionalSuccessStatus=99;;
-	--)		shift; parseTail "$@"; shift; break;;
+	--)		parseTail "$@"; set --; break;;
 	-*)		if argCount=$(runWithPrompt --understands "$@"); then
 			    while ((argCount-- > 0))
 			    do
@@ -261,7 +261,7 @@ do
 			    { echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2
 			fi
 			;;
-	*)		parseTail "$@"; break;;
+	*)		parseTail "$@"; set --; break;;
     esac
 done
 if [ -z "$commands" ]; then
@@ -287,7 +287,7 @@ if [ ${#directories[@]} -eq 0 -a ${#findArgs[@]} -eq 0 ]; then
 fi
 
 if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
-    typeset progressCountToArgs=(--count-to $#); [ "$isFixedNumberOfDirs" ] || progressCountToArgs=()
+    typeset progressCountToArgs=(--count-to ${#arguments[@]}); [ "$isFixedNumberOfDirs" ] || progressCountToArgs=()
     typeset -a progressNotificationCommand=(progressNotification --to "$progressSink" ${EACHDIR_DIR_WHAT:+--prepend-count "$EACHDIR_DIR_WHAT"} "${progressCountToArgs[@]}")
 fi
 
