@@ -17,7 +17,9 @@ printShortUsage()
     # skim the long one.
     printf 'Usage: %q%s %s\n' "$(basename "$1")" "${hasProgressNotification:+ [--progress SINK]}" "[--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [...] --exec SIMPLECOMMAND [...] ${EACHARG_EXEC_END} [--exec ...] | ([--] SIMPLECOMMAND [...] --) ARGUMENT [...] [-?|-h|--help]"
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] --arguments ARG [...] ${EACHARG_ARGUMENTS_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] [--] SIMPLECOMMAND [...]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] -m|--trailing-argument-match-command ARGUMENT-MATCH-COMMANDLINE|-M|--trailing-argument-match-exec ARGUMENT-MATCH-SIMPLECOMMAND [...] ${EACHARG_EXEC_END} [-m|-M ...] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] ARGUMENT [...]"
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] --arguments ARG [...] ${EACHARG_ARGUMENTS_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]"
 }
 printUsage()
 {
@@ -60,6 +62,18 @@ HELPTEXT
     --exec CMD [...] ${EACHARG_EXEC_END}	Execute CMD; all following arguments are taken to be
 			arguments to the CMD until an argument consisting of
 			'${EACHARG_EXEC_END}' is encountered.
+    --trailing-argument-match-command|-m ARGUMENT-MATCH-COMMANDLINE
+			Only accept ARGUMENT(s) from behind (which ${argMarker:+either }are
+			individually appended to${argMarker:+ or replace any $argMarker marker
+			inside }ARGUMENT-MATCH-COMMANDLINE) where the predicate
+			command succeeds.
+    --trailing-argument-match-exec|-M ARGUMENT-MATCH-SIMPLECOMMAND [...] ${EACHARG_EXEC_END}
+			Only accept ARGUMENT(s) from behind (which ${argMarker:+either }are
+			individually appended to${argMarker:+ or replace any $argMarker marker
+			inside }ARGUMENT-MATCH-SIMPLECOMMAND) where the predicate
+			command succeeds; all following arguments are taken to
+			be arguments to the CMD until an argument consisting of
+			'${EACHARG_EXEC_END}' is encountered.
     --arguments ARG [...] ${EACHARG_ARGUMENTS_END}
 			Take the following ARG(s); i.e. all following arguments
 			until an argument consisting of '${EACHARG_ARGUMENTS_END}' is encountered.
@@ -78,6 +92,7 @@ HELPTEXT
 }
 
 progressSink=
+trailingArgumentMatchCommand=
 typeset -a arguments=()
 with=
 errorRedir='2>&1'
@@ -89,6 +104,32 @@ usageRedirectCommand=
 typeset -a runWithPromptArgs=()
 parseTail()
 {
+    if [ -n "$trailingArgumentMatchCommand" ]; then
+	while [ $# -gt 0 ]
+	do
+	    local lastArg="${!#}" quotedLastArg
+	    printf -v quotedLastArg %q "$lastArg"
+	    local interpolatedTrailingArgumentMatchCommand="${trailingArgumentMatchCommand//"$argMarker"/$quotedLastArg}"
+	    [ "$interpolatedTrailingArgumentMatchCommand" = "$trailingArgumentMatchCommand" ] || quotedLastArg=''
+	    if eval "$interpolatedTrailingArgumentMatchCommand" "$quotedLastArg" >/dev/null 2>&1; then
+		case ",${DEBUG:-}," in *,eachArg:trailingArgumentMatch,*) printf >&2 '%seachArg (trailingArgumentMatch): Accepted %s\n' "$PS5" "$lastArg";; esac
+	    else
+		case ",${DEBUG:-}," in *,eachArg:trailingArgumentMatch,*) printf >&2 '%seachArg (trailingArgumentMatch): Rejected %s through %s\n' "$PS5" "$lastArg" "${interpolatedTrailingArgumentMatchCommand}${quotedLastArg:+ }${quotedLastArg}";; esac
+		break
+	    fi
+
+	    arguments=("$lastArg" "${arguments[@]}")
+	    set -- "${@:1:$(($#-1))}"
+	done
+	if [ -n "$commands" -a $# -gt 0 ]; then
+	    # Append the remaining (not accepted) argument to the last -c|--command or
+	    # --exec command.
+	    local quotedArgs; printf -v quotedArgs ' %q' "$@"
+	    commands+="$quotedArgs"
+	    return
+	fi
+    fi
+
     if [ -z "$commands" -o ${#arguments[@]} -gt 0 ]; then
 	local cmd=
 	while [ $# -gt 0 ] && [ ${#arguments[@]} -gt 0 -o "$1" != -- ]
@@ -108,6 +149,24 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--trailing-argument-match-command|-m)
+			shift; trailingArgumentMatchCommand+="${trailingArgumentMatchCommand:+ ; }${1?}"; shift;;
+	--trailing-argument-match-exec|-M)
+			shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != "$EACHARG_EXEC_END" ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd="${cmd}${cmd:+ }${quotedArg//"$escapedArgMarker"/$argMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --trailing-argument-match-exec command must be concluded with '${EACHARG_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			trailingArgumentMatchCommand+="${trailingArgumentMatchCommand:+ ; }${cmd}"
+			;;
 	--arguments)	shift
 			while [ $# -gt 0 -a "$1" != "$EACHARG_ARGUMENTS_END" ]
 			do
