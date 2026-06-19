@@ -248,7 +248,7 @@ do
 
 	--status-99-is-noop)
 			runWithPromptArgs+=("$1"); shift; additionalSuccessStatus=99;;
-	--)		shift; parseTail "$@"; set --; break;;
+	--)		parseTail "$@"; set --; break;;
 	-*)		if argCount=$(runWithPrompt --understands "$@"); then
 			    while ((argCount-- > 0))
 			    do
