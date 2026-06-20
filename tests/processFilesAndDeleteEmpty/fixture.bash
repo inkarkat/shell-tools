@@ -5,16 +5,13 @@ bats_load_library bats-support
 bats_load_library bats-assert
 bats_load_library bats-file
 
+readonly FILE1="${BATS_TMPDIR}/FILE1"
+readonly FILE2="${BATS_TMPDIR}/FILE2"
+
 setup()
 {
-    readonly FILE1="${BATS_TMPDIR}/FILE1"; echo "FOO" > "$FILE1"
-    readonly FILE2="${BATS_TMPDIR}/FILE2"; echo "fox" > "$FILE2"
-    changeAllCommand=(sed -i -e 's/[oO]\+/i/g')
-    changeAndDeleteCommand=(sed -i -e 's/[oO]\+/i/g' -e '/x/d')
-    failAllCommand=(sed -i -e '/[oO]/q 1')
-    deleteAllCommand=(sed -i -e '/[oO]/d')
-    failFirstCommand=(sed -i -e 's/o/i/g' -e '/O/q 1')
-    deleteAndFailCommand=(sed -i -e '/O/d' -e '/o/q 1')
+    echo "FOO" > "$FILE1"
+    echo "fox" > "$FILE2"
 }
 
 assertFile1Unchanged()
