@@ -93,6 +93,11 @@ SEE ALSO:
   sink and returns the source command's exit status.
 - withOutputToSinkBasedOnStatus captures all output and then pipes it to
   different sink commands based on the command's exit status.
+- segregateInput only processes standard input into (non-)matches of consecutive
+  lines, and passes these chunks to sink COMMAND(s), a fallback COMMAND, or
+  standard output, and unlike this command exclusively to one of these: the
+  first PATTERN wins, and while input is being read, not just at the conclusion
+  of the source command.
 
 EXIT STATUS:
     2	Bad invocation, wrong or missing command-line arguments.
