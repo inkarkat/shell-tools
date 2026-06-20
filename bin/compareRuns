@@ -9,7 +9,7 @@ shopt -qs extglob
 : ${COMPARERUNS_DISCREPANCY_SIGIL='⇄ '}
 : ${COMPARERUNS_REPORT_SEPARATOR='---'}
 
-readonly generalArgs='[-S|--ignore-status] [-O|--ignore-output| DIFF-ARGS [...] [-t|--tee] [-1|--stdout|-2|--stderr]] [-T|--ignore-time]'
+readonly generalArgs='[-S|--ignore-status] [-O|--ignore-output| [--color=(always|auto|never)|--no-color] DIFF-ARGS [...] [-t|--tee] [-1|--stdout|-2|--stderr]] [-T|--ignore-time]'
 getShortUsage()
 {
     case "$1" in
@@ -148,6 +148,7 @@ HELPTEXT
 HELPTEXT
 }
 
+isColor=; [ -t 1 ] && isColor=t
 outputCompare=compareOutput
 statusCompare=compareStatus
 timeCompare=compareTime
@@ -279,6 +280,20 @@ do
 	--exit-on-failure)
 			bashArgs+=(-e); runWithPromptArgs+=("$1"); shift;;
 
+	--no-color|--color=never)
+			isColor=; shift;;
+	--color=always)	isColor=t; shift;;
+	--color=auto)	shift;;
+	--color)	shift
+			case "$1" in
+			    always) shift; isColor=t;;
+			    never)  shift; isColor=;;
+			    auto)   shift; ;;
+			    *)	    # Take a no-param --color as diff's --color flag and disable colordiff.
+				    diffArgs+=(--color); isColor=
+				    ;;
+			esac
+			;;
 	-[qu])
 			diffTypeArgs+=("$1"); shift;;
 	--@(normal|brief|context|unified|ed|rcs|side-by-side))
@@ -328,6 +343,9 @@ if [ -z "$setupCommands" ] && [ -z "$resetCommands" ] && [ -z "$cleanCommands" ]
     exit 2
 fi >&2
 : ${commands:=$fallbackCommands}
+
+: ${diffCommand:=diff}; [ "$isColor" ] && type -t colordiff >/dev/null && diffCommand=colordiff
+diffCommand="${COMPARERUNS_DIFF_COMMAND:-${DIFF:-$diffCommand}}"
 
 typeset -a tempFilespecs=()
 temp1Filespec="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM")"; tempFilespecs+=("$temp1Filespec")
@@ -395,7 +413,7 @@ compareOutput()
     fi
 
     if [ ${#diffTypeArgs[@]} -gt 0 ]; then
-	${DIFF:-diff} "${diffTypeArgs[@]}" "${diffLabelArgs[@]}" "${diffFormatArgs[@]}" -- "$temp1Filespec" "$temp2Filespec"
+	$diffCommand "${diffTypeArgs[@]}" "${diffLabelArgs[@]}" "${diffFormatArgs[@]}" -- "$temp1Filespec" "$temp2Filespec"
     else
 	local diffStat; diffStat="$(diff --context "${diffLabelArgs[@]}" -- "$temp1Filespec" "$temp2Filespec" | diffstat -q -s -f 0)"
 	if [ -n "$diffStat" ]; then
