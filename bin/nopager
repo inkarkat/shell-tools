@@ -1,0 +1,40 @@
+#!/bin/bash
+
+printUsage()
+{
+    cat <<HELPTEXT
+Dummy pager that ignores any options and parameters and just outputs standard
+input or the contents of any FILE(s) passed to it.
+HELPTEXT
+    echo
+    printf 'Usage: PAGER=%q COMMAND [ARGS ...]\n' "$(basename "$1")"
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[PAGER-ARGS ...] [--] [FILE ...] [-?|-h|--help]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[PAGER-ARGS ...] [-?|-h|--help]'
+}
+
+typeset -a allargs=()
+unset filespecs
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+	--)		shift; typeset -a filespecs=("$@"); set --; break;;
+	*)		allargs+=("$1"); shift;;
+    esac
+done
+if [ -z "${filespecs+t}" ]; then
+    # No files after -- captured yet; need to investigate parsed and
+    # remaining args from behind for files.
+    typeset -a filespecs=()
+    allargs+=("$@")
+    while [ ${#allargs[@]} -ne 0 ]
+    do
+	lastArg="${allargs[-1]}"
+	[ -e "$lastArg" ] || break
+
+	filespecs=("$lastArg" "${filespecs[@]}")
+	allargs=("${allargs[@]:0:${#allargs[@]}-1}")
+    done
+fi
+cat ${filespecs:+--} "${filespecs[@]}"
