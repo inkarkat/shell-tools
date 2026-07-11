@@ -1,0 +1,138 @@
+#!/bin/bash
+
+: ${WITHEDITORANDPAGER_COMMAND_JOINER=;}
+: ${WITHEDITORANDPAGER_EXEC_END=;}
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    local keepArgs
+    if [ ! "$isKeepEditor" ] && [ ! "$isKeepPager" ]; then
+	keepArgs='[--keep-editor|--keep-pager]'
+    fi
+    printf 'Usage: %q %s\n' "$(basename "$1")" "${keepArgs}${keepArgs:+ }-s|--sink-command \"COMMANDLINE\" | -S|--sink-exec SIMPLECOMMAND [...] ${WITHEDITORANDPAGER_EXEC_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHEDITORANDPAGER_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    local whatVarsAre='$[GUI_]EDITOR and $PAGER are'
+    local whatSubject='editor or pager'
+    local whatAction=$'editing or\npaging through'
+    if [ "$isKeepEditor" ]; then
+	whatVarsAre='$PAGER is'
+	whatSubject='pager'
+	whatAction='paging through'
+    elif [ "$isKeepPager" ]; then
+	whatVarsAre='$[GUI_]EDITOR are'
+	whatSubject='editor'
+	whatAction='editing'
+    fi
+    cat <<HELPDESCRIPTION
+Execute COMMAND while $whatVarsAre set to SINK-COMMAND, so any
+$whatSubject invocation passes file(s) to the sink instead of $whatAction them.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    if [ ! "$isKeepEditor" ] && [ ! "$isKeepPager" ]; then
+	cat <<HELPTEXT
+    --keep-editor	Do not modify \$[GUI_]EDITOR, so edits are not sent to
+			SINK-COMMAND, only purely readonly files.
+    --keep-pager	Do not modify \$PAGER, so purely readonly outputs are
+			not sent to SINK-COMMAND, only edited files.
+HELPTEXT
+    fi
+}
+
+assertSingleSinkCommand()
+{
+    [ -n "$sinkCommand" ] || return 0
+    echo >&2 'ERROR: Only one SINK-COMMAND is allowed.'
+    echo >&2
+    printUsage "$0" >&2
+    exit 2
+}
+
+isKeepEditor=
+isKeepPager=
+commands=
+sinkCommand=
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--keep-editor)	shift; isKeepEditor=t;;
+	--keep-pager)	shift; isKeepPager=t;;
+
+	--command|-c)	shift; commands+="${commands:+ $WITHEDITORANDPAGER_COMMAND_JOINER }${1?}"; shift;;
+	--exec)		shift
+			cmd=
+			while [ $# -gt 0 -a "$1" != "$WITHEDITORANDPAGER_EXEC_END" ]
+			do
+			    printf -v quotedArg %q "$1"
+			    cmd+="${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${WITHEDITORANDPAGER_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			commands+="${commands:+ $WITHEDITORANDPAGER_COMMAND_JOINER }${cmd}"
+			;;
+	--sink-command|-s)
+			shift; assertSingleSinkCommand; sinkCommand="$1"; shift;;
+	--sink-exec|-S)	shift
+			assertSingleSinkCommand
+			cmd=
+			while [ $# -gt 0 -a "$1" != "$WITHEDITORANDPAGER_EXEC_END" ]
+			do
+			    printf -v quotedArg %q "$1"
+			    cmd+="${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: -S|--sink-exec command must be concluded with '${WITHEDITORANDPAGER_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			sinkCommand="$cmd"
+			;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    # Combine --sink-command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"
+    commands+="${commands:+ $WITHEDITORANDPAGER_COMMAND_JOINER }${quotedSimpleCommand% }"
+fi
+if [ -z "$sinkCommand" ]; then
+    echo "ERROR: No SINK-COMMAND specified; need to pass -s|--sink-command \"COMMANDLINE\", or -S|--sink-exec SIMPLECOMMAND [...] ${WITHEDITORANDPAGER_EXEC_END}."
+    echo
+    printUsage "$0"
+    exit 2
+elif [ -z "$commands" ]; then
+    echo "ERROR: No COMMAND(s) specified; need to pass -c|--command \"COMMANDLINE\", or --exec SIMPLECOMMAND [...] $WITHEDITORANDPAGER_EXEC_END or SIMPLECOMMAND."
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+if [ ! "$isKeepEditor" ]; then
+    export EDITOR="$sinkCommand"
+    export GUI_EDITOR="$sinkCommand"
+fi
+[ "$isKeepPager" ] || export PAGER="$sinkCommand"
+eval "$commands"
