@@ -7,7 +7,11 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[--keep-editor|--keep-pager] -s|--sink-command \"COMMANDLINE\" | -S|--sink-exec SIMPLECOMMAND [...] ${WITHEDITORANDPAGER_EXEC_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHEDITORANDPAGER_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
+    local keepArgs
+    if [ ! "$isKeepEditor" ] && [ ! "$isKeepPager" ]; then
+	keepArgs='[--keep-editor|--keep-pager]'
+    fi
+    printf 'Usage: %q %s\n' "$(basename "$1")" "${keepArgs}${keepArgs:+ }-s|--sink-command \"COMMANDLINE\" | -S|--sink-exec SIMPLECOMMAND [...] ${WITHEDITORANDPAGER_EXEC_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHEDITORANDPAGER_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
 }
 printUsage()
 {
@@ -20,20 +24,33 @@ printLongUsage()
 {
     # This is the long "man page" when launched with the help argument.
     # It is printed to stdout to allow paging with 'more'.
+    local whatVarsAre='$[GUI_]EDITOR and $PAGER are'
+    local whatSubject='editor or pager'
+    local whatAction=$'editing or\npaging through'
+    if [ "$isKeepEditor" ]; then
+	whatVarsAre='$PAGER is'
+	whatSubject='pager'
+	whatAction='paging through'
+    elif [ "$isKeepPager" ]; then
+	whatVarsAre='$[GUI_]EDITOR are'
+	whatSubject='editor'
+	whatAction='editing'
+    fi
     cat <<HELPDESCRIPTION
-Execute COMMAND while \$[GUI_]EDITOR and \$PAGER are set to SINK-COMMAND, so any
-pager or editor invocation passes file(s) to the sink instead of editing or
-paging them.
+Execute COMMAND while $whatVarsAre set to SINK-COMMAND, so any
+$whatSubject invocation passes file(s) to the sink instead of $whatAction them.
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
     echo
-    cat <<HELPTEXT
+    if [ ! "$isKeepEditor" ] && [ ! "$isKeepPager" ]; then
+	cat <<HELPTEXT
     --keep-editor	Do not modify \$[GUI_]EDITOR, so edits are not sent to
 			SINK-COMMAND, only purely readonly files.
     --keep-pager	Do not modify \$PAGER, so purely readonly outputs are
 			not sent to SINK-COMMAND, only edited files.
 HELPTEXT
+    fi
 }
 
 assertSingleSinkCommand()
