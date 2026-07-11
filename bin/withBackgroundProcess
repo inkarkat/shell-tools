@@ -37,8 +37,7 @@ HELPDESCRIPTION
     --background-exec|-B CMD [...] ${WITHBACKGROUNDPROCESS_EXEC_END}
 			Execute CMD as a background job, then kill it. All
 			following arguments are taken to be arguments to the CMD
-			until an argument consisting of
-			'${WITHBACKGROUNDPROCESS_EXEC_END}' is encountered.
+			until an argument consisting of '${WITHBACKGROUNDPROCESS_EXEC_END}' is encountered.
     --background-command|-b CMD
 			Execute CMD as a background job, then kill it.
 			Note: You need to use exec or alternatively pass
@@ -47,8 +46,7 @@ HELPDESCRIPTION
 			Execute the daemon CMD (it's supposed to put itself into
 			the background), then kill it. All following arguments
 			are taken to be arguments to the CMD until an argument
-			consisting of '${WITHBACKGROUNDPROCESS_EXEC_END}' is
-			encountered.
+			consisting of '${WITHBACKGROUNDPROCESS_EXEC_END}' is encountered.
     --daemon-command|-d CMD
 			Execute the daemon CMD (it's supposed to put itself into
 			the background), then kill it.
