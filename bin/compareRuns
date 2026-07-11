@@ -140,7 +140,6 @@ HELPTEXT
 EXIT STATUS:
 HELPTEXT
     getLongUsage exitstatus
-HELPTEXT
     cat <<HELPTEXT
     2	Bad invocation, wrong or missing command-line arguments.
     3	Internal error or failed assertion.
