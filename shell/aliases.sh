@@ -186,12 +186,6 @@ COMMAND_PARAM_NAMES='@(--command|-c|--sink-command|-s)' EXEC_PARAM_NAMES='@(--ex
 COMMAND_PARAM_NAMES='@(--command|-c|--sink-command|-s)' EXEC_PARAM_NAMES='@(--exec|--sink-exec|-S)' \
     addAliasSupport withPager
 
-addAliasSupport withDebug \
-    'v' \
-    'verbose' \
-    'mM' \
-    'module|only-module|for'
-
 
 # Use my own ~/tmp instead of the system default temp directory.
 if [ -d ~/tmp ]; then
