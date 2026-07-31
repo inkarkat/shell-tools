@@ -159,7 +159,7 @@ if [ $# -ne 0 ]; then
     commands+="${commands:+ $WITHDIFF_COMMAND_JOINER }${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 fi
 
-[ "${DEBUG:-}" ] || trap 'rm -rf -- "${tempFilespecs[@]}" 2>/dev/null' EXIT
+! ${DEBUG:+debugenabled --invert-match --} ${DEBUG:-:} || trap 'rm -rf -- "${tempFilespecs[@]}" 2>/dev/null' EXIT
 typeset -A tempFilesFor=()
 typeset -A tempLabelsFor=()
 typeset -a tempFilespecs=()

@@ -219,7 +219,7 @@ interpolateFileMarker()
     local output="${1?}"; shift
 
     local tempFilespec="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM")"
-    [ "${DEBUG:-}" ] || trap 'rm -f -- "${tempFilespecs[@]}" 2>/dev/null' EXIT
+    ! ${DEBUG:+debugenabled --invert-match --} ${DEBUG:-:} || trap 'rm -f -- "${tempFilespecs[@]}" 2>/dev/null' EXIT
     printf '%s\n' "$output" > "$tempFilespec" || exit 3
     tempFilespecs+=("$tempFilespec")
     local quotedTempFilespec; printf -v quotedTempFilespec %q "$tempFilespec"

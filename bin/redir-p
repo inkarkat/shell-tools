@@ -8,7 +8,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: [DEBUG=sudo[!]] %q %s\n' "$(basename "$1")" '[--] TARGET-FILE [--sudo] [-m|--mode MODE] [-v|--verbose] [-a|--append] [--sponge] [-t|--tee] [-?|-h|--help] ...'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[--] TARGET-FILE [--sudo] [-m|--mode MODE] [-v|--verbose] [-a|--append] [--sponge] [-t|--tee] [-?|-h|--help] ...'
     printf 'Usage: %q %s\n' "$(basename "$1")" "... [-1|--stdout|-2|--stderr] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${REDIRP_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]"
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '...'
 }
@@ -118,7 +118,7 @@ if [ $# -ne 0 ]; then
 fi
 
 SUDO="$sudoArg"; [ $EUID -eq 0 ] || [ -w "$targetDirspec" ] && SUDO=''
-[ -n "$sudoArg" ] && case ",${DEBUG:-}," in *,sudo,*) SUDO="verbose $SUDO";; *,sudo\!,*) SUDO="echotrace $SUDO";; esac
+[ -n "$SUDO" -a -n "$DEBUG" ] && SUDO="debugcommand --for sudo -- $SUDO"
 
 targetDirspec="$(dirname -- "$targetFilespec")"
 [ -d "$targetDirspec" ] || $SUDO mkdir --parents "${mkdirArgs[@]}" -- "$targetDirspec" || exit $?

@@ -4,7 +4,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: [DEBUG=sudo[!]] %q %s\n' "$(basename "$1")" '[--sudo] [-c|--no-create|-U|--no-update] [-m|--mode MODE] [-v|--verbose] [--] FILE [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[--sudo] [-c|--no-create|-U|--no-update] [-m|--mode MODE] [-v|--verbose] [--] FILE [...] [-?|-h|--help]'
 }
 printUsage()
 {
@@ -67,7 +67,7 @@ if [ $# -eq 0 ]; then
 fi
 
 SUDO="$sudoArg"; [ $EUID -eq 0 ] && SUDO=''
-[ -n "$sudoArg" ] && case ",${DEBUG:-}," in *,sudo,*) SUDO="verbose $SUDO";; *,sudo\!,*) SUDO="echotrace $SUDO";; esac
+[ -n "$SUDO" -a -n "$DEBUG" ] && SUDO="debugcommand --for sudo -- $SUDO"
 
 status=0
 for filespec

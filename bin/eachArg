@@ -112,9 +112,9 @@ parseTail()
 	    local interpolatedTrailingArgumentMatchCommand="${trailingArgumentMatchCommand//"$argMarker"/$quotedLastArg}"
 	    [ "$interpolatedTrailingArgumentMatchCommand" = "$trailingArgumentMatchCommand" ] || quotedLastArg=''
 	    if eval "$interpolatedTrailingArgumentMatchCommand" "$quotedLastArg" >/dev/null 2>&1; then
-		case ",${DEBUG:-}," in *,eachArg:trailingArgumentMatch,*) printf >&2 '%seachArg (trailingArgumentMatch): Accepted %s\n' "$PS5" "$lastArg";; esac
+		${DEBUG:+debuglogf --module trailingArgumentMatch 'Accepted %s' "$lastArg"}
 	    else
-		case ",${DEBUG:-}," in *,eachArg:trailingArgumentMatch,*) printf >&2 '%seachArg (trailingArgumentMatch): Rejected %s through %s\n' "$PS5" "$lastArg" "${interpolatedTrailingArgumentMatchCommand}${quotedLastArg:+ }${quotedLastArg}";; esac
+		${DEBUG:+debuglogf --module trailingArgumentMatch 'Rejected %s through %s' "$lastArg" "${interpolatedTrailingArgumentMatchCommand}${quotedLastArg:+ }${quotedLastArg}"}
 		break
 	    fi
 
