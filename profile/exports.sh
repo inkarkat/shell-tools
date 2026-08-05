@@ -1,4 +1,4 @@
-IFS='|' optionmunge export COMMANDNAME_WRAPPERS commandlineToShellCommand \
+optionmunge -s '|' export COMMANDNAME_WRAPPERS commandlineToShellCommand \
     eachArg eachDir eachFile \
     exitsWith onfile \
     processAddedFiles replify reverseFileArgs slowcommand sortedFileArgs \
