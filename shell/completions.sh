@@ -7,6 +7,6 @@ completeAsCommand combinations commandlineToShellCommand \
     sameScreenPosition slowcommand sortedFileArgs \
     tempdir tempedit tempfile tempfileAndEdit tempfileAndOpen \
     withAccessibleFile withAliasedCommand withCwdPrependedToOutput withDeltaCommand withDir withDiskUsageDelta withEphemeralFile withFallbackPath withFirstExistingFile withHome withLoggingTo \
-    withNewestAblage withNewestDownload withNewestFile withNewestInbox withNewestPicture withNewestPrint withNewestTemp withNewestVideo \
+    withNewestAblage withNewestDownload withNewestFile withNewestInbox withNewestPicture withNewestPrint withNewestTemp withNewestTmp withNewestVideo \
     withOutputToSink withOutputToSinkBasedOnMatch withOutputToSinkBasedOnStatus withPath withPid withPipedArgs withRemovedFile withRestoredFile withSelectedFiles \
     withTempdir withTempfile withVisualizedStatus

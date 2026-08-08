@@ -1,0 +1,4 @@
+#!/bin/bash
+
+WITHNEWESTFILE_WRAPPER="$(basename "$0")" \
+    exec withNewestFile --files /tmp \; "$@"
