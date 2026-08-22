@@ -350,7 +350,7 @@ temp2Filespec="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || ech
 if [ -z "$commands" ]; then
     commandsFilespec="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM")"; tempFilespecs+=("$commandsFilespec")
 fi
-! ${DEBUG:+debugenabled --invert-match --} ${DEBUG:-:} || trap 'rm -f -- "${tempFilespecs[@]}" 2>/dev/null' EXIT
+trap '${DEBUG:+debugcommand --} rm -f -- "${tempFilespecs[@]}" 2>/dev/null' EXIT
 
 executeInput()
 {

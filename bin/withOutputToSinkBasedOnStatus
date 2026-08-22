@@ -274,7 +274,7 @@ sinkExecute()
 }
 
 TMPFILE="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM")"
-! ${DEBUG:+debugenabled --invert-match --} ${DEBUG:-:} || trap 'rm -f -- "$TMPFILE" 2>/dev/null' EXIT
+trap '${DEBUG:+debugcommand --} rm -f -- "$TMPFILE" 2>/dev/null' EXIT
 
 eval "{ { execute $teePrefix; } $teePipe \"\$TMPFILE\"; } ${teeSuffix}"
 typeset -a states=("${PIPESTATUS[@]}")

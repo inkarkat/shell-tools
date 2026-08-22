@@ -126,7 +126,7 @@ cleanup()
 	[ $status $keepOnComparison 0 ] && return $status
     fi
 
-    rm -rf "$tmpDirspec" 2>/dev/null
+    ${DEBUG:+debugcommand --} rm -rf "$tmpDirspec" 2>/dev/null
 }
 
 tmpDirspec=
@@ -138,7 +138,7 @@ if hasTempDir; then
 		tmpDirspec="$(mktemp --directory --tmpdir "$tmpDirspec" 2>/dev/null || ( shopt -qs extglob; dirspec="${tmpDirspec/XX+(X)/$$$RANDOM}"; mkdir -p -- "$dirspec" && printf %s "$dirspec"; ))" || \
 		tmpDirspec=''
 
-	    [ "$isPrint" ] || ! ${DEBUG:+debugenabled --invert-match --} ${DEBUG:-:} || trap 'cleanup' EXIT
+	    [ "$isPrint" ] || trap 'cleanup' EXIT
 	else
 	    mkdir --parents -- "$tmpDirspec" || tmpDirspec=''
 	fi
@@ -147,7 +147,7 @@ fi
 if [ -z "$tmpDirspec" ]; then
     tmpDirspec="$(mktemp --directory --tmpdir "${prefix}-XXXXXX" 2>/dev/null || { dirspec="${TMPDIR:-/tmp}/${prefix}.$$$RANDOM"; mkdir -p -- "$dirspec" && printf %s "$dirspec"; })" || exit $?
 
-    [ "$isPrint" ] || ! ${DEBUG:+debugenabled --invert-match --} ${DEBUG:-:} || trap 'cleanup' EXIT
+    [ "$isPrint" ] || trap 'cleanup' EXIT
 fi
 
 if [ "$isPrint" ]; then

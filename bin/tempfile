@@ -157,7 +157,7 @@ fi
 
 cleanup()
 {
-    [ ! -e "$tempFilespec" ] || rm -f -- "$tempFilespec" 2>/dev/null
+    [ ! -e "$tempFilespec" ] || ${DEBUG:+debugcommand --} rm -f -- "$tempFilespec" 2>/dev/null
 }
 
 if [ -z "$commands" ]; then
@@ -179,7 +179,7 @@ if [ -z "$sinkCommands" ] || [ "$isVerbose" ]; then
 fi
 
 if [ -n "$sinkCommands" ]; then
-    [ "$isNoDelete" ] || ! ${DEBUG:+debugenabled --invert-match --} ${DEBUG:-:} || trap 'cleanup' EXIT
+    [ "$isNoDelete" ] || trap 'cleanup' EXIT
     printf -v quotedTempFilespec '%q' "$tempFilespec"
     interpolatedCommands="${sinkCommands//"$fileMarker"/$quotedTempFilespec}"
     [ "$interpolatedCommands" = "$sinkCommands" ] || quotedTempFilespec=''

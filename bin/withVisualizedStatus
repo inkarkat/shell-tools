@@ -132,7 +132,7 @@ do
 	--output|-o)	shift
 			formats+=(output)
 			TMPFILE="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM")"
-			! ${DEBUG:+debugenabled --invert-match --} ${DEBUG:-:} || trap 'rm -f -- "$TMPFILE" 2>/dev/null' EXIT
+			trap '${DEBUG:+debugcommand --} rm -f -- "$TMPFILE" 2>/dev/null' EXIT
 			redir='> "$TMPFILE" 2>&1'
 			;;
 	--no-output|-O)	shift; redir='>/dev/null 2>&1';;
