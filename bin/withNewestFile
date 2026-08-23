@@ -13,11 +13,11 @@ printShortUsage()
     local commonCommandArgs="-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${WITHNEWESTFILE_EXEC_END} [--exec ...] | SIMPLECOMMAND [...]"
     [ -z "$commands" ] || commonCommandArgs=''
     if [ -n "$dirspecs" ]; then
-	printf 'Usage: %q %s\n' "${WITHNEWESTFILE_WRAPPER:-$(basename "$1")}" "${commonArgs}${commonArgs:+ }${commonCommandArgs}${commonCommandArgs:+ }[-?|-h|--help]"
+	printf 'Usage: %q %s\n' "${WITHNEWESTFILE:-$(basename "$1")}" "${commonArgs}${commonArgs:+ }${commonCommandArgs}${commonCommandArgs:+ }[-?|-h|--help]"
     else
-	printf 'Usage: %q %s\n' "${WITHNEWESTFILE_WRAPPER:-$(basename "$1")}" "${commonArgs}${commonArgs:+ }${commonCommandArgs}${commonCommandArgs:+ }[--] DIR [...] [-?|-h|--help]"
+	printf 'Usage: %q %s\n' "${WITHNEWESTFILE:-$(basename "$1")}" "${commonArgs}${commonArgs:+ }${commonCommandArgs}${commonCommandArgs:+ }[--] DIR [...] [-?|-h|--help]"
 	echo
-	printf 'Usage: %q %s\n' "${WITHNEWESTFILE_WRAPPER:-$(basename "$1")}" "-f|--files DIR [...] ${WITHNEWESTFILE_FILES_END} [-f ...] ${commonArgs}${commonArgs:+ }${commonCommandArgs}${commonCommandArgs:+ }[-?|-h|--help]"
+	printf 'Usage: %q %s\n' "${WITHNEWESTFILE:-$(basename "$1")}" "-f|--files DIR [...] ${WITHNEWESTFILE_FILES_END} [-f ...] ${commonArgs}${commonArgs:+ }${commonCommandArgs}${commonCommandArgs:+ }[-?|-h|--help]"
     fi
 }
 printUsage()

@@ -2,5 +2,5 @@
 
 : ${WITHNEWESTVIDEO_DIR:=~/Videos}
 
-WITHNEWESTFILE_WRAPPER="$(basename "$0")" \
+WITHNEWESTFILE="$(basename "$0")" \
     exec withNewestFile --files "$WITHNEWESTVIDEO_DIR" \; "$@"

@@ -2,5 +2,5 @@
 
 : ${INBOX_DIR:=~/inbox}
 
-WITHNEWESTFILE_WRAPPER="$(basename "$0")" \
+WITHNEWESTFILE="$(basename "$0")" \
     exec withNewestFile --recursive --files "$INBOX_DIR" \; "$@"
