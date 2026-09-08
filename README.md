@@ -13,7 +13,7 @@ Similar to the Shell Basics, these are more elaborate and/or specialized.
 * [inkarkat/shell-user-interactions](https://github.com/inkarkat/shell-user-interactions) for the `--progress` parameter
 * [inkarkat/headers](https://github.com/inkarkat/headers) for the `--with-header` flag
 * [inkarkat/shell-debugging](https://github.com/inkarkat/shell-debugging) for debugging (optional)
-* automated testing is done with _bats - Bash Automated Testing System_ (https://github.com/bats-core/bats-core)
+* automated testing is done with _Bats_ - [Bash Automated Testing System](https://github.com/bats-core/bats-core)
 
 ### Installation
 
