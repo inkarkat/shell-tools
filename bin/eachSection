@@ -5,7 +5,7 @@ printUsage()
     eachSplit --help 2>&1 | sed \
 	-e '1s#^.*$#Split standard input into sections separated by PATTERN (two or three dashes by\ndefault) and execute COMMAND with each section file (which either is appended or\nreplaces any {} marker inside COMMANDLINE).#' \
 	-e '2b removeFirstParagraphLoop' \
-	-e 's/SPLIT-OPTIONS \.\.\./-S|--section-separator PATTERN/g' \
+	-e 's/SPLIT-OPTIONS \.\.\./-S|--section-separator PATTERN] [-z|--elide-empty-files/g' \
 	-e '/^SEE ALSO:/a\
 - dishOutSections dynamically prints individual sections on each invocation.\
 - eachCsplit is a generalization that allows the use of different separators and\
@@ -16,7 +16,9 @@ printUsage()
 			within the FILE. These lines are not part of the output.\
 			PATTERN is a POSIX-style unanchored basic regular\
 			expression. The default separator is two or three\
-			dashes.' \
+			dashes.\
+    --elide-empty-files|-z\
+			Empty sections do not produce empty files.' \
 	-e '/^ *--splitter/b removeOptionLoop' \
 	-e '/^Usage:$/N' -e '/\(^\|\n\)Usage: */{ s/\(^\|\n\)\(Usage: *\)\?\([^ |]\+ \)*eachSplit /\1\2'"$(basename "$1")"' /; s/\[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ;\] //; }' \
 	-e '/^Example:$/N' -e '/\(^\|\n\)Example: */{ s/\(^\|\n\)\(Example: *\)\?eachSplit /\1\2'"$(basename "$1") /; }" \
