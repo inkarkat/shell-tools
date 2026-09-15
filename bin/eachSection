@@ -37,4 +37,4 @@ do
     esac
 done
 
-exec eachSplit --splitter csplit --suppress-matched --prefix=PREFIX OPTIONS FILE ARGS \; "/${separatorPattern}/" '{*}' "${args[@]}" "$@"
+exec eachSplit --splitter csplit --quiet --suppress-matched --prefix=PREFIX OPTIONS FILE ARGS \; "/${separatorPattern}/" '{*}' "${args[@]}" "$@"
