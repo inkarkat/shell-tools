@@ -3,7 +3,7 @@
 load fixture
 
 @test "split dashdash-delimited sections with header that has custom section info extractor" {
-    run -0 eachSection --file "${BATS_TEST_DIRNAME}/inputs/dashdash-delimited.txt" --with-header --section-info-extractor sh -c 'printf "%d line(s)" "$(cat -- {} | wc -l)"' \; -- "${SECTION_PREFIXER_COMMAND[@]}"
+    run -0 eachSection --file "${BATS_TEST_DIRNAME}/inputs/dashdash-delimited.txt" --with-header --section-info-extractor-command 'printf "%d line(s)" "$(cat -- {} | wc -l)"' -- "${SECTION_PREFIXER_COMMAND[@]}"
     assert_output - <<'EOF'
 2 line(s):
 00: The opener
