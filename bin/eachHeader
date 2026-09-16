@@ -1,0 +1,32 @@
+#!/bin/bash
+
+printUsage()
+{
+    eachSection --help 2>&1 | sed \
+	-e '1s#^.*$#Split standard input into sections separated by header lines (as created by the\n[with]Header commands) and execute COMMAND with each section file (which either\nis appended or replaces any {} marker inside COMMANDLINE).#' \
+	-e '2b removeFirstParagraphLoop' \
+	-e 's/old term/new term/g' \
+	-e '/^ *\(--section-separator|-S\)/b removeOptionLoop' \
+	-e '/^Usage:$/N' -e '/\(^\|\n\)Usage: */{ s/\(^\|\n\)\(Usage: *\)\?\(\([^ |]\+ \)*\(| \)\?\)eachSection /\1\2\3[EACHHEADER_STYLE=dashed-line] '"$(basename "$1")"' /; s/ \[-S|--section-separator PATTERN\]//; }' \
+	-e b -e :removeFirstParagraphLoop -e '{ /\(^\|\n\)$/{ s/^\(.*\n\)\?//; b; }; N; b removeFirstParagraphLoop; }' \
+	-e b -e :removeOptionLoop -e '{ /\n *\(--section-separator|-S\)[^\n]*$/{ N; b removeOptionLoop; }; /\n *--[^\n]*$\|\n[^	 ]\|\n$/{ s/^\(.*\n\)\?//; b; }; N; b removeOptionLoop; }'
+}
+case "$1" in
+    --help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+esac
+
+headerPattern='^\(.*\):$'
+case "$EACHHEADER_STYLE" in
+    dashed-line)
+	headerPattern='^-- \([^[:space:]].*\) --\+$';;
+    ?*)	printf >&2 'ERROR: Unknown header style "%s".\n' "$EACHHEADER_STYLE"
+	exit 2
+	;;
+esac
+
+exec eachSection \
+    --section-separator "$headerPattern" \
+    --section-info-extractor-exec sed -n -e "1s/${headerPattern}/\\1/p" "${EACHSPLIT_EXTRACTOR_MARKER:-{\}}" "${EACHSPLIT_EXTRACTOR_END:-;}" \
+    --section-modifier-exec sed -i -e '${ /^$/d; }' -- "${EACHSPLIT_MODIFIER_MARKER:-{\}}" "${EACHSPLIT_MODIFIER_END:-;}" \
+    --section-info-include-separator above \
+    "$@"
