@@ -60,7 +60,12 @@ do
 			args+=(--piece-modifier-exec sed -i "/${separatorPattern//\//\\/}/d" -- "${EACHSPLIT_MODIFIER_MARKER:-{\}}" "${EACHSPLIT_MODIFIER_END:-;}")
 			;;
 	--section-*)	args+=("${1/#--section-/--piece-}"); shift;;
-	--)		args+=("$1"); shift; break;;
+
+	# Note: In order to parse -- properly, the --section-*-exec parameters would
+	# have to be fully parsed, too, because they can contain --. We go the lazy
+	# route and just assume that anything after -- doesn't start with --section-*.
+	#--)		args+=("$1"); shift; break;;
+
 	*)		args+=("$1"); shift;;
     esac
 done
