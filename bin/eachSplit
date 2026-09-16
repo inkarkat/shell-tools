@@ -11,8 +11,8 @@ extractorMarker="$EACHSPLIT_EXTRACTOR_MARKER"; unset EACHSPLIT_EXTRACTOR_MARKER
 : ${EACHSPLIT_EXTRACTOR_JOINER=;}
 : ${EACHSPLIT_EXTRACTOR_END=;}
 : ${EACHSPLIT_SPLITTER_END=;}
-: ${EACHSPLIT_FILE_PREFIX=section-}
-: ${EACHSPLIT_NO_SECTION_STATUS:=99}
+: ${EACHSPLIT_FILE_PREFIX=piece-}
+: ${EACHSPLIT_NO_PIECE_STATUS:=99}
 
 hasProgressNotification=; type -t progressNotification >/dev/null && hasProgressNotification=t
 
@@ -20,7 +20,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, they can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}] [SPLIT-OPTIONS ...]${hasProgressNotification:+ [--progress SINK]} [--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--section-info-extractor-command COMMANDLINE|--section-info-extractor-exec CMD [...]${extractorMarker:+ [}${extractorMarker}${extractorMarker:+] [...]} ${EACHSPLIT_EXTRACTOR_END}] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...]${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--exec ...] | -- SIMPLECOMMAND [...] [-?|-h|--help] ..."
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}] [SPLIT-OPTIONS ...]${hasProgressNotification:+ [--progress SINK]} [--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--piece-info-extractor-command COMMANDLINE|--piece-info-extractor-exec CMD [...]${extractorMarker:+ [}${extractorMarker}${extractorMarker:+] [...]} ${EACHSPLIT_EXTRACTOR_END}] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...]${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--exec ...] | -- SIMPLECOMMAND [...] [-?|-h|--help] ..."
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '...'
     printf 'Usage: %q %s\n' "$(basename "$1")" '-f|--file FILE ...'
 }
@@ -36,7 +36,7 @@ printLongUsage()
     # This is the long "man page" when launched with the help argument.
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
-Split standard input into sections and execute COMMAND with each section file
+Split standard input into pieces and execute COMMAND with each piece file
 (which ${fileMarker:+either }is appended${fileMarker:+ or replaces any $fileMarker marker} inside COMMANDLINE).
 HELPDESCRIPTION
     echo
@@ -48,7 +48,7 @@ HELPDESCRIPTION
 			and ARGS are replaced by the passed SPLIT-OPTIONS, input
 			file, output directory + file prefix, and trailing ARGS
 			respectively.
-${hasProgressNotification:+    --progress SINK	Report the current section through one of the SINKs of
+${hasProgressNotification:+    --progress SINK	Report the current piece through one of the SINKs of
 			the progressNotification command.
 }    --with-header	Print a header (containing the current ARGUMENT) before
 			each execution if COMMAND produces output.
@@ -63,17 +63,17 @@ ${hasProgressNotification:+    --progress SINK	Report the current section throug
 HELPTEXT
     runWithPrompt --get-long-usage 2>/dev/null
     cat <<HELPTEXT
-    --section-info-extractor-command CMD
-			Use CMD to extract the section identifier (from the
-			section contents). FILEs ${fileMarker:+either }are appended${extractorMarker:+
+    --piece-info-extractor-command CMD
+			Use CMD to extract the piece identifier (from the
+			piece contents). FILEs ${fileMarker:+either }are appended${extractorMarker:+
 			or replace any $extractorMarker marker} inside COMMANDLINE.
-    --section-info-extractor-exec CMD [...] ${EACHSPLIT_EXTRACTOR_END}
-			Use CMD to extract the section identifier (from the
-			section contents); all following arguments are taken to
+    --piece-info-extractor-exec CMD [...] ${EACHSPLIT_EXTRACTOR_END}
+			Use CMD to extract the piece identifier (from the
+			piece contents); all following arguments are taken to
 			be arguments to the CMD until an argument consisting of
 			'${EACHSPLIT_EXTRACTOR_END}' is encountered. FILEs ${fileMarker:+either }are appended${extractorMarker:+ or replace
 			any $extractorMarker marker} inside COMMANDLINE.
-    --file|-f FILE	Split sections from FILE instead of standard input.
+    --file|-f FILE	Split pieces from FILE instead of standard input.
     --command|-c CMD	Execute CMD as a command-line. FILEs ${fileMarker:+either }are appended
 			${fileMarker:+or replace any $fileMarker marker }inside COMMANDLINE.
     --exec CMD [...] ${EACHSPLIT_EXEC_END}	Execute CMD; all following arguments are taken to be
@@ -86,7 +86,7 @@ SEE ALSO:
 EXIT STATUS:
 Overall exit status is the highest status of all. If you specify any
 runWith[Prompt] argument, --worst-status needs to be explicitly passed.
-    $EACHSPLIT_NO_SECTION_STATUS: No sections were found.
+    $EACHSPLIT_NO_PIECE_STATUS: No pieces were found.
 HELPTEXT
 }
 
@@ -130,9 +130,9 @@ do
 			shift; errorRedir='';;
 	--no-color|--color=*)	colorArg=("$1"); shift;;
 	--with-prompt)	shift; with=runWithPrompt;;
-	--section-info-extractor-command)
-			shift; sectionInfoExtractorCommand+="${sectionInfoExtractorCommand:+ $EACHSPLIT_EXTRACTOR_JOINER }${1:?}"; shift;;
-	--section-info-extractor-exec)
+	--piece-info-extractor-command)
+			shift; pieceInfoExtractorCommand+="${pieceInfoExtractorCommand:+ $EACHSPLIT_EXTRACTOR_JOINER }${1:?}"; shift;;
+	--piece-info-extractor-exec)
 			shift
 			cmd=
 			printf -v escapedExtractorMarker %q "$extractorMarker"
@@ -147,7 +147,7 @@ do
 			    exit 2
 			fi >&2
 			shift
-			sectionInfoExtractorCommand+="${sectionInfoExtractorCommand:+ $EACHSPLIT_EXTRACTOR_JOINER }${cmd}"
+			pieceInfoExtractorCommand+="${pieceInfoExtractorCommand:+ $EACHSPLIT_EXTRACTOR_JOINER }${cmd}"
 			;;
 	--command|-c)	shift; commands+="${commands:+ $EACHSPLIT_COMMAND_JOINER }$1"; shift;;
 	--exec)		shift
@@ -219,25 +219,25 @@ splitCommand=("${splitCommand[@]//FILE/"$filespec"}")
 splitCommand=("${splitCommand[@]//PREFIX/"${tempDirspec}/${EACHSPLIT_FILE_PREFIX}"}")
 
 "${splitCommand[@]}" || exit $?
-typeset -a sectionFiles=("${tempDirspec}/${EACHSPLIT_FILE_PREFIX}"*)
-if [ ${#sectionFiles[@]} -eq 0 ]; then
-    exit $EACHSPLIT_NO_SECTION_STATUS
+typeset -a pieceFiles=("${tempDirspec}/${EACHSPLIT_FILE_PREFIX}"*)
+if [ ${#pieceFiles[@]} -eq 0 ]; then
+    exit $EACHSPLIT_NO_PIECE_STATUS
 fi
 
 if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
     typeset -a progressNotificationCommand=(progressNotification --to "$progressSink" ${EACHARG_ARG_WHAT:+--prepend-count "$EACHARG_ARG_WHAT"} --count-to $#)
 fi
 
-getSectionInfo()
+getPieceInfo()
 {
-    if [ -z "$sectionInfoExtractorCommand" ]; then
-	printf %s "$sectionFile"
+    if [ -z "$pieceInfoExtractorCommand" ]; then
+	printf %s "$pieceFile"
 	return 0
     fi
 
-    interpolatedSectionInfoExtractorCommand="${sectionInfoExtractorCommand//"$extractorMarker"/$quotedSectionFile}"
-    [ "$interpolatedSectionInfoExtractorCommand" = "$sectionInfoExtractorCommand" ] || quotedSectionFile=''
-    eval "$interpolatedSectionInfoExtractorCommand" "$quotedSectionFile"
+    interpolatedPieceInfoExtractorCommand="${pieceInfoExtractorCommand//"$extractorMarker"/$quotedPieceFile}"
+    [ "$interpolatedPieceInfoExtractorCommand" = "$pieceInfoExtractorCommand" ] || quotedPieceFile=''
+    eval "$interpolatedPieceInfoExtractorCommand" "$quotedPieceFile"
 }
 
 isHeader=
@@ -251,15 +251,15 @@ case "$with" in
 		printf '2>/dev/null); reportProgress() { trap "reportProgress() { :; }; trap PIPE" PIPE; printf %%s\\\\n "$*" >&4 2>/dev/null; }\n'
 	    fi
 
-	    for sectionFile in "${sectionFiles[@]}"
+	    for pieceFile in "${pieceFiles[@]}"
 	    do
-		printf -v quotedSectionFile '%q' "$sectionFile"
-		interpolatedCommands="${commands//"$fileMarker"/$quotedSectionFile}"
-		typeset -a f=("$quotedSectionFile")
+		printf -v quotedPieceFile '%q' "$pieceFile"
+		interpolatedCommands="${commands//"$fileMarker"/$quotedPieceFile}"
+		typeset -a f=("$quotedPieceFile")
 		[ "$interpolatedCommands" = "$commands" ] || f=()
 
 		[ "$hasProgressNotification" ] && [ -n "$progressSink" ] \
-		    && printf ' reportProgress %q || :\n' "$(getSectionInfo)"
+		    && printf ' reportProgress %q || :\n' "$(getPieceInfo)"
 		printf '%s ' "$interpolatedCommands" "${f[@]}"
 		printf '\n'
 	    done
@@ -282,16 +282,16 @@ case "$with" in
 	status=
 	: ${EACHSPLIT_HEADER_ID:="eachSplit-$$-$RANDOM"}
 	exec 3<&0
-	for sectionFile in "${sectionFiles[@]}"
+	for pieceFile in "${pieceFiles[@]}"
 	do
-	    printf -v quotedSectionFile '%q' "$sectionFile"
-	    sectionInfo="$(getSectionInfo)"
+	    printf -v quotedPieceFile '%q' "$pieceFile"
+	    pieceInfo="$(getPieceInfo)"
 
-	    interpolatedCommands="${commands//"$fileMarker"/$quotedSectionFile}"
-	    [ "$interpolatedCommands" = "$commands" ] || quotedSectionFile=''
+	    interpolatedCommands="${commands//"$fileMarker"/$quotedPieceFile}"
+	    [ "$interpolatedCommands" = "$commands" ] || quotedPieceFile=''
 
-	    reportProgress "$sectionInfo"
-	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedSectionFile" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHSPLIT_HEADER_ID' -- '$sectionInfo'}") <&3; exitStatus=$?
+	    reportProgress "$pieceInfo"
+	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedPieceFile" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHSPLIT_HEADER_ID' -- '$pieceInfo'}") <&3; exitStatus=$?
 	    if [ $exitStatus -gt ${status:--1} -a $exitStatus -ne ${additionalSuccessStatus:--1} ]; then
 		status=$exitStatus
 	    fi

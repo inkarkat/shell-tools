@@ -1,10 +1,13 @@
 #!/bin/bash
 
+: ${EACHSECTION_FILE_PREFIX=section-}
+
 printUsage()
 {
     eachSplit --help 2>&1 | sed \
 	-e '1s#^.*$#Split standard input into sections separated by PATTERN (two or three dashes by\ndefault) and execute COMMAND with each section file (which either is appended or\nreplaces any {} marker inside COMMANDLINE).#' \
 	-e '2b removeFirstParagraphLoop' \
+	-e 's/--piece-info/--section-info/g' \
 	-e 's/SPLIT-OPTIONS \.\.\./-S|--section-separator PATTERN] [-z|--elide-empty-files/g' \
 	-e '/^SEE ALSO:/a\
 - dishOutSections dynamically prints individual sections on each invocation.\
@@ -35,9 +38,12 @@ do
 	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
 	--section-separator|-S)
 			shift; separatorPattern="${1:?}"; shift;;
+	--section-info-*)
+			args+=("${1/#--section-/--piece-}"); shift;;
 	--)		args+=("$1"); shift; break;;
 	*)		args+=("$1"); shift;;
     esac
 done
 
-exec eachSplit --splitter csplit --quiet --suppress-matched --prefix=PREFIX OPTIONS FILE ARGS \; "/${separatorPattern}/" '{*}' "${args[@]}" "$@"
+EACHSPLIT_FILE_PREFIX="$EACHSECTION_FILE_PREFIX" \
+    exec eachSplit --splitter csplit --quiet --suppress-matched --prefix=PREFIX OPTIONS FILE ARGS \; "/${separatorPattern}/" '{*}' "${args[@]}" "$@"
