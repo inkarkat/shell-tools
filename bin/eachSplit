@@ -8,6 +8,7 @@ shopt -qs nullglob
 fileMarker="$EACHSPLIT_FILE_MARKER"; unset EACHSPLIT_FILE_MARKER
 : ${EACHSPLIT_EXTRACTOR_MARKER='{}'}
 extractorMarker="$EACHSPLIT_EXTRACTOR_MARKER"; unset EACHSPLIT_EXTRACTOR_MARKER
+: ${EACHSPLIT_EXTRACTOR_JOINER=;}
 : ${EACHSPLIT_EXTRACTOR_END=;}
 : ${EACHSPLIT_SPLITTER_END=;}
 : ${EACHSPLIT_FILE_PREFIX=section-}
@@ -130,7 +131,7 @@ do
 	--no-color|--color=*)	colorArg=("$1"); shift;;
 	--with-prompt)	shift; with=runWithPrompt;;
 	--section-info-extractor-command)
-			shift; sectionInfoExtractorCommand+="${sectionInfoExtractorCommand:+ $EACHSPLIT_COMMAND_JOINER }${1:?}"; shift;;
+			shift; sectionInfoExtractorCommand+="${sectionInfoExtractorCommand:+ $EACHSPLIT_EXTRACTOR_JOINER }${1:?}"; shift;;
 	--section-info-extractor-exec)
 			shift
 			cmd=
@@ -146,7 +147,7 @@ do
 			    exit 2
 			fi >&2
 			shift
-			sectionInfoExtractorCommand+="${sectionInfoExtractorCommand:+ $EACHSPLIT_COMMAND_JOINER }${cmd}"
+			sectionInfoExtractorCommand+="${sectionInfoExtractorCommand:+ $EACHSPLIT_EXTRACTOR_JOINER }${cmd}"
 			;;
 	--command|-c)	shift; commands+="${commands:+ $EACHSPLIT_COMMAND_JOINER }$1"; shift;;
 	--exec)		shift
