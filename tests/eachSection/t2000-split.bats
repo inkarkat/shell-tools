@@ -35,8 +35,8 @@ EOF
     assert_output ''
 }
 
-@test "split headered sections and prefix" {
-    run -0 eachSection --section-separator '^-- [^[:space:]].* -\+$' --file "${BATS_TEST_DIRNAME}/inputs/headered.txt" -- "${SECTION_PREFIXER_COMMAND[@]}"
+@test "split dashdash-headered sections and prefix" {
+    run -0 eachSection --section-separator '^-- [^[:space:]].* --\+$' --file "${BATS_TEST_DIRNAME}/inputs/dashdash-headered.txt" -- "${SECTION_PREFIXER_COMMAND[@]}"
     assert_output - <<'EOF'
 01: Is a simple one.
 01: 
