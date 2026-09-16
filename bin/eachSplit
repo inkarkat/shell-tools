@@ -6,6 +6,8 @@ shopt -qs nullglob
 : ${EACHSPLIT_EXEC_END=;}
 : ${EACHSPLIT_FILE_MARKER='{}'}
 fileMarker="$EACHSPLIT_FILE_MARKER"; unset EACHSPLIT_FILE_MARKER
+: ${EACHSPLIT_IDENTIFIER_MARKER='{I}'}
+identifierMarker="$EACHSPLIT_IDENTIFIER_MARKER"; unset EACHSPLIT_IDENTIFIER_MARKER
 : ${EACHSPLIT_EXTRACTOR_MARKER='{}'}
 extractorMarker="$EACHSPLIT_EXTRACTOR_MARKER"; unset EACHSPLIT_EXTRACTOR_MARKER
 : ${EACHSPLIT_EXTRACTOR_JOINER=;}
@@ -24,7 +26,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, they can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}] [SPLIT-OPTIONS ...]${hasProgressNotification:+ [--progress SINK]} [--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--piece-info-extractor-command COMMANDLINE|--piece-info-extractor-exec CMD [...]${extractorMarker:+ [}${extractorMarker}${extractorMarker:+] [...]} ${EACHSPLIT_EXTRACTOR_END}] [--piece-modifier-command COMMANDLINE|--piece-modifier-exec CMD [...]${modifierMarker:+ [}${modifierMarker}${modifierMarker:+] [...]} ${EACHSPLIT_MODIFIER_END}] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...]${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--exec ...] | -- SIMPLECOMMAND [...] [-?|-h|--help] ..."
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}] [SPLIT-OPTIONS ...]${hasProgressNotification:+ [--progress SINK]} [--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--piece-info-extractor-command COMMANDLINE|--piece-info-extractor-exec CMD [...]${extractorMarker:+ [}${extractorMarker}${extractorMarker:+] [...]} ${EACHSPLIT_EXTRACTOR_END}] [--piece-modifier-command COMMANDLINE|--piece-modifier-exec CMD [...]${modifierMarker:+ [}${modifierMarker}${modifierMarker:+] [...]} ${EACHSPLIT_MODIFIER_END}] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...]${identifierMarker:+ [${identifierMarker}]}${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--exec ...] | -- SIMPLECOMMAND [...] [-?|-h|--help] ..."
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '...'
     printf 'Usage: %q %s\n' "$(basename "$1")" '-f|--file FILE ...'
 }
@@ -93,11 +95,15 @@ HELPTEXT
 			is not executed for that piece.
     --file|-f FILE	Split pieces from FILE instead of standard input.
     --command|-c CMD	Execute CMD as a command-line. FILEs ${fileMarker:+either }are appended
-			${fileMarker:+or replace any $fileMarker marker }inside COMMANDLINE.
+			${fileMarker:+or replace any $fileMarker marker }inside COMMANDLINE.${identifierMarker:+
+			Furthermore, ${identifierMarker} is replaced with the piece filename /
+			extracted piece info inside COMMANDLINE.}
     --exec CMD [...] ${EACHSPLIT_EXEC_END}	Execute CMD; all following arguments are taken to be
 			arguments to the CMD until an argument consisting of
 			'${EACHSPLIT_EXEC_END}' is encountered. FILEs ${fileMarker:+either }are appended${fileMarker:+ or replace
-			any $fileMarker marker} inside COMMANDLINE.
+			any $fileMarker marker} inside COMMANDLINE.${identifierMarker:+
+			Furthermore, ${identifierMarker} is replaced with the piece filename /
+			extracted piece info inside COMMANDLINE.}
 SEE ALSO:
 - eachFile directly operates on individual files.
 
@@ -192,10 +198,14 @@ do
 	--exec)		shift
 			cmd=
 			printf -v escapedFileMarker %q "$fileMarker"
+			printf -v escapedIdentifierMarker %q "$identifierMarker"
 			while [ $# -gt 0 -a "$1" != "$EACHSPLIT_EXEC_END" ]
 			do
 			    printf -v quotedArg %q "$1"
-			    cmd+="${cmd:+ }${quotedArg//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    # %q escapes {} and {I}, we don't want that to have it interpolated later.
+			    quotedArg="${quotedArg//"$escapedFileMarker"/$fileMarker}"
+			    quotedArg="${quotedArg//"$escapedIdentifierMarker"/$identifierMarker}"
+			    cmd+="${cmd:+ }${quotedArg}"
 			    shift
 			done
 			if [ $# -eq 0 ]; then
@@ -227,7 +237,11 @@ if [ $# -ne 0 ]; then
     # undo the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
     printf -v escapedFileMarker %q "$fileMarker"
-    commands+="${commands:+ $EACHSPLIT_COMMAND_JOINER }${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+    printf -v escapedIdentifierMarker %q "$identifierMarker"
+    # %q escapes {} and {I}, we don't want that to have it interpolated later.
+    quotedSimpleCommand="${quotedSimpleCommand//"$escapedFileMarker"/$fileMarker}"
+    quotedSimpleCommand="${quotedSimpleCommand//"$escapedIdentifierMarker"/$identifierMarker}"
+    commands+="${commands:+ $EACHSPLIT_COMMAND_JOINER }${quotedSimpleCommand}"
 fi
 if [ -z "$commands" ]; then
     echo "ERROR: No COMMAND(s) specified; need to pass -c|--command \"COMMANDLINE\", or --exec SIMPLECOMMAND [...] $EACHSPLIT_EXEC_END or SIMPLECOMMAND."
@@ -269,11 +283,13 @@ fi
 
 getPieceInfo()
 {
+    local pieceFile="${1:?}"; shift
     if [ -z "$pieceInfoExtractorCommand" ]; then
-	printf %s "$pieceFile"
+	printf %s "${pieceFile##*/}"
 	return 0
     fi
 
+    local quotedPieceFile; printf -v quotedPieceFile '%q' "$pieceFile"
     local interpolatedPieceInfoExtractorCommand="${pieceInfoExtractorCommand//"$extractorMarker"/$quotedPieceFile}"
     [ "$interpolatedPieceInfoExtractorCommand" = "$pieceInfoExtractorCommand" ] || quotedPieceFile=''
     eval "$interpolatedPieceInfoExtractorCommand" "$quotedPieceFile"
@@ -303,13 +319,16 @@ case "$with" in
 
 	    for pieceFile in "${pieceFiles[@]}"
 	    do
+		pieceInfo="$(getPieceInfo "$pieceFile")"
+		modifyPieceFile "$pieceFile" || continue
+
 		printf -v quotedPieceFile '%q' "$pieceFile"
-		interpolatedCommands="${commands//"$fileMarker"/$quotedPieceFile}"
+		printf -v quotedPieceInfo '%q' "$pieceInfo"
+		interpolatedCommands="$commands"
+		interpolatedCommands="${interpolatedCommands//"$fileMarker"/$quotedPieceFile}"
 		typeset -a f=("$quotedPieceFile")
 		[ "$interpolatedCommands" = "$commands" ] || f=()
-
-		pieceInfo="$(getPieceInfo)"
-		modifyPieceFile "$pieceFile" || continue
+		interpolatedCommands="${interpolatedCommands//"$identifierMarker"/$quotedPieceInfo}"
 
 		[ "$hasProgressNotification" ] && [ -n "$progressSink" ] \
 		    && printf ' reportProgress %q || :\n' "$pieceInfo"
@@ -338,12 +357,15 @@ case "$with" in
 	exec 3<&0
 	for pieceFile in "${pieceFiles[@]}"
 	do
-	    printf -v quotedPieceFile '%q' "$pieceFile"
-	    pieceInfo="$(getPieceInfo)"
+	    pieceInfo="$(getPieceInfo "$pieceFile")"
 	    modifyPieceFile "$pieceFile" || continue
 
-	    interpolatedCommands="${commands//"$fileMarker"/$quotedPieceFile}"
+	    printf -v quotedPieceFile '%q' "$pieceFile"
+	    printf -v quotedPieceInfo '%q' "$pieceInfo"
+	    interpolatedCommands="$commands"
+	    interpolatedCommands="${interpolatedCommands//"$fileMarker"/$quotedPieceFile}"
 	    [ "$interpolatedCommands" = "$commands" ] || quotedPieceFile=''
+	    interpolatedCommands="${interpolatedCommands//"$identifierMarker"/$quotedPieceInfo}"
 
 	    reportProgress "$pieceInfo"
 	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedPieceFile" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHSPLIT_HEADER_ID' -- '$pieceInfo'}") <&3; exitStatus=$?
