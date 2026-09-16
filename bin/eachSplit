@@ -19,7 +19,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, they can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}] [SPLIT-OPTIONS ...]${hasProgressNotification:+ [--progress SINK]} [--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--section-info-extractor CMD [...]${extractorMarker:+ [}${extractorMarker}${extractorMarker:+] [...]} ${EACHSPLIT_EXTRACTOR_END}] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...]${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--exec ...] | -- SIMPLECOMMAND [...] [-?|-h|--help] ..."
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}] [SPLIT-OPTIONS ...]${hasProgressNotification:+ [--progress SINK]} [--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--section-info-extractor-command COMMANDLINE|--section-info-extractor-exec CMD [...]${extractorMarker:+ [}${extractorMarker}${extractorMarker:+] [...]} ${EACHSPLIT_EXTRACTOR_END}] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...]${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--exec ...] | -- SIMPLECOMMAND [...] [-?|-h|--help] ..."
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '...'
     printf 'Usage: %q %s\n' "$(basename "$1")" '-f|--file FILE ...'
 }
@@ -62,7 +62,11 @@ ${hasProgressNotification:+    --progress SINK	Report the current section throug
 HELPTEXT
     runWithPrompt --get-long-usage 2>/dev/null
     cat <<HELPTEXT
-    --section-info-extractor CMD [...] ${EACHSPLIT_EXTRACTOR_END}
+    --section-info-extractor-command CMD
+			Use CMD to extract the section identifier (from the
+			section contents). FILEs ${fileMarker:+either }are appended${extractorMarker:+
+			or replace any $extractorMarker marker} inside COMMANDLINE.
+    --section-info-extractor-exec CMD [...] ${EACHSPLIT_EXTRACTOR_END}
 			Use CMD to extract the section identifier (from the
 			section contents); all following arguments are taken to
 			be arguments to the CMD until an argument consisting of
@@ -125,7 +129,9 @@ do
 			shift; errorRedir='';;
 	--no-color|--color=*)	colorArg=("$1"); shift;;
 	--with-prompt)	shift; with=runWithPrompt;;
-	--section-info-extractor)
+	--section-info-extractor-command)
+			shift; sectionInfoExtractorCommand+="${sectionInfoExtractorCommand:+ $EACHSPLIT_COMMAND_JOINER }${1:?}"; shift;;
+	--section-info-extractor-exec)
 			shift
 			cmd=
 			printf -v escapedExtractorMarker %q "$extractorMarker"
