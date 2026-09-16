@@ -9,7 +9,8 @@ printUsage()
 	-e '/^SEE ALSO:/a\
 - dishOutSections dynamically prints individual sections on each invocation.\
 - eachCsplit is a generalization that allows the use of different separators and\
-  fine-grained control of offsets and repetitions.' \
+  fine-grained control of offsets and repetitions.\
+- eachParagraph is a specialization for splitting on empty lines.' \
 	-e '/^ *--splitter/i\
     --section-separator|-S PATTERN\
 			Lines matching PATTERN separate the individual sections\
