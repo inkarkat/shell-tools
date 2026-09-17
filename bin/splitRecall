@@ -2,6 +2,8 @@
 
 ${DEBUG:+eval $(debugtrace -o $- -- "$@")}
 
+: ${EACHSPLIT:=eachSplit}
+
 typeset -a fileRecallArgs=()
 typeset -a eachSplitArgs=()
 while [ $# -ne 0 ]
@@ -9,7 +11,7 @@ do
     case "$1" in
 	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
 	--)		break;;
-	-*)		if argCount=$(eachSplit --understand-for split --understand-for piece-info --understand-for input --understands "$@"); then
+	-*)		if argCount=$($EACHSPLIT --understand-for split --understand-for piece-info --understand-for input --understands "$@"); then
 			    eachSplitArgs+=("${@:1:argCount}")
 			    shift $argCount
 			elif [ $? -eq 2 ]; then
@@ -22,5 +24,5 @@ do
     esac
 done
 
-exec eachSplit "${eachSplitArgs[@]}" --consumer-exec \
+exec $EACHSPLIT "${eachSplitArgs[@]}" --consumer-exec \
     file-recall --catalog {} "${fileRecallArgs[@]}" "$@" \;

@@ -1,0 +1,3 @@
+#!/bin/sh
+
+EACHSPLIT=eachPrompt exec splitRecall "$@"
