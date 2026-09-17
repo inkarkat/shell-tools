@@ -1,30 +1,43 @@
 #!/bin/bash
 
+: ${EACHSECTION_FILE_PREFIX=section-}
+
 printUsage()
 {
     eachSplit --help 2>&1 | sed \
 	-e '1s#^.*$#Split standard input into sections separated by PATTERN (two or three dashes by\ndefault) and execute COMMAND with each section file (which either is appended or\nreplaces any {} marker inside COMMANDLINE).#' \
 	-e '2b removeFirstParagraphLoop' \
-	-e 's/SPLIT-OPTIONS \.\.\./-S|--section-separator PATTERN/g' \
+	-e 's/--piece-/--section-/g' \
+	-e 's/SPLIT-OPTIONS \.\.\./-S|--section-separator PATTERN] [-z|--elide-empty-files/g' \
 	-e '/^SEE ALSO:/a\
 - dishOutSections dynamically prints individual sections on each invocation.\
 - eachCsplit is a generalization that allows the use of different separators and\
-  fine-grained control of offsets and repetitions.' \
+  fine-grained control of offsets and repetitions.\
+- eachParagraph is a specialization for splitting on empty lines.' \
 	-e '/^ *--splitter/i\
     --section-separator|-S PATTERN\
 			Lines matching PATTERN separate the individual sections\
 			within the FILE. These lines are not part of the output.\
 			PATTERN is a POSIX-style unanchored basic regular\
 			expression. The default separator is two or three\
-			dashes.' \
+			dashes.\
+    --elide-empty-files|-z\
+			Empty sections do not produce empty files.' \
+	-e '/^ *--section-modifier-command/i\
+    --section-info-include-separator above|below\
+			Pass the separator line (which belongs to the section\
+			above / below) to the section info extractor (not just\
+			the section contents).' \
 	-e '/^ *--splitter/b removeOptionLoop' \
-	-e '/^Usage:$/N' -e '/\(^\|\n\)Usage: */{ s/\(^\|\n\)\(Usage: *\)\?\([^ |]\+ \)*eachSplit /\1\2'"$(basename "$1")"' /; s/\[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ;\] //; }' \
+	-e '/^Usage:$/N' -e '/\(^\|\n\)Usage: */{ s/\(^\|\n\)\(Usage: *\)\?\(\([^ |]\+ \)*\(| \)\?\)eachSplit /\1\2\3'"$(basename "$1")"' /; s/\[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ;\] //;  s/\[--section-modifier-command/[--section-info-include-separator above|below] &/; }' \
 	-e '/^Example:$/N' -e '/\(^\|\n\)Example: */{ s/\(^\|\n\)\(Example: *\)\?eachSplit /\1\2'"$(basename "$1") /; }" \
 	-e b -e :removeFirstParagraphLoop -e '{ /\(^\|\n\)$/{ s/^\(.*\n\)\?//; b; }; N; b removeFirstParagraphLoop; }' \
 	-e b -e :removeOptionLoop -e '{ /\n *--splitter[^\n]*$/{ N; b removeOptionLoop; }; /\n *--[^\n]*$\|\n[^	 ]\|\n$/{ s/^\(.*\n\)\?//; b; }; N; b removeOptionLoop; }'
 }
 
 separatorPattern='^-\{2,3\}$'
+isSeparatorBelow=
+typeset -a suppressedMatchedArg=(--suppress-matched)
 typeset -a args=()
 while [ $# -ne 0 ]
 do
@@ -32,9 +45,30 @@ do
 	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
 	--section-separator|-S)
 			shift; separatorPattern="${1:?}"; shift;;
-	--)		args+=("$1"); shift; break;;
+	--section-info-include-separator)
+			shift
+			case "${1:?}" in
+			    above)  ;;
+			    below)  isSeparatorBelow=t;;
+			    *)	    echo >&2 'ERROR: --section-info-include-separator supports only "above" or "below".'
+				    echo >&2
+				    printUsage "$0" >&2
+				    exit 2
+				    ;;
+			esac; shift
+			suppressedMatchedArg=()
+			args+=(--piece-modifier-exec sed -i "/${separatorPattern//\//\\/}/d" -- "${EACHSPLIT_MODIFIER_MARKER:-{\}}" "${EACHSPLIT_MODIFIER_END:-;}")
+			;;
+	--section-*)	args+=("${1/#--section-/--piece-}"); shift;;
+
+	# Note: In order to parse -- properly, the --section-*-exec parameters would
+	# have to be fully parsed, too, because they can contain --. We go the lazy
+	# route and just assume that anything after -- doesn't start with --section-*.
+	#--)		args+=("$1"); shift; break;;
+
 	*)		args+=("$1"); shift;;
     esac
 done
 
-exec eachSplit --splitter csplit --suppress-matched --prefix=PREFIX OPTIONS FILE ARGS \; "/${separatorPattern}/" '{*}' "${args[@]}" "$@"
+EACHSPLIT_FILE_PREFIX="$EACHSECTION_FILE_PREFIX" \
+    exec eachSplit --splitter csplit --quiet "${suppressedMatchedArg[@]}" --prefix=PREFIX OPTIONS FILE ARGS \; "/${separatorPattern}/${isSeparatorBelow:++1}" '{*}' "${args[@]}" "$@"
