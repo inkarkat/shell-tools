@@ -26,42 +26,85 @@ modifierMarker="$EACHSPLIT_MODIFIER_MARKER"; unset EACHSPLIT_MODIFIER_MARKER
 
 hasProgressNotification=; type -t progressNotification >/dev/null && hasProgressNotification=t
 
-printShortUsage()
+getShortUsage()
 {
-    # Note: short followed by long option; if the user knows the short one, they can
-    # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}] [SPLIT-OPTIONS ...] [--piece-info-extractor-command COMMANDLINE|--piece-info-extractor-exec CMD [...]${extractorMarker:+ [}${extractorMarker}${extractorMarker:+] [...]} ${EACHSPLIT_EXTRACTOR_END}] [--piece-modifier-command COMMANDLINE|--piece-modifier-exec CMD [...]${modifierMarker:+ [}${modifierMarker}${modifierMarker:+] [...]} ${EACHSPLIT_MODIFIER_END}] [-?|-h|--help] ..."
-    echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "...${hasProgressNotification:+ [--progress SINK]} [--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...]${identifierMarker:+ [${identifierMarker}]}${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--exec ...] | -- SIMPLECOMMAND [...]"
-    printf 'Usage: %q %s\n' "$(basename "$1")" "... -C|--consumer-command \"COMMANDLINE\" [-C ...] | --consumer-exec SIMPLECOMMAND [...]${mappingMarker:+ [${mappingMarker}]}${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--consumer-exec ...]"
-    echo
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '...'
-    printf 'Usage: %q %s\n' "$(basename "$1")" '-f|--file FILE ...'
+    local usageSep
+    [ $# -gt 0 ] || set -- ''
+    while [ $# -gt 0 ]
+    do
+	local hadTopic=
+	case "$1" in
+	    ''|split)
+		printf %s "${usageSep}${hadTopic:+ }" "[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}] [SPLIT-OPTIONS ...]"; hadTopic=t;;&
+	    ''|piece-info)
+		printf %s "${usageSep}${hadTopic:+ }" "[--piece-info-extractor-command COMMANDLINE|--piece-info-extractor-exec CMD [...]${extractorMarker:+ [}${extractorMarker}${extractorMarker:+] [...]} ${EACHSPLIT_EXTRACTOR_END}]"; hadTopic=t;;&
+	    ''|piece-modifier)
+		printf %s "${usageSep}${hadTopic:+ }" "[--piece-modifier-command COMMANDLINE|--piece-modifier-exec CMD [...]${modifierMarker:+ [}${modifierMarker}${modifierMarker:+] [...]} ${EACHSPLIT_MODIFIER_END}]"; hadTopic=t;;&
+	    ''|iteration)
+		printf %s "${usageSep}${hadTopic:+ }" "${hasProgressNotification:+[--progress SINK] }[--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...]${identifierMarker:+ [${identifierMarker}]}${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--exec ...] | -- SIMPLECOMMAND [...]"; hadTopic=t;;&
+	    ''|consumer)
+		printf %s "${usageSep}${hadTopic:+ }" "-C|--consumer-command \"COMMANDLINE\" [-C ...] | --consumer-exec SIMPLECOMMAND [...]${mappingMarker:+ [${mappingMarker}]}${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--consumer-exec ...]"; hadTopic=t;;&
+	    ''|input)
+		printf %s "${usageSep}${hadTopic:+ }" '-f|--file FILE'; hadTopic=t;;&
+	    *)  [ "$hadTopic" ] || { echo "ERROR: Unknown short usage topic \"$1\"!" >&2; return 2; };;
+	esac
+	shift; usageSep=' '
+    done
 }
-printUsage()
+getLongUsage()
 {
-    # This is the short help when launched with no or incorrect arguments.
-    # It is printed to stderr to avoid accidental processing.
-    printShortUsage "$1" >&2
-    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
-}
-printLongUsage()
-{
-    # This is the long "man page" when launched with the help argument.
-    # It is printed to stdout to allow paging with 'more'.
-    cat <<HELPDESCRIPTION
-Split standard input into pieces and execute COMMAND with each piece file
-(which ${fileMarker:+either }is appended${fileMarker:+ or replaces any $fileMarker marker} inside COMMANDLINE).
-HELPDESCRIPTION
-    echo
-    printShortUsage "$1"
-    echo
-    cat <<HELPTEXT
+    [ $# -gt 0 ] || set -- ''
+    while [ $# -gt 0 ]
+    do
+	local topic="$1"; shift
+	local hadTopic=
+	case "$topic" in
+	    ''|split)
+		cat <<HELPTEXT
     --splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}
 			Use a different split command; OPTIONS, FILE, PREFIX,
 			and ARGS are replaced by the passed SPLIT-OPTIONS, input
 			file, output directory + file prefix, and trailing ARGS
 			respectively.
+HELPTEXT
+		hadTopic=t
+		;;&
+	    ''|piece-info)
+		cat <<HELPTEXT
+    --piece-info-extractor-command CMD
+			Use CMD to extract the piece identifier (from the
+			piece contents). FILEs ${fileMarker:+either }are appended${extractorMarker:+
+			or replace any $extractorMarker marker} inside CMD.
+    --piece-info-extractor-exec CMD [...] ${EACHSPLIT_EXTRACTOR_END}
+			Use CMD to extract the piece identifier (from the
+			piece contents); all following arguments are taken to
+			be arguments to the CMD until an argument consisting of
+			'${EACHSPLIT_EXTRACTOR_END}' is encountered. FILEs ${fileMarker:+either }are appended${extractorMarker:+ or replace
+			any $extractorMarker marker} inside CMD.
+HELPTEXT
+		hadTopic=t
+		;;&
+	    ''|piece-modifier)
+		cat <<HELPTEXT
+    --piece-modifier-command CMD
+			Use CMD to modify each piece file before passing it to
+			COMMAND (but after piece info extraction). FILEs${fileMarker:+ either}
+			are appended${extractorMarker:+ or replace any $extractorMarker marker} inside CMD.
+			If the CMD fails, the piece file is skipped and COMMAND
+			is not executed for that piece.
+    --piece-modifier-exec CMD [...] ${EACHSPLIT_EXTRACTOR_END}
+			Use CMD to modify each piece file before passing it to
+			COMMAND (but after piece info extraction); all following
+			arguments are taken to be arguments to the CMD until an
+			argument consisting of '${EACHSPLIT_EXTRACTOR_END}' is encountered. FILEs${fileMarker:+ either}
+			are appended${extractorMarker:+ or replace any $extractorMarker marker} inside CMD.
+			If the CMD fails, the piece file is skipped and COMMAND
+			is not executed for that piece.
+HELPTEXT
+		hadTopic=t
+		;;&
+	    ''|iteration)
+		cat <<HELPTEXT
 ${hasProgressNotification:+    --progress SINK	Report the current piece through one of the SINKs of
 			the progressNotification command.
 }    --with-header	Print a header (containing the current ARGUMENT) before
@@ -77,31 +120,6 @@ ${hasProgressNotification:+    --progress SINK	Report the current piece through 
 HELPTEXT
     runWithPrompt --get-long-usage 2>/dev/null
     cat <<HELPTEXT
-    --piece-info-extractor-command CMD
-			Use CMD to extract the piece identifier (from the
-			piece contents). FILEs ${fileMarker:+either }are appended${extractorMarker:+
-			or replace any $extractorMarker marker} inside CMD.
-    --piece-info-extractor-exec CMD [...] ${EACHSPLIT_EXTRACTOR_END}
-			Use CMD to extract the piece identifier (from the
-			piece contents); all following arguments are taken to
-			be arguments to the CMD until an argument consisting of
-			'${EACHSPLIT_EXTRACTOR_END}' is encountered. FILEs ${fileMarker:+either }are appended${extractorMarker:+ or replace
-			any $extractorMarker marker} inside CMD.
-    --piece-modifier-command CMD
-			Use CMD to modify each piece file before passing it to
-			COMMAND (but after piece info extraction). FILEs${fileMarker:+ either}
-			are appended${extractorMarker:+ or replace any $extractorMarker marker} inside CMD.
-			If the CMD fails, the piece file is skipped and COMMAND
-			is not executed for that piece.
-    --piece-modifier-exec CMD [...] ${EACHSPLIT_EXTRACTOR_END}
-			Use CMD to modify each piece file before passing it to
-			COMMAND (but after piece info extraction); all following
-			arguments are taken to be arguments to the CMD until an
-			argument consisting of '${EACHSPLIT_EXTRACTOR_END}' is encountered. FILEs${fileMarker:+ either}
-			are appended${extractorMarker:+ or replace any $extractorMarker marker} inside CMD.
-			If the CMD fails, the piece file is skipped and COMMAND
-			is not executed for that piece.
-    --file|-f FILE	Split pieces from FILE instead of standard input.
     --command|-c CMD	Execute CMD as a command-line. FILEs ${fileMarker:+either }are appended
 			${fileMarker:+or replace any $fileMarker marker }inside COMMANDLINE.${identifierMarker:+
 			Furthermore, ${identifierMarker} is replaced with the piece filename /
@@ -112,6 +130,11 @@ HELPTEXT
 			any $fileMarker marker} inside COMMANDLINE.${identifierMarker:+
 			Furthermore, ${identifierMarker} is replaced with the piece filename /
 			extracted piece info inside COMMANDLINE.}
+HELPTEXT
+		hadTopic=t
+		;;&
+	    ''|consumer)
+		cat <<HELPTEXT
     --consumer-command|-C CMD
 			Execute CMD once as a command-line to work on all split
 			pieces at once. ${fileMarker:+Any $fileMarker marker is replaced with a catalog
@@ -134,6 +157,52 @@ HELPTEXT
 			each split piece filespec to the corresponding extracted
 			piece info.} ${fileMarker:+If no marker is given, }all piece filespecs
 			are directly appended to CMD.
+HELPTEXT
+		hadTopic=t
+		;;&
+	    ''|input)
+		cat <<HELPTEXT
+    --file|-f FILE	Split pieces from FILE instead of standard input.
+HELPTEXT
+		hadTopic=t
+		;;&
+	    *)  [ "$hadTopic" ] || { echo "ERROR: Unknown long usage topic \"$topic\"!" >&2; return 2; };;
+	esac
+    done
+}
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, they can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" "$(getShortUsage split piece-info piece-modifier) [-?|-h|--help] ..."
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... $(getShortUsage iteration)"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... $(getShortUsage consumer)"
+    echo
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '...'
+    printf 'Usage: %q %s\n' "$(basename "$1")" "$(getShortUsage input) ..."
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Split standard input into pieces and execute COMMAND with each piece file
+(which ${fileMarker:+either }is appended${fileMarker:+ or replaces any $fileMarker marker} inside COMMANDLINE).
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    getLongUsage ''
+    echo
+    cat <<HELPTEXT
 SEE ALSO:
 - eachFile directly operates on individual files.
 
@@ -163,6 +232,11 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--get-short-usage)
+			shift; getShortUsage "$@"; exit $?;;
+	--get-long-usage)
+			shift; getLongUsage "$@"; exit $?;;
+
 	--splitter)	shift
 			splitCommand=()
 			while [ $# -gt 0 -a "$1" != "$EACHSPLIT_SPLITTER_END" ]
