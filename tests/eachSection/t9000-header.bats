@@ -24,7 +24,7 @@ EOF
 }
 
 @test "split dash-dash headered sections" {
-    EACHHEADER_STYLE=dashed-line run -0 eachHeader --file "${BATS_TEST_DIRNAME}/inputs/dashdash-headered.txt" --with-header -- "${SECTION_PREFIXER_COMMAND[@]}"
+    run -0 eachDashedHeader --file "${BATS_TEST_DIRNAME}/inputs/dashdash-headered.txt" --with-header -- "${SECTION_PREFIXER_COMMAND[@]}"
     assert_output - <<'EOF'
 opener:	01: Is a simple one.
 secondary one:
