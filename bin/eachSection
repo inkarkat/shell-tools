@@ -1,50 +1,134 @@
 #!/bin/bash
+set -o pipefail
 
 : ${EACHSECTION_FILE_PREFIX=section-}
+
+getShortUsage()
+{
+    local usageSep
+    [ $# -gt 0 ] || set -- ''
+    while [ $# -gt 0 ]
+    do
+	local hadTopic=
+	case "$1" in
+	    split)
+		printf %s "${usageSep}${hadTopic:+ }" '[-S|--section-separator PATTERN] [-z|--elide-empty-files]'; hadTopic=t;;
+	    *)  printf %s "${usageSep}${hadTopic:+ }"; eachSplit --splitter csplit \; --get-short-usage "$1" | sed -e 's/--piece-/--section-/g' || [ "$hadTopic" ];;
+	esac
+	shift; usageSep=' '
+    done
+}
+
+getLongUsage()
+{
+    [ $# -gt 0 ] || set -- ''
+    while [ $# -gt 0 ]
+    do
+	local topic="$1"; shift
+	local hadTopic=
+	case "$topic" in
+	    split)
+		cat <<HELPTEXT
+    --section-separator|-S PATTERN
+			Lines matching PATTERN separate the individual sections
+			within the FILE. These lines are not part of the output.
+			PATTERN is a POSIX-style unanchored basic regular
+			expression. The default separator is two or three
+			dashes.
+    --elide-empty-files|-z
+			Empty sections do not produce empty files.
+HELPTEXT
+		hadTopic=t
+		;;
+	    piece-info)
+		eachSplit --splitter csplit \; --get-long-usage "$topic" | sed -e 's/--piece-/--section-/g'
+		;&
+	    piece-info-extension)
+		cat <<HELPTEXT
+    --section-info-include-separator above|below
+			Pass the separator line (which belongs to the section
+			above / below) to the section info extractor (not just
+			the section contents).
+HELPTEXT
+		hadTopic=t
+		;;
+	    *)  eachSplit --splitter csplit \; --get-long-usage "$topic" | sed -e 's/--piece-/--section-/g' || [ "$hadTopic" ];;
+	esac
+    done
+}
 
 printUsage()
 {
     eachSplit --help 2>&1 | sed \
 	-e '1s#^.*$#Split standard input into sections separated by PATTERN (two or three dashes by\ndefault) and execute COMMAND with each section file (which either is appended or\nreplaces any {} marker inside COMMANDLINE).#' \
 	-e '2b removeFirstParagraphLoop' \
+	-e ':start' \
 	-e 's/--piece-/--section-/g' \
-	-e 's/SPLIT-OPTIONS \.\.\./-S|--section-separator PATTERN] [-z|--elide-empty-files/g' \
+	-e 's/\[SPLIT-OPTIONS \.\.\.\]/'"$(getShortUsage split)"'/g' \
 	-e '/^SEE ALSO:/a\
 - dishOutSections dynamically prints individual sections on each invocation.\
 - eachCsplit is a generalization that allows the use of different separators and\
   fine-grained control of offsets and repetitions.\
 - eachParagraph is a specialization for splitting on empty lines.' \
-	-e '/^ *--splitter/i\
-    --section-separator|-S PATTERN\
-			Lines matching PATTERN separate the individual sections\
-			within the FILE. These lines are not part of the output.\
-			PATTERN is a POSIX-style unanchored basic regular\
-			expression. The default separator is two or three\
-			dashes.\
-    --elide-empty-files|-z\
-			Empty sections do not produce empty files.' \
-	-e '/^ *--section-modifier-command/i\
-    --section-info-include-separator above|below\
-			Pass the separator line (which belongs to the section\
-			above / below) to the section info extractor (not just\
-			the section contents).' \
+	-e '/^ *--splitter/i\'"
+$(getLongUsage split | suffix --except-last \\)" \
+	-e '/^ *--section-modifier-command/i\'"
+$(getLongUsage piece-info-extension | suffix --except-last \\)" \
 	-e '/^ *--splitter/b removeOptionLoop' \
 	-e '/^Usage:$/N' -e '/\(^\|\n\)Usage: */{ s/\(^\|\n\)\(Usage: *\)\?\(\([^ |]\+ \)*\(| \)\?\)eachSplit /\1\2\3'"$(basename "$1")"' /; s/\[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ;\] //;  s/\[--section-modifier-command/[--section-info-include-separator above|below] &/; }' \
 	-e '/^Example:$/N' -e '/\(^\|\n\)Example: */{ s/\(^\|\n\)\(Example: *\)\?eachSplit /\1\2'"$(basename "$1") /; }" \
 	-e b -e :removeFirstParagraphLoop -e '{ /\(^\|\n\)$/{ s/^\(.*\n\)\?//; b; }; N; b removeFirstParagraphLoop; }' \
-	-e b -e :removeOptionLoop -e '{ /\n *--splitter[^\n]*$/{ N; b removeOptionLoop; }; /\n *--[^\n]*$\|\n[^	 ]\|\n$/{ s/^\(.*\n\)\?//; b; }; N; b removeOptionLoop; }'
+	-e b -e :removeOptionLoop -e '{ /\n *--splitter[^\n]*$/{ N; b removeOptionLoop; }; /\n *--[^\n]*$\|\n[^	 ]\|\n$/{ s/^\(.*\n\)\?//; b start; }; N; b removeOptionLoop; }'
 }
 
 separatorPattern='^-\{2,3\}$'
 isSeparatorBelow=
 typeset -a suppressedMatchedArg=(--suppress-matched)
 typeset -a args=()
+typeset -a understandsArgs=()
+option() { :; }
+parameter() { :; }
+parameterToSep() { :; }
+argCount() { :; }
+endOfOptionsAndParameters() { :; }
+noUnderstand() { :; }
+delegateUnderstand() { :; }
+typeset -A understandsSubtopics=()
+isUnderstandSubtopic() {
+    [ $# -gt 0 -a ${#understandsSubtopics[@]} -gt 0 ] || return 0
+    local subtopic; for subtopic
+    do
+	[ "${understandsSubtopics["$subtopic"]}" ] && return 0
+    done
+    return 1
+}
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+	--get-short-usage)
+			shift; getShortUsage "$@"; exit $?;;
+	--get-long-usage)
+			shift; getLongUsage "$@"; exit $?;;
+	--understand-for)
+			understandsArgs+=("$1" "${2?}"); shift; understandsSubtopics["$1"]=t; shift;;
+	--understands)	shift
+			option() { isUnderstandSubtopic "$@" || exit 1; printf 1; exit 0; }
+			parameter() { isUnderstandSubtopic "$@" || exit 1; printf 2; exit 0; }
+			parameterToSep() { argCount "$@"; }
+			argCount() { local argCount="${1:?}"; shift; isUnderstandSubtopic "$@" || exit 1; printf $argCount; exit 0; }
+			endOfOptionsAndParameters() { exit 99; }
+			noUnderstand() { exit 1; }
+			delegateUnderstand() { eachSplit --splitter csplit \; "${understandsArgs[@]}" --understands "$@"; exit $?; }
+
+			# As a wrapper, if the wrappee understands the argument, accept that. For
+			# anything of our customizations, we need to say whether we understand it. (But
+			# we may delegate to the wrappee with renamed arguments.)
+			eachSplit --splitter csplit \; "${understandsArgs[@]}" --understands "$@" && exit 0
+			;;
+
 	--section-separator|-S)
-			shift; separatorPattern="${1:?}"; shift;;
+			shift; separatorPattern="${1:?}"; shift; parameter split;;
 	--section-info-include-separator)
 			shift
 			case "${1:?}" in
@@ -58,15 +142,16 @@ do
 			esac; shift
 			suppressedMatchedArg=()
 			args+=(--piece-modifier-exec sed -i "/${separatorPattern//\//\\/}/d" -- "${EACHSPLIT_MODIFIER_MARKER:-{\}}" "${EACHSPLIT_MODIFIER_END:-;}")
+			parameter split
 			;;
-	--section-*)	args+=("${1/#--section-/--piece-}"); shift;;
+	--section-*)	renamedArg="${1/#--section-/--piece-}"; shift; args+=("$renamedArg"); delegateUnderstand "$renamedArg" "$@";;
 
 	# Note: In order to parse -- properly, the --section-*-exec parameters would
 	# have to be fully parsed, too, because they can contain --. We go the lazy
 	# route and just assume that anything after -- doesn't start with --section-*.
 	#--)		args+=("$1"); shift; break;;
 
-	*)		args+=("$1"); shift;;
+	*)		args+=("$1"); shift; delegateUnderstand "$@";;	# This asks the wrappee again, but this time actually fails and exits.
     esac
 done
 

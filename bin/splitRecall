@@ -1,0 +1,62 @@
+#!/bin/bash
+
+${DEBUG:+eval $(debugtrace -o $- -- "$@")}
+
+: ${EACHSPLIT:=eachSplit}
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, they can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "${SPLITRECALL:-$(basename "$1")}" "$($EACHSPLIT --get-short-usage split piece-info piece-modifier input 2>/dev/null) [-?|-h|--help] ..."
+    echo
+    local i; for ((i = 1; i <= 4; i++))
+    do
+	printf 'Usage: %q %s\n' "${SPLITRECALL:-$(basename "$1")}" "... $(file-recall --get-short-usage query${i})"
+    done
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "${SPLITRECALL:-$(basename "$1")}"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Split standard input into ${SPLITRECALL_WHAT:-pieces} and recall them
+to show in the pager, or to pass to a COMMAND.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    $EACHSPLIT --get-long-usage split piece-info piece-modifier input 2>/dev/null
+    echo
+    file-recall --get-long-usage query 2>/dev/null
+}
+
+typeset -a fileRecallArgs=()
+typeset -a eachSplitArgs=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--)		break;;
+	-*)		if argCount=$($EACHSPLIT --understand-for split --understand-for piece-info --understand-for input --understands "$@"); then
+			    eachSplitArgs+=("${@:1:argCount}")
+			    shift $argCount
+			elif [ $? -eq 2 ]; then
+			    exit 2
+			else
+			    { echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2
+			fi
+			;;
+	*)		fileRecallArgs+=("$1"); shift;;
+    esac
+done
+
+exec $EACHSPLIT "${eachSplitArgs[@]}" --consumer-exec \
+    file-recall --catalog {} "${fileRecallArgs[@]}" "$@" \;

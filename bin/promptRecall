@@ -1,0 +1,6 @@
+#!/bin/bash
+
+EACHSPLIT=eachPrompt \
+SPLITRECALL="$(basename -- "${BASH_SOURCE[0]}")" \
+SPLITRECALL_WHAT='sections separated by prompts' \
+    exec splitRecall "$@"
