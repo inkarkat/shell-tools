@@ -1,3 +1,5 @@
-#!/bin/sh
+#!/bin/bash
 
-EACHSPLIT=eachPrompt exec splitRecall "$@"
+EACHSPLIT=eachPrompt \
+SPLITRECALL="$(basename -- "${BASH_SOURCE[0]}")" \
+    exec splitRecall "$@"

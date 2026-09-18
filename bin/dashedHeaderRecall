@@ -1,3 +1,5 @@
-#!/bin/sh
+#!/bin/bash
 
-EACHSPLIT=eachDashedHeader exec splitRecall "$@"
+EACHSPLIT=eachDashedHeader \
+SPLITRECALL="$(basename -- "${BASH_SOURCE[0]}")" \
+    exec splitRecall "$@"
