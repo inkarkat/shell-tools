@@ -5,18 +5,18 @@ load fixture
 @test "split paragraphs and prefix" {
     run -0 eachParagraph --file "${BATS_TEST_DIRNAME}/input.txt" -- "${SECTION_PREFIXER_COMMAND[@]}"
     assert_output - <<'EOF'
-00: The opener
-00: Is a simple one.
-01: Secondary
-01: Is the next one
-01: and has more text.
-02: Third
-02: Aller
-02: guten
-02: Dinge
-02: sind
-02: drei.
-03: Last but not least.
+0000: The opener
+0000: Is a simple one.
+0001: Secondary
+0001: Is the next one
+0001: and has more text.
+0002: Third
+0002: Aller
+0002: guten
+0002: Dinge
+0002: sind
+0002: drei.
+0003: Last but not least.
 EOF
 }
 

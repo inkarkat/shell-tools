@@ -4,7 +4,7 @@ load fixture
 
 @test "splitting empty input invokes the command once" {
     run -0 eachSection --file /dev/null -- echo WHAT
-    assert_output -e '^WHAT .*/section-00$'
+    assert_output -e '^WHAT .*/section-0000$'
 }
 
 @test "splitting empty input with --elide-empty-files does not invoke the command and exits with 99" {

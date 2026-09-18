@@ -110,6 +110,7 @@ countExecArgs()
 
 separatorPattern='^-\{2,3\}$'
 isSeparatorBelow=
+typeset -a csplitDigitsArg=(--digits=4)    # DWIM: The default 2 digits is too small for expected sections. Support 9999 without losing the correct ordering.
 typeset -a suppressedMatchedArg=(--suppress-matched)
 typeset -a args=()
 typeset -a understandsArgs=()
@@ -154,6 +155,9 @@ do
 			eachSplit --splitter csplit \; "${understandsArgs[@]}" --understands "$@" && exit 0
 			;;
 
+	--digits|-n)	csplitDigitsArg=("$1" "${2?}"); shift; shift;;
+	--digits=*)	csplitDigitsArg=("$1"); shift;;
+
 	--section-separator|-S)
 			shift; separatorPattern="${1:?}"; shift; parameter split;;
 	--section-info-include-separator)
@@ -183,4 +187,4 @@ do
 done
 
 EACHSPLIT_FILE_PREFIX="$EACHSECTION_FILE_PREFIX" \
-    exec eachSplit --splitter csplit --quiet "${suppressedMatchedArg[@]}" --prefix=PREFIX OPTIONS FILE ARGS \; "/${separatorPattern}/${isSeparatorBelow:++1}" '{*}' "${args[@]}" "$@"
+    exec eachSplit --splitter csplit --quiet "${csplitDigitsArg[@]}" "${suppressedMatchedArg[@]}" --prefix=PREFIX OPTIONS FILE ARGS \; "/${separatorPattern}/${isSeparatorBelow:++1}" '{*}' "${args[@]}" "$@"
