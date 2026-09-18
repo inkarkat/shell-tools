@@ -25,6 +25,7 @@ case "$EACHHEADER_STYLE" in
 esac
 
 exec eachSection \
+    --elide-empty-first \
     --section-separator "$headerPattern" \
     --section-info-extractor-exec sed -n -e "1s/${headerPattern}/\\1/p" "${EACHSPLIT_EXTRACTOR_MARKER:-{\}}" "${EACHSPLIT_EXTRACTOR_END:-;}" \
     --section-modifier-exec sed -i -e '${ /^$/d; }' -- "${EACHSPLIT_MODIFIER_MARKER:-{\}}" "${EACHSPLIT_MODIFIER_END:-;}" \

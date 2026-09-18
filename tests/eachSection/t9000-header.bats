@@ -2,6 +2,8 @@
 
 load fixture
 
+readonly FILENAME_AND_SIZE_LISTER="stat --format '%n %s' {} | sed -e 's#.*/##'"
+
 @test "split (normal) headered sections" {
     run -0 eachHeader --file "${BATS_TEST_DIRNAME}/inputs/headered.txt" --with-header -- "${SECTION_PREFIXER_COMMAND[@]}"
     assert_output - <<'EOF'
@@ -23,6 +25,16 @@ final:	04: Last but not least.
 EOF
 }
 
+@test "split (normal) headered sections does not create empty files" {
+    run -0 eachHeader --file "${BATS_TEST_DIRNAME}/inputs/headered.txt" --command "$FILENAME_AND_SIZE_LISTER"
+    assert_output - <<'EOF'
+section-01 17
+section-02 36
+section-03 30
+section-04 20
+EOF
+}
+
 @test "split dash-dash headered sections" {
     run -0 eachDashedHeader --file "${BATS_TEST_DIRNAME}/inputs/dashdash-headered.txt" --with-header -- "${SECTION_PREFIXER_COMMAND[@]}"
     assert_output - <<'EOF'
@@ -41,5 +53,15 @@ third:
 03: 
 
 final:	04: Last but not least.
+EOF
+}
+
+@test "split dash-dash headered sections does not create empty files" {
+    run -0 eachDashedHeader --file "${BATS_TEST_DIRNAME}/inputs/dashdash-headered.txt" --command "$FILENAME_AND_SIZE_LISTER"
+    assert_output - <<'EOF'
+section-01 17
+section-02 36
+section-03 30
+section-04 20
 EOF
 }
