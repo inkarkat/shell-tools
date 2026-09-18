@@ -19,6 +19,7 @@ case "$1" in
 esac
 
 exec eachSection \
+    --elide-empty-last \
     --section-separator "$EACHPROMPT_PATTERN" \
     --section-info-extractor-exec sed -n -e "\$s/${EACHPROMPT_PATTERN}/${EACHPROMPT_SUBMATCH}/p" "${EACHSPLIT_EXTRACTOR_MARKER:-{\}}" "${EACHSPLIT_EXTRACTOR_END:-;}" \
     --section-info-include-separator below \

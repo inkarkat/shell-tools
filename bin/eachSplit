@@ -37,7 +37,7 @@ getShortUsage()
 	local hadTopic=
 	case "$1" in
 	    ''|split)
-		printf %s "${usageSep}${hadTopic:+ }" "[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}] [SPLIT-OPTIONS ...] [--elide-empty-first]"; hadTopic=t;;&
+		printf %s "${usageSep}${hadTopic:+ }" "[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}] [SPLIT-OPTIONS ...] [--elide-empty-first] [--elide-empty-last]"; hadTopic=t;;&
 	    ''|piece-info)
 		printf %s "${usageSep}${hadTopic:+ }" "[--piece-info-extractor-command COMMANDLINE|--piece-info-extractor-exec CMD [...]${extractorMarker:+ [}${extractorMarker}${extractorMarker:+] [...]} ${EACHSPLIT_EXTRACTOR_END}]"; hadTopic=t;;&
 	    ''|piece-modifier)
@@ -69,6 +69,8 @@ getLongUsage()
 			file, output directory + file prefix, and trailing ARGS
 			respectively.
     --elide-empty-first	If the splitter creates an empty first file, remove it
+			before iteration.
+    --elide-empty-last	If the splitter creates an empty last file, remove it
 			before iteration.
 HELPTEXT
 		hadTopic=t
@@ -233,6 +235,7 @@ typeset -a splitCommand=(split OPTIONS ARGS FILE PREFIX)
 typeset -a splitOptions=()
 typeset -a splitArgs=()
 isElideEmptyFirst=
+isElideEmptyLast=
 option() { :; }
 parameter() { :; }
 parameterToSep() { :; }
@@ -287,6 +290,8 @@ do
 			;;
 	--elide-empty-first)
 			shift; isElideEmptyFirst=t; option split;;
+	--elide-empty-last)
+			shift; isElideEmptyLast=t; option split;;
 
 	--file|-f)	shift; filespec="${1:?}"; shift; parameter input;;
 	--file=*)	filespec="${1#--file=}"; shift; option input;;
@@ -482,6 +487,10 @@ typeset -a pieceFiles=("${tempDirspec}/${EACHSPLIT_FILE_PREFIX}"*)
 if [ "$isElideEmptyFirst" ] && [ -f "${pieceFiles[0]}" -a ! -s "${pieceFiles[0]}" ]; then
     rm --force -- "${pieceFiles[0]}"
     pieceFiles=("${pieceFiles[@]:1}")
+fi
+if [ "$isElideEmptyLast" ] && [ -f "${pieceFiles[-1]}" -a ! -s "${pieceFiles[-1]}" ]; then
+    rm --force -- "${pieceFiles[-1]}"
+    pieceFiles=("${pieceFiles[@]:0:$((${#pieceFiles[@]}-1))}")
 fi
 if [ ${#pieceFiles[@]} -eq 0 ]; then
     exit $EACHSPLIT_NO_PIECE_STATUS

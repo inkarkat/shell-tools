@@ -65,3 +65,34 @@ piece-02 35
 piece-03 20
 EOF
 }
+
+@test "splitting empty pieces with --elide-empty-last omits empty last file" {
+    run -0 eachCsplit --quiet --suppress-matched '/^--$/' '{*}' --elide-empty-last --file "${BATS_TEST_DIRNAME}/inputs/dashdash-with-empty.txt" --command "$FILENAME_AND_SIZE_LISTER"
+    assert_output - <<'EOF'
+piece-00 0
+piece-01 26
+piece-02 0
+piece-03 19
+piece-04 20
+EOF
+}
+
+@test "splitting regular pieces with --elide-empty-last has no effect" {
+    run -0 eachCsplit --quiet --suppress-matched '/^--$/' '{*}' --elide-empty-last --file "${BATS_TEST_DIRNAME}/inputs/dashdash-delimited.txt" --command "$FILENAME_AND_SIZE_LISTER"
+    assert_output - <<'EOF'
+piece-00 28
+piece-01 45
+piece-02 35
+piece-03 20
+EOF
+}
+
+@test "splitting empty pieces with --elide-empty-first and --elide-empty-last omits empty first and last files" {
+    run -0 eachCsplit --quiet --suppress-matched '/^--$/' '{*}' --elide-empty-first --elide-empty-last --file "${BATS_TEST_DIRNAME}/inputs/dashdash-with-empty.txt" --command "$FILENAME_AND_SIZE_LISTER"
+    assert_output - <<'EOF'
+piece-01 26
+piece-02 0
+piece-03 19
+piece-04 20
+EOF
+}
