@@ -1,6 +1,7 @@
 #!/bin/bash
 
 EACHSPLIT=eachParagraph \
+EACHSPLIT_USAGE_TOPICS="${EACHSPLIT_USAGE_TOPICS-piece-info piece-modifier input}" \
 SPLITRECALL="${SPLITRECALL:-$(basename -- "${BASH_SOURCE[0]}")}" \
 SPLITRECALL_WHAT='paragraphs separated by an empty line' \
     exec splitRecall "$@"
