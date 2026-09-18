@@ -1,6 +1,6 @@
 #!/bin/bash
 
 EACHSPLIT=eachDashedHeader \
-SPLITRECALL="$(basename -- "${BASH_SOURCE[0]}")" \
+SPLITRECALL="${SPLITRECALL:-$(basename -- "${BASH_SOURCE[0]}")}" \
 SPLITRECALL_WHAT='sections separated by dashed "-- header lines -----"' \
     exec splitRecall "$@"
