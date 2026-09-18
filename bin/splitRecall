@@ -3,13 +3,17 @@
 ${DEBUG:+eval $(debugtrace -o $- -- "$@")}
 
 : ${EACHSPLIT:=eachSplit}
+: ${EACHSPLIT_USAGE_TOPICS=split piece-info piece-modifier input}
 
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, they can
     # skim the long one.
-    printf 'Usage: %q %s\n' "${SPLITRECALL:-$(basename "$1")}" "$($EACHSPLIT --get-short-usage split piece-info piece-modifier input 2>/dev/null) [-?|-h|--help] ..."
-    echo
+    if [ -n "$EACHSPLIT_USAGE_TOPICS" ]; then
+	printf 'Usage: %q %s\n' "${SPLITRECALL:-$(basename "$1")}" "$($EACHSPLIT --get-short-usage $EACHSPLIT_USAGE_TOPICS 2>/dev/null) [-?|-h|--help] ..."
+	echo
+    fi
+
     local i; for ((i = 1; i <= 4; i++))
     do
 	printf 'Usage: %q %s\n' "${SPLITRECALL:-$(basename "$1")}" "... $(file-recall --get-short-usage query${i})"
@@ -26,14 +30,22 @@ printLongUsage()
 {
     # This is the long "man page" when launched with the help argument.
     # It is printed to stdout to allow paging with 'more'.
-    cat <<HELPDESCRIPTION
-Split standard input into ${SPLITRECALL_WHAT:-pieces} and recall them
-to show in the pager, or to pass to a COMMAND.
+    if [ -n "$SPLITRECALL_ACTION_WHAT" ]; then
+	cat <<HELPDESCRIPTION
+Recall $SPLITRECALL_ACTION_WHAT to show in the pager, or to pass to a COMMAND.
 HELPDESCRIPTION
+    else
+	cat <<HELPDESCRIPTION
+Split ${SPLITRECALL_INPUT_WHAT:-standard input} into ${SPLITRECALL_WHAT:-pieces}
+and recall them to show in the pager, or to pass to a COMMAND.
+HELPDESCRIPTION
+    fi
     echo
     printShortUsage "$1"
-    echo
-    $EACHSPLIT --get-long-usage split piece-info piece-modifier input 2>/dev/null
+    if [ -n "$EACHSPLIT_USAGE_TOPICS" ]; then
+	echo
+	$EACHSPLIT --get-long-usage $EACHSPLIT_USAGE_TOPICS 2>/dev/null
+    fi
     echo
     file-recall --get-long-usage query 2>/dev/null
 }
