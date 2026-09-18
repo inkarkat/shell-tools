@@ -2,4 +2,5 @@
 
 EACHSPLIT=eachHeader \
 SPLITRECALL="$(basename -- "${BASH_SOURCE[0]}")" \
+SPLITRECALL_WHAT='sections separated by header lines' \
     exec splitRecall "$@"

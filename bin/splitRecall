@@ -27,8 +27,8 @@ printLongUsage()
     # This is the long "man page" when launched with the help argument.
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
-Split standard input into pieces and recall piece(s) to show in the pager, or to
-pass to a COMMAND.
+Split standard input into ${SPLITRECALL_WHAT:-pieces} and recall them
+to show in the pager, or to pass to a COMMAND.
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
