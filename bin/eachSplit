@@ -35,7 +35,7 @@ getShortUsage()
 	local hadTopic=
 	case "$1" in
 	    ''|split)
-		printf %s "${usageSep}${hadTopic:+ }" "[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}] [SPLIT-OPTIONS ...]"; hadTopic=t;;&
+		printf %s "${usageSep}${hadTopic:+ }" "[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}] [SPLIT-OPTIONS ...] [--elide-empty-first]"; hadTopic=t;;&
 	    ''|piece-info)
 		printf %s "${usageSep}${hadTopic:+ }" "[--piece-info-extractor-command COMMANDLINE|--piece-info-extractor-exec CMD [...]${extractorMarker:+ [}${extractorMarker}${extractorMarker:+] [...]} ${EACHSPLIT_EXTRACTOR_END}]"; hadTopic=t;;&
 	    ''|piece-modifier)
@@ -66,6 +66,8 @@ getLongUsage()
 			and ARGS are replaced by the passed SPLIT-OPTIONS, input
 			file, output directory + file prefix, and trailing ARGS
 			respectively.
+    --elide-empty-first	If the splitter creates an empty first file, remove it
+			before iteration.
 HELPTEXT
 		hadTopic=t
 		;;&
@@ -228,6 +230,7 @@ consumerCommands=
 typeset -a splitCommand=(split OPTIONS ARGS FILE PREFIX)
 typeset -a splitOptions=()
 typeset -a splitArgs=()
+isElideEmptyFirst=
 option() { :; }
 parameter() { :; }
 parameterToSep() { :; }
@@ -280,15 +283,20 @@ do
 			fi >&2
 			argCount $((originalArgNum - $#)) split
 			;;
+	--elide-empty-first)
+			shift; isElideEmptyFirst=t; option split;;
+
 	--file|-f)	shift; filespec="${1:?}"; shift; parameter input;;
 	--file=*)	filespec="${1#--file=}"; shift; option input;;
 	-f*)		filespec="${1#-f}"; shift; option input;;
+
 	--progress)	shift; progressSink="$1"; shift; option iteration;;
 	--with-header)	shift; with=header; option iteration;;
 	--separate-errors)
 			shift; errorRedir=''; option iteration;;
 	--no-color|--color=*)	colorArg=("$1"); shift; option iteration;;
 	--with-prompt)	shift; with=runWithPrompt; option iteration;;
+
 	--piece-info-extractor-command)
 			shift; pieceInfoExtractorCommand+="${pieceInfoExtractorCommand:+ $EACHSPLIT_EXTRACTOR_JOINER }${1:?}"; shift; parameter piece-info;;
 	--piece-info-extractor-exec)
@@ -469,6 +477,10 @@ splitCommand=("${splitCommand[@]//PREFIX/"${tempDirspec}/${EACHSPLIT_FILE_PREFIX
 
 "${splitCommand[@]}" || exit $?
 typeset -a pieceFiles=("${tempDirspec}/${EACHSPLIT_FILE_PREFIX}"*)
+if [ "$isElideEmptyFirst" ] && [ -f "${pieceFiles[0]}" -a ! -s "${pieceFiles[0]}" ]; then
+    rm --force -- "${pieceFiles[0]}"
+    pieceFiles=("${pieceFiles[@]:1}")
+fi
 if [ ${#pieceFiles[@]} -eq 0 ]; then
     exit $EACHSPLIT_NO_PIECE_STATUS
 fi
