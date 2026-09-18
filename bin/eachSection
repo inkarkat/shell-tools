@@ -1,5 +1,6 @@
 #!/bin/bash
 set -o pipefail
+${DEBUG:+eval $(debugtrace -o $- -- "$@")}
 
 : ${EACHSECTION_FILE_PREFIX=section-}
 

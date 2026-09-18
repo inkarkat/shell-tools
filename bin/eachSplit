@@ -2,6 +2,8 @@
 set -o pipefail
 shopt -qs extglob nullglob
 
+${DEBUG:+eval $(debugtrace -o $- -- "$@")}
+
 : ${EACHSPLIT_COMMAND_JOINER=;}
 : ${EACHSPLIT_EXEC_END=;}
 : ${EACHSPLIT_FILE_MARKER='{}'}
@@ -475,7 +477,7 @@ splitCommand=("${tempArray[@]}")
 splitCommand=("${splitCommand[@]//FILE/"$filespec"}")
 splitCommand=("${splitCommand[@]//PREFIX/"${tempDirspec}/${EACHSPLIT_FILE_PREFIX}"}")
 
-"${splitCommand[@]}" || exit $?
+${DEBUG:+debugcommand --module splitter --} "${splitCommand[@]}" || exit $?
 typeset -a pieceFiles=("${tempDirspec}/${EACHSPLIT_FILE_PREFIX}"*)
 if [ "$isElideEmptyFirst" ] && [ -f "${pieceFiles[0]}" -a ! -s "${pieceFiles[0]}" ]; then
     rm --force -- "${pieceFiles[0]}"
