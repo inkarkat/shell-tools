@@ -4,4 +4,4 @@ EACHSPLIT=eachPrompt \
 EACHSPLIT_USAGE_TOPICS="${EACHSPLIT_USAGE_TOPICS-piece-modifier input}" \
 SPLITRECALL="${SPLITRECALL:-$(basename -- "${BASH_SOURCE[0]}")}" \
 SPLITRECALL_WHAT='sections separated by prompts' \
-    exec splitRecall --reverse --elide-empty-files "$@"
+    exec splitRecall --reverse --name-mapping "${EACHSPLIT_MAPPING_MARKER:-{M\}}" --elide-empty-files "$@"
