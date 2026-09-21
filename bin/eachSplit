@@ -81,12 +81,14 @@ HELPTEXT
 			Use CMD to extract the piece identifier (from the
 			piece contents). FILEs ${fileMarker:+either }are appended${extractorMarker:+
 			or replace any $extractorMarker marker} inside CMD.
+			If the CMD fails, it falls back to the piece filename.
     --piece-info-extractor-exec CMD [...] ${EACHSPLIT_EXTRACTOR_END}
 			Use CMD to extract the piece identifier (from the
 			piece contents); all following arguments are taken to
 			be arguments to the CMD until an argument consisting of
 			'${EACHSPLIT_EXTRACTOR_END}' is encountered. FILEs ${fileMarker:+either }are appended${extractorMarker:+ or replace
 			any $extractorMarker marker} inside CMD.
+			If the CMD fails, it falls back to the piece filename.
 HELPTEXT
 		hadTopic=t
 		;;&
@@ -511,7 +513,8 @@ getPieceInfo()
     local quotedPieceFile; printf -v quotedPieceFile '%q' "$pieceFile"
     local interpolatedPieceInfoExtractorCommand="${pieceInfoExtractorCommand//"$extractorMarker"/$quotedPieceFile}"
     [ "$interpolatedPieceInfoExtractorCommand" = "$pieceInfoExtractorCommand" ] || quotedPieceFile=''
-    eval "$interpolatedPieceInfoExtractorCommand" "$quotedPieceFile"
+    eval "$interpolatedPieceInfoExtractorCommand" "$quotedPieceFile" \
+	|| printf %s "${pieceFile##*/}"
 }
 
 modifyPieceFile()
