@@ -59,6 +59,11 @@ do
 	--)		break;;
 	-*)		if argCount=$($EACHSPLIT --understand-for split --understand-for piece-info --understand-for input --understands "$@"); then
 			    eachSplitArgs+=("${@:1:argCount}")
+			    if [[ "$1" = --piece-info-extractor-* ]]; then
+				# DWIM: Use the extracted piece identifier instead of the filespec in the
+				# file-recall UI.
+				filerecallArgs+=(--name-mapping "${EACHSPLIT_MAPPING_MARKER:-{M\}}")
+			    fi
 			    shift $argCount
 			elif [ $? -eq 2 ]; then
 			    exit 2
