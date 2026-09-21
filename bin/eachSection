@@ -6,6 +6,11 @@ ${DEBUG:+eval $(debugtrace -o $- -- "$@")}
 
 : ${EACHSECTION_FILE_PREFIX=section-}
 
+typeset -ra sedTranslatePiecesArgs=(
+    -e 's/--piece-/--section-/g'
+    -e 's/\bpiece\(s\?\)\b/section\1/g'
+)
+
 getShortUsage()
 {
     local usageSep
@@ -16,7 +21,7 @@ getShortUsage()
 	case "$1" in
 	    split)
 		printf %s "${usageSep}${hadTopic:+ }" '[-S|--section-separator PATTERN] [-z|--elide-empty-files]'; hadTopic=t;;
-	    *)  printf %s "${usageSep}${hadTopic:+ }"; eachSplit --splitter csplit \; --get-short-usage "$1" | sed -e 's/--piece-/--section-/g' || [ "$hadTopic" ];;
+	    *)  printf %s "${usageSep}${hadTopic:+ }"; eachSplit --splitter csplit \; --get-short-usage "$1" | sed "${sedTranslatePiecesArgs[@]}" || [ "$hadTopic" ];;
 	esac
 	shift; usageSep=' '
     done
@@ -44,7 +49,7 @@ HELPTEXT
 		hadTopic=t
 		;;
 	    piece-info)
-		eachSplit --splitter csplit \; --get-long-usage "$topic" | sed -e 's/--piece-/--section-/g'
+		eachSplit --splitter csplit \; --get-long-usage "$topic" | sed "${sedTranslatePiecesArgs[@]}"
 		;&
 	    piece-info-extension)
 		cat <<HELPTEXT
@@ -55,7 +60,7 @@ HELPTEXT
 HELPTEXT
 		hadTopic=t
 		;;
-	    *)  eachSplit --splitter csplit \; --get-long-usage "$topic" | sed -e 's/--piece-/--section-/g' || [ "$hadTopic" ];;
+	    *)  eachSplit --splitter csplit \; --get-long-usage "$topic" | sed "${sedTranslatePiecesArgs[@]}" || [ "$hadTopic" ];;
 	esac
     done
 }
@@ -66,7 +71,7 @@ printUsage()
 	-e '1s#^.*$#Split standard input into sections separated by PATTERN (two or three dashes by\ndefault) and execute COMMAND with each section file (which either is appended or\nreplaces any {} marker inside COMMANDLINE).#' \
 	-e '2b removeFirstParagraphLoop' \
 	-e ':start' \
-	-e 's/--piece-/--section-/g' \
+	"${sedTranslatePiecesArgs[@]}" \
 	-e 's/\[SPLIT-OPTIONS \.\.\.\]/'"$(getShortUsage split)"'/g' \
 	-e '/^SEE ALSO:/a\
 - dishOutSections dynamically prints individual sections on each invocation.\

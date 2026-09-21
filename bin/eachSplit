@@ -104,12 +104,13 @@ HELPTEXT
 			is not executed for that piece.
     --piece-modifier-exec CMD [...] ${EACHSPLIT_EXTRACTOR_END}
 			Use CMD to modify each piece file before passing it to
-			COMMAND (but after piece info extraction); all following
-			arguments are taken to be arguments to the CMD until an
-			argument consisting of '${EACHSPLIT_EXTRACTOR_END}' is encountered. FILEs${fileMarker:+ either}
-			are appended${extractorMarker:+ or replace any $extractorMarker marker} inside CMD.
-			If the CMD fails, the piece file is skipped and COMMAND
-			is not executed for that piece.
+			COMMAND (but after piece info extraction); all
+			following arguments are taken to be arguments to the CMD
+			until an argument consisting of '${EACHSPLIT_EXTRACTOR_END}' is encountered.
+			FILEs${fileMarker:+ either} are appended${extractorMarker:+ or replace any $extractorMarker marker}
+			inside CMD.
+			If the CMD fails, the piece file is skipped and
+			COMMAND is not executed for that piece.
 HELPTEXT
 		hadTopic=t
 		;;&
@@ -147,26 +148,26 @@ HELPTEXT
 		cat <<HELPTEXT
     --consumer-command|-C CMD
 			Execute CMD once as a command-line to work on all split
-			pieces at once. ${fileMarker:+Any $fileMarker marker is replaced with a catalog
-			file that lists all split piece filespecs.}
+			pieces at once. ${fileMarker:+Any $fileMarker marker is replaced with a
+			catalog file that lists all split piece filespecs.}
 			${globMarker:+Any $globMarker marker is replaced with a glob pattern that
 			matches all split piece filespecs.}
 			${mappingMarker:+Any $mappingMarker marker is replaced with a mapping file that maps
-			each split piece filespec to the corresponding extracted
-			piece info.} ${fileMarker:+If no marker is given, }all piece filespecs
-			are directly appended to CMD.
+			each split piece filespec to the corresponding
+			extracted piece info.} ${fileMarker:+If no marker is given, }all
+			piece filespecs are directly appended to CMD.
     --consumer-exec CMD [...] ${EACHSPLIT_EXEC_END}
 			Execute CMD once as a command-line to work on all split
-			pieces at once; all following arguments are taken to be
-			arguments to the CMD until an argument consisting of
+			pieces at once; all following arguments are taken to
+			be arguments to the CMD until an argument consisting of
 			'${EACHSPLIT_EXEC_END}' is encountered. ${fileMarker:+Any $fileMarker marker is replaced with a
 			catalog file that lists all split piece filespecs.}
 			${globMarker:+Any $globMarker marker is replaced with a glob pattern that
 			matches all split piece filespecs.}
 			${mappingMarker:+Any $mappingMarker marker is replaced with a mapping file that maps
-			each split piece filespec to the corresponding extracted
-			piece info.} ${fileMarker:+If no marker is given, }all piece filespecs
-			are directly appended to CMD.
+			each split piece filespec to the corresponding
+			extracted piece info.} ${fileMarker:+If no marker is given, }all
+			piece filespecs are directly appended to CMD.
 HELPTEXT
 		hadTopic=t
 		;;&
