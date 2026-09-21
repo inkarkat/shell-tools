@@ -37,7 +37,7 @@ getShortUsage()
 	local hadTopic=
 	case "$1" in
 	    ''|split)
-		printf %s "${usageSep}${hadTopic:+ }" "[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}] [SPLIT-OPTIONS ...] [--elide-empty-first] [--elide-empty-last]"; hadTopic=t;;&
+		printf %s "${usageSep}${hadTopic:+ }" "[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}] [SPLIT-OPTIONS ...] [--elide-first] [--elide-empty-first] [--elide-last] [--elide-empty-last]"; hadTopic=t;;&
 	    ''|piece-info)
 		printf %s "${usageSep}${hadTopic:+ }" "[--piece-info-extractor-command COMMANDLINE|--piece-info-extractor-exec CMD [...]${extractorMarker:+ [}${extractorMarker}${extractorMarker:+] [...]} ${EACHSPLIT_EXTRACTOR_END}]"; hadTopic=t;;&
 	    ''|piece-modifier)
@@ -68,8 +68,10 @@ getLongUsage()
 			and ARGS are replaced by the passed SPLIT-OPTIONS, input
 			file, output directory + file prefix, and trailing ARGS
 			respectively.
+    --elide-first	Skip the first piece file.
     --elide-empty-first	If the splitter creates an empty first file, remove it
 			before iteration.
+    --elide-last	Skip the last piece file.
     --elide-empty-last	If the splitter creates an empty last file, remove it
 			before iteration.
 HELPTEXT
@@ -81,12 +83,14 @@ HELPTEXT
 			Use CMD to extract the piece identifier (from the
 			piece contents). FILEs ${fileMarker:+either }are appended${extractorMarker:+
 			or replace any $extractorMarker marker} inside CMD.
+			If the CMD fails, it falls back to the piece filename.
     --piece-info-extractor-exec CMD [...] ${EACHSPLIT_EXTRACTOR_END}
 			Use CMD to extract the piece identifier (from the
 			piece contents); all following arguments are taken to
 			be arguments to the CMD until an argument consisting of
 			'${EACHSPLIT_EXTRACTOR_END}' is encountered. FILEs ${fileMarker:+either }are appended${extractorMarker:+ or replace
 			any $extractorMarker marker} inside CMD.
+			If the CMD fails, it falls back to the piece filename.
 HELPTEXT
 		hadTopic=t
 		;;&
@@ -100,12 +104,13 @@ HELPTEXT
 			is not executed for that piece.
     --piece-modifier-exec CMD [...] ${EACHSPLIT_EXTRACTOR_END}
 			Use CMD to modify each piece file before passing it to
-			COMMAND (but after piece info extraction); all following
-			arguments are taken to be arguments to the CMD until an
-			argument consisting of '${EACHSPLIT_EXTRACTOR_END}' is encountered. FILEs${fileMarker:+ either}
-			are appended${extractorMarker:+ or replace any $extractorMarker marker} inside CMD.
-			If the CMD fails, the piece file is skipped and COMMAND
-			is not executed for that piece.
+			COMMAND (but after piece info extraction); all
+			following arguments are taken to be arguments to the CMD
+			until an argument consisting of '${EACHSPLIT_EXTRACTOR_END}' is encountered.
+			FILEs${fileMarker:+ either} are appended${extractorMarker:+ or replace any $extractorMarker marker}
+			inside CMD.
+			If the CMD fails, the piece file is skipped and
+			COMMAND is not executed for that piece.
 HELPTEXT
 		hadTopic=t
 		;;&
@@ -143,26 +148,26 @@ HELPTEXT
 		cat <<HELPTEXT
     --consumer-command|-C CMD
 			Execute CMD once as a command-line to work on all split
-			pieces at once. ${fileMarker:+Any $fileMarker marker is replaced with a catalog
-			file that lists all split piece filespecs.}
+			pieces at once. ${fileMarker:+Any $fileMarker marker is replaced with a
+			catalog file that lists all split piece filespecs.}
 			${globMarker:+Any $globMarker marker is replaced with a glob pattern that
 			matches all split piece filespecs.}
 			${mappingMarker:+Any $mappingMarker marker is replaced with a mapping file that maps
-			each split piece filespec to the corresponding extracted
-			piece info.} ${fileMarker:+If no marker is given, }all piece filespecs
-			are directly appended to CMD.
+			each split piece filespec to the corresponding
+			extracted piece info.} ${fileMarker:+If no marker is given, }all
+			piece filespecs are directly appended to CMD.
     --consumer-exec CMD [...] ${EACHSPLIT_EXEC_END}
 			Execute CMD once as a command-line to work on all split
-			pieces at once; all following arguments are taken to be
-			arguments to the CMD until an argument consisting of
+			pieces at once; all following arguments are taken to
+			be arguments to the CMD until an argument consisting of
 			'${EACHSPLIT_EXEC_END}' is encountered. ${fileMarker:+Any $fileMarker marker is replaced with a
 			catalog file that lists all split piece filespecs.}
 			${globMarker:+Any $globMarker marker is replaced with a glob pattern that
 			matches all split piece filespecs.}
 			${mappingMarker:+Any $mappingMarker marker is replaced with a mapping file that maps
-			each split piece filespec to the corresponding extracted
-			piece info.} ${fileMarker:+If no marker is given, }all piece filespecs
-			are directly appended to CMD.
+			each split piece filespec to the corresponding
+			extracted piece info.} ${fileMarker:+If no marker is given, }all
+			piece filespecs are directly appended to CMD.
 HELPTEXT
 		hadTopic=t
 		;;&
@@ -234,7 +239,9 @@ consumerCommands=
 typeset -a splitCommand=(split OPTIONS ARGS FILE PREFIX)
 typeset -a splitOptions=()
 typeset -a splitArgs=()
+isElideFirst=
 isElideEmptyFirst=
+isElideLast=
 isElideEmptyLast=
 option() { :; }
 parameter() { :; }
@@ -288,8 +295,12 @@ do
 			fi >&2
 			argCount $((originalArgNum - $#)) split
 			;;
+	--elide-first)
+			shift; isElideFirst=t; option split;;
 	--elide-empty-first)
 			shift; isElideEmptyFirst=t; option split;;
+	--elide-last)
+			shift; isElideLast=t; option split;;
 	--elide-empty-last)
 			shift; isElideEmptyLast=t; option split;;
 
@@ -484,11 +495,15 @@ splitCommand=("${splitCommand[@]//PREFIX/"${tempDirspec}/${EACHSPLIT_FILE_PREFIX
 
 ${DEBUG:+debugcommand --module splitter --} "${splitCommand[@]}" || exit $?
 typeset -a pieceFiles=("${tempDirspec}/${EACHSPLIT_FILE_PREFIX}"*)
-if [ "$isElideEmptyFirst" ] && [ -f "${pieceFiles[0]}" -a ! -s "${pieceFiles[0]}" ]; then
+if { [ "$isElideFirst" ] && [ -f "${pieceFiles[0]}" ]; } \
+    || { [ "$isElideEmptyFirst" ] && [ -f "${pieceFiles[0]}" -a ! -s "${pieceFiles[0]}" ]; }
+then
     rm --force -- "${pieceFiles[0]}"
     pieceFiles=("${pieceFiles[@]:1}")
 fi
-if [ "$isElideEmptyLast" ] && [ -f "${pieceFiles[-1]}" -a ! -s "${pieceFiles[-1]}" ]; then
+if { [ "$isElideLast" ] && [ -f "${pieceFiles[-1]}" ]; } \
+    || { [ "$isElideEmptyLast" ] && [ -f "${pieceFiles[-1]}" -a ! -s "${pieceFiles[-1]}" ]; }
+then
     rm --force -- "${pieceFiles[-1]}"
     pieceFiles=("${pieceFiles[@]:0:$((${#pieceFiles[@]}-1))}")
 fi
@@ -511,7 +526,8 @@ getPieceInfo()
     local quotedPieceFile; printf -v quotedPieceFile '%q' "$pieceFile"
     local interpolatedPieceInfoExtractorCommand="${pieceInfoExtractorCommand//"$extractorMarker"/$quotedPieceFile}"
     [ "$interpolatedPieceInfoExtractorCommand" = "$pieceInfoExtractorCommand" ] || quotedPieceFile=''
-    eval "$interpolatedPieceInfoExtractorCommand" "$quotedPieceFile"
+    eval "$interpolatedPieceInfoExtractorCommand" "$quotedPieceFile" \
+	|| printf %s "${pieceFile##*/}"
 }
 
 modifyPieceFile()

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-: ${EACHPROMPT_PATTERN:='^.*|[0-9]\{2\}-\(Jan\|Feb\|Mar\|Apr\|May\|Jun\|Jul\|Aug\|Sep\|Oct\|Nov\|Dec\)-[0-9]\{4\} [0-9]\{2\}:[0-9]\{2\}:[0-9]\{2\} !\([^[:space:]]\+\) *$'}
+: ${EACHPROMPT_PATTERN:='^.*|[0-9]\{2\}-\(Jan\|Feb\|Mar\|Apr\|May\|Jun\|Jul\|Aug\|Sep\|Oct\|Nov\|Dec\)-[0-9]\{4\} [0-9]\{2\}:[0-9]\{2\}:[0-9]\{2\} \([^[:space:]]\+\) *$'}
 : ${EACHPROMPT_SUBMATCH='\2'}
 
 printUsage()
@@ -18,9 +18,20 @@ case "$1" in
     --help|-h|-\?)	shift; printUsage "$0"; exit 0;;
 esac
 
+typeset -a infoExtractor=(
+    sed -n
+	-e '$!b'
+	-e "\$s/${EACHPROMPT_PATTERN}/${EACHPROMPT_SUBMATCH}/"	# Extract the !history-number / custom ID from the prompt.
+	-e 't havePrompt'
+	-e 'Q 1'
+	-e :havePrompt
+	-e 's/^[0-9]\+$/#&/'	# If it's just a number, prefix it with # to avoid confusion with the selection by number.
+	-e p
+)
+
 exec eachSection \
     --elide-empty-last \
     --section-separator "$EACHPROMPT_PATTERN" \
-    --section-info-extractor-exec sed -n -e "\$s/${EACHPROMPT_PATTERN}/${EACHPROMPT_SUBMATCH}/p" "${EACHSPLIT_EXTRACTOR_MARKER:-{\}}" "${EACHSPLIT_EXTRACTOR_END:-;}" \
+    --section-info-extractor-exec "${infoExtractor[@]}" "${EACHSPLIT_EXTRACTOR_MARKER:-{\}}" "${EACHSPLIT_EXTRACTOR_END:-;}" \
     --section-info-include-separator below \
     "$@"
