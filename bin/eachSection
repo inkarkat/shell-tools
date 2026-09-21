@@ -182,7 +182,7 @@ do
 			renamedArg="${1/#--section-/--piece-}"; shift; args+=("$renamedArg" "${1?}"); delegateUnderstand "$renamedArg" "$@"; shift;;
 
 	--)		endOfOptionsAndParameters; args+=("$1"); shift; break;;
-	*)		args+=("$1"); shift; delegateUnderstand "$@";;	# This asks the wrappee again, but this time actually fails and exits.
+	*)		args+=("$1"); delegateUnderstand "$@"; shift;;	# This asks the wrappee again, but this time actually fails and exits.
     esac
 done
 
