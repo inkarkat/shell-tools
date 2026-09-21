@@ -63,7 +63,7 @@ do
 			elif [ $? -eq 2 ]; then
 			    exit 2
 			else
-			    { echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2
+			    fileRecallArgs+=("$1"); shift
 			fi
 			;;
 	*)		fileRecallArgs+=("$1"); shift;;
