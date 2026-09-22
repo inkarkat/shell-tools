@@ -20,7 +20,20 @@ esac
 
 typeset -a infoExtractor=(
     sed -n
-	-e '$!b'
+	-e 's/^[$#] //'
+	-e '$T historyNumberFallback' -e T
+	-e '/^[[:space:]]*$/b historyNumberFallback'
+
+	-e 'h'
+	-e "s/'/'\\\\''/g"
+	-e "s/.*/COMMANDNAME_WRAPPERS='' commandName --eval --no-interpreter --undefined '' '&'/"
+	-e e
+	-e '/^[[:space:]]*$/{ g; b historyNumberFallback; }'
+	-e p
+	-e q
+
+	-e ':historyNumberFallback'
+	-e '$!{ N; b historyNumberFallback; }'
 	-e "\$s/${EACHPROMPT_PATTERN}/${EACHPROMPT_SUBMATCH}/"	# Extract the !history-number / custom ID from the prompt.
 	-e 't havePrompt'
 	-e 'Q 1'

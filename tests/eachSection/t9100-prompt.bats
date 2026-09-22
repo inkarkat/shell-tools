@@ -4,7 +4,7 @@ load fixture
 
 readonly FILENAME_AND_SIZE_LISTER="stat --format '%n %s' {} | sed -e 's#.*/##'"
 
-@test "split prompts" {
+@test "split footered sections" {
     run -0 eachPrompt --file "${BATS_TEST_DIRNAME}/inputs/footered.txt" --with-header -- "${SECTION_PREFIXER_COMMAND[@]}"
     assert_output - <<'EOF'
 !17401:	0000: Is a simple one.
@@ -24,7 +24,30 @@ readonly FILENAME_AND_SIZE_LISTER="stat --format '%n %s' {} | sed -e 's#.*/##'"
 EOF
 }
 
-@test "split prompts does not create empty files" {
+@test "split prompts extracts the commands" {
+    run -0 eachPrompt --file "${BATS_TEST_DIRNAME}/inputs/prompts.txt" --with-header -- "${SECTION_PREFIXER_COMMAND[@]}"
+    assert_output - <<'EOF'
+!17401:	0000: Is a simple one.
+!17402:
+0001: Is the next one
+0001: 
+0001: and has more text.
+
+motd:
+0002: $ motd
+0002: Aller
+0002: guten
+0002: Dinge
+0002: sind
+0002: drei.
+
+cat /etc/motd:
+0003: $ cat /etc/motd
+0003: Last but not least.
+EOF
+}
+
+@test "split footered sections does not create empty files" {
     run -0 eachPrompt --file "${BATS_TEST_DIRNAME}/inputs/footered.txt" --with-header --command "$FILENAME_AND_SIZE_LISTER"
     assert_output - <<'EOF'
 !17401:	section-0000 17
