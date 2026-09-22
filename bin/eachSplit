@@ -98,10 +98,10 @@ HELPTEXT
 		cat <<HELPTEXT
     --piece-modifier-command CMD
 			Use CMD to modify each piece file before passing it to
-			COMMAND (but after piece info extraction). FILEs${fileMarker:+ either}
-			are appended${extractorMarker:+ or replace any $extractorMarker marker} inside CMD.
-			If the CMD fails, the piece file is skipped and COMMAND
-			is not executed for that piece.
+			COMMAND (but after piece info extraction). FILEs
+			${fileMarker:+either }are appended${extractorMarker:+ or replace any $extractorMarker marker} inside CMD.
+			If the CMD fails, the piece file is skipped and
+			COMMAND is not executed for that piece.
     --piece-modifier-exec CMD [...] ${EACHSPLIT_EXTRACTOR_END}
 			Use CMD to modify each piece file before passing it to
 			COMMAND (but after piece info extraction); all
@@ -494,6 +494,8 @@ splitCommand=("${splitCommand[@]//FILE/"$filespec"}")
 splitCommand=("${splitCommand[@]//PREFIX/"${tempDirspec}/${EACHSPLIT_FILE_PREFIX}"}")
 
 ${DEBUG:+debugcommand --module splitter --} "${splitCommand[@]}" || exit $?
+${DEBUG:+eval $(debugtrace --point main -o $- --)}
+
 typeset -a pieceFiles=("${tempDirspec}/${EACHSPLIT_FILE_PREFIX}"*)
 if { [ "$isElideFirst" ] && [ -f "${pieceFiles[0]}" ]; } \
     || { [ "$isElideEmptyFirst" ] && [ -f "${pieceFiles[0]}" -a ! -s "${pieceFiles[0]}" ]; }
