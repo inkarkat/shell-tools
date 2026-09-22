@@ -43,7 +43,7 @@ typeset -a infoExtractor=(
 )
 
 exec eachSection \
-    --elide-empty-last \
+    --elide-empty-first --elide-empty-last \
     --section-separator "$EACHPROMPT_PATTERN" \
     --section-info-extractor-exec "${infoExtractor[@]}" "${EACHSPLIT_EXTRACTOR_MARKER:-{\}}" "${EACHSPLIT_EXTRACTOR_END:-;}" \
     --section-info-include-separator below \
