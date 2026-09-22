@@ -239,6 +239,7 @@ consumerCommands=
 typeset -a splitCommand=(split OPTIONS ARGS FILE PREFIX)
 typeset -a splitOptions=()
 typeset -a splitArgs=()
+isElideEmpty=
 isElideFirst=
 isElideEmptyFirst=
 isElideLast=
@@ -420,9 +421,11 @@ do
 			    case "${splitCommand[0]}" in
 				split)
 				    case "$1" in
-					-+([deu]))
+					--elide-empty-files|-e)
+						splitOptions+=("$1"); shift; isElideEmpty=t; option split;;
+					-+([du]))
 						splitOptions+=("$1"); shift; option split;;
-					--@(elide-empty-files|numeric-suffixes|hex-suffixes|unbuffered))
+					--@(numeric-suffixes|hex-suffixes|unbuffered))
 						splitOptions+=("$1"); shift; option split;;
 					-[abClnt])
 						splitOptions+=("$1" "${2?}"); shift; shift; parameter split;;
@@ -435,9 +438,11 @@ do
 				    ;;
 				csplit)
 				    case "$1" in
-					-+([ksz]))
+					--elide-empty-files|-z)	# Note: Different short option than split!
+						splitOptions+=("$1"); shift; isElideEmpty=t; option split;;
+					-+([ks]))
 						splitOptions+=("$1"); shift; option split;;
-					--@(keep-files|suppress-matched|quiet|silent|elide-empty-files))
+					--@(keep-files|suppress-matched|quiet|silent))
 						splitOptions+=("$1"); shift; option split;;
 					-[bfn])
 						splitOptions+=("$1" "${2?}"); shift; shift; parameter split;;
@@ -543,7 +548,8 @@ modifyPieceFile()
     eval "$interpolatedPieceModifierCommand" "$quotedPieceFile" || return $?
 
     if { [ "$isElideEmptyFirst" ] && [ "$pieceFile" = "${pieceFiles[0]}" -a ! -s "${pieceFiles[0]}" ]; } \
-	|| { [ "$isElideEmptyLast" ] && [ "$pieceFile" = "${pieceFiles[-1]}" -a ! -s "${pieceFiles[-1]}" ]; }
+	|| { [ "$isElideEmptyLast" ] && [ "$pieceFile" = "${pieceFiles[-1]}" -a ! -s "${pieceFiles[-1]}" ]; } \
+	|| { [ "$isElideEmpty" ] && [ ! -s "$pieceFile" ]; }
     then
 	[ ! -e "$pieceFile" ] || rm --force -- "$pieceFile"
 	return 1

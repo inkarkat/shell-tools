@@ -46,6 +46,13 @@ piece-03 20
 EOF
 }
 
+@test "--elide-empty-files considers pieces that got emptied by a piece modifier" {
+    run -0 eachCsplit --quiet --suppress-matched '/^--$/' '{*}' "${EMPTYING_PIECE_MODIFIER_ARGS[@]}" --elide-empty-files --file "${BATS_TEST_DIRNAME}/inputs/dashdash-delimited.txt" --command "$FILENAME_AND_SIZE_LISTER"
+    assert_output - <<'EOF'
+piece-02 17
+EOF
+}
+
 @test "splitting empty pieces with --elide-empty-first omits empty first file" {
     run -0 eachCsplit --quiet --suppress-matched '/^--$/' '{*}' --elide-empty-first --file "${BATS_TEST_DIRNAME}/inputs/dashdash-with-empty.txt" --command "$FILENAME_AND_SIZE_LISTER"
     assert_output - <<'EOF'
