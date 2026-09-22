@@ -3,6 +3,7 @@
 load fixture
 
 readonly FILENAME_AND_SIZE_LISTER="stat --format '%n %s' {} | sed -e 's#.*/##'"
+typeset -gra EMPTYING_PIECE_MODIFIER_ARGS=(--piece-modifier-exec sed -i -e '/^[[:upper:]]/d' -e '/^and /d' \;)
 
 @test "splitting empty input does not invoke the command and exits with 99" {
     run -99 eachCsplit --quiet --elide-empty-files --suppress-matched '/^--$/' '{*}' --file /dev/null -- echo WHAT
@@ -66,6 +67,15 @@ piece-03 20
 EOF
 }
 
+@test "--elide-empty-first considers pieces that got emptied by a piece modifier" {
+    run -0 eachCsplit --quiet --suppress-matched '/^--$/' '{*}' "${EMPTYING_PIECE_MODIFIER_ARGS[@]}" --elide-empty-first --file "${BATS_TEST_DIRNAME}/inputs/dashdash-delimited.txt" --command "$FILENAME_AND_SIZE_LISTER"
+    assert_output - <<'EOF'
+piece-01 0
+piece-02 17
+piece-03 0
+EOF
+}
+
 @test "splitting empty pieces with --elide-empty-last omits empty last file" {
     run -0 eachCsplit --quiet --suppress-matched '/^--$/' '{*}' --elide-empty-last --file "${BATS_TEST_DIRNAME}/inputs/dashdash-with-empty.txt" --command "$FILENAME_AND_SIZE_LISTER"
     assert_output - <<'EOF'
@@ -84,6 +94,15 @@ piece-00 28
 piece-01 45
 piece-02 35
 piece-03 20
+EOF
+}
+
+@test "--elide-empty-last considers pieces that got emptied by a piece modifier" {
+    run -0 eachCsplit --quiet --suppress-matched '/^--$/' '{*}' "${EMPTYING_PIECE_MODIFIER_ARGS[@]}" --elide-empty-last --file "${BATS_TEST_DIRNAME}/inputs/dashdash-delimited.txt" --command "$FILENAME_AND_SIZE_LISTER"
+    assert_output - <<'EOF'
+piece-00 0
+piece-01 0
+piece-02 17
 EOF
 }
 

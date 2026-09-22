@@ -540,7 +540,14 @@ modifyPieceFile()
     local quotedPieceFile; printf -v quotedPieceFile '%q' "$pieceFile"
     local interpolatedPieceModifierCommand="${pieceModifierCommand//"$modifierMarker"/$quotedPieceFile}"
     [ "$interpolatedPieceModifierCommand" = "$pieceModifierCommand" ] || quotedPieceFile=''
-    eval "$interpolatedPieceModifierCommand" "$quotedPieceFile"
+    eval "$interpolatedPieceModifierCommand" "$quotedPieceFile" || return $?
+
+    if { [ "$isElideEmptyFirst" ] && [ "$pieceFile" = "${pieceFiles[0]}" -a ! -s "${pieceFiles[0]}" ]; } \
+	|| { [ "$isElideEmptyLast" ] && [ "$pieceFile" = "${pieceFiles[-1]}" -a ! -s "${pieceFiles[-1]}" ]; }
+    then
+	[ ! -e "$pieceFile" ] || rm --force -- "$pieceFile"
+	return 1
+    fi
 }
 
 [ -n "$with" -a -z "$commands" ] && with='' # No need for runWith[Prompt] if there are no commands to run on each piece.
