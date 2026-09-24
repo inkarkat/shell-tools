@@ -231,6 +231,7 @@ with=
 errorRedir='2>&1'
 typeset -a colorArg=()
 filespec=-
+isSingleSuccess=
 additionalSuccessStatus=
 pieceInfoExtractorCommand=
 pieceModifierCommand=
@@ -404,6 +405,8 @@ do
 			consumerCommands+="${consumerCommands:+ $EACHSPLIT_COMMAND_JOINER }${cmd}"
 			argCount $((originalArgNum - $#)) consumer
 			;;
+	--single-success)
+			runWithPromptArgs+=("$1"); shift; isSingleSuccess=t; option iteration;;
 	--status-99-is-noop)
 			runWithPromptArgs+=("$1"); shift; additionalSuccessStatus=99; option iteration;;
 	--)		endOfOptionsAndParameters; shift; break;;
@@ -604,6 +607,7 @@ case "$with" in
 	fi
 
 	status=
+	singleSuccessStatus=
 	pieceFileList="${tempDirspec}/${EACHSPLIT_FILE_PREFIX/-/.}list"
 	pieceInfoMapping="${tempDirspec}/${EACHSPLIT_FILE_PREFIX/-/.}info.tsv"
 	: ${EACHSPLIT_HEADER_ID:="eachSplit-$$-$RANDOM"}
@@ -627,13 +631,15 @@ case "$with" in
 
 	    reportProgress "$pieceInfo"
 	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedPieceFile" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHSPLIT_HEADER_ID' -- '$pieceInfo'}") <&3; exitStatus=$?
-	    if [ $exitStatus -gt ${status:--1} -a $exitStatus -ne ${additionalSuccessStatus:--1} ]; then
+	    if [ $exitStatus -eq 0 ] && [ "$isSingleSuccess" ]; then
+		singleSuccessStatus=0
+	    elif [ $exitStatus -gt ${status:--1} -a $exitStatus -ne ${additionalSuccessStatus:--1} ]; then
 		status=$exitStatus
 	    fi
 	done
 
 	if [ ${#pieceFiles[@]} -gt 0 -a -n "$consumerCommands" ] \
-	    && [ ${status:-${additionalSuccessStatus:-0}} -eq 0 -o ${status:-${additionalSuccessStatus:-0}} -eq ${additionalSuccessStatus:-0} ]
+	    && [ ${singleSuccessStatus:-${status:-${additionalSuccessStatus:-0}}} -eq 0 -o ${status:-${additionalSuccessStatus:-0}} -eq ${additionalSuccessStatus:-0} ]
 	then
 	    printf -v quotedPieceFileList '%q' "$pieceFileList"
 	    printf -v quotedGlob '%q/%q*' "$tempDirspec" "$EACHSPLIT_FILE_PREFIX"
@@ -647,7 +653,7 @@ case "$with" in
 	    eval "$interpolatedConsumerCommands" "$quotedPieceFiles" || exit $?
 	fi
 
-	exit ${status:-${additionalSuccessStatus:-0}}
+	exit ${singleSuccessStatus:-${status:-${additionalSuccessStatus:-0}}}
 	;;
     *)	printf >&2 'ASSERT: Invalid strategy: %s\n' "$with"; exit 3;;
 esac
