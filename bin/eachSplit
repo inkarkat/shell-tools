@@ -233,6 +233,8 @@ typeset -a colorArg=()
 filespec=-
 isSingleSuccess=
 additionalSuccessStatus=
+typeset -a runWithPromptArgs=()
+typeset -a commonArgs=()
 pieceInfoExtractorCommand=
 pieceModifierCommand=
 commands=
@@ -406,9 +408,9 @@ do
 			argCount $((originalArgNum - $#)) consumer
 			;;
 	--single-success)
-			runWithPromptArgs+=("$1"); shift; isSingleSuccess=t; option iteration;;
+			commonArgs+=("$1"); shift; isSingleSuccess=t; option iteration;;
 	--status-99-is-noop)
-			runWithPromptArgs+=("$1"); shift; additionalSuccessStatus=99; option iteration;;
+			commonArgs+=("$1"); shift; additionalSuccessStatus=99; option iteration;;
 	--)		endOfOptionsAndParameters; shift; break;;
 	-*)		if argCount=$(runWithPrompt --understands "$@"); then
 			    runWithPromptArgs+=("${@:1:argCount}")
@@ -590,7 +592,7 @@ case "$with" in
 		printf '%s ' "$interpolatedCommands" "${f[@]}"
 		printf '\n'
 	    done
-	} | ${with:?} "${runWithPromptArgs[@]}"
+	} | ${with:?} "${commonArgs[@]}" "${runWithPromptArgs[@]}"
 	;;
     header)
 	isHeader=t;&
