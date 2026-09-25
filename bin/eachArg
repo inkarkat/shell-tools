@@ -97,6 +97,7 @@ typeset -a arguments=()
 with=
 errorRedir='2>&1'
 typeset -a colorArg=()
+isSingleSuccess=
 additionalSuccessStatus=
 commands=
 betweenCommand=
@@ -211,6 +212,8 @@ do
 	--usage-redirect)
 			shift; usageRedirectCommand="$1"; shift;;
 
+	--single-success)
+			runWithPromptArgs+=("$1"); shift; isSingleSuccess=t;;
 	--status-99-is-noop)
 			runWithPromptArgs+=("$1"); shift; additionalSuccessStatus=99;;
 	--)		shift; parseTail "$@"; set --; break;;
@@ -308,6 +311,7 @@ case "$with" in
 	fi
 
 	status=
+	singleSuccessStatus=
 	: ${EACHARG_HEADER_ID:="eachArg-$$-$RANDOM"}
 	exec 3<&0
 	for arg in "${arguments[@]}"
@@ -325,12 +329,14 @@ case "$with" in
 
 	    reportProgress "$arg"
 	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedArg" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHARG_HEADER_ID' -- '$arg'}") <&3; exitStatus=$?
-	    if [ $exitStatus -gt ${status:--1} -a $exitStatus -ne ${additionalSuccessStatus:--1} ]; then
+	    if [ $exitStatus -eq 0 ] && [ "$isSingleSuccess" ]; then
+		singleSuccessStatus=0
+	    elif [ $exitStatus -gt ${status:--1} -a $exitStatus -ne ${additionalSuccessStatus:--1} ]; then
 		status=$exitStatus
 	    fi
 	    isFirst=
 	done
-	exit ${status:-${additionalSuccessStatus:-0}}
+	exit ${singleSuccessStatus:-${status:-${additionalSuccessStatus:-0}}}
 	;;
     *)	printf >&2 'ASSERT: Invalid strategy: %s\n' "$with"; exit 3;;
 esac

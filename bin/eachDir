@@ -132,6 +132,7 @@ with=
 isHeaderBasename=
 errorRedir='2>&1'
 typeset -a colorArg=()
+isSingleSuccess=
 additionalSuccessStatus=
 commands=
 predicateComparison=-eq
@@ -246,6 +247,8 @@ do
 	--usage-redirect)
 			shift; usageRedirectCommand="$1"; shift;;
 
+	--single-success)
+			runWithPromptArgs+=("$1"); shift; isSingleSuccess=t;;
 	--status-99-is-noop)
 			runWithPromptArgs+=("$1"); shift; additionalSuccessStatus=99;;
 	--)		parseTail "$@"; set --; break;;
@@ -367,6 +370,7 @@ case "$with" in
 	fi
 
 	status=
+	singleSuccessStatus=
 	exec 3<&0
 	: ${EACHDIR_HEADER_ID:="eachDir-$$-$RANDOM"}
 	while IFS=$'\n' read -r dirspec || [ -n "$dirspec" ]
@@ -400,12 +404,14 @@ case "$with" in
 
 	    reportProgress "$header"
 	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedDirspec" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHDIR_HEADER_ID' -- '$header'}") <&3; exitStatus=$?
-	    if [ $exitStatus -gt ${status:--1} -a $exitStatus -ne ${additionalSuccessStatus:--1} ]; then
+	    if [ $exitStatus -eq 0 ] && [ "$isSingleSuccess" ]; then
+		singleSuccessStatus=0
+	    elif [ $exitStatus -gt ${status:--1} -a $exitStatus -ne ${additionalSuccessStatus:--1} ]; then
 		status=$exitStatus
 	    fi
 	    isFirst=
 	done < <(eval '$dirSource "${directories[@]}"' "${dirProcessor:+|}" "$dirProcessor")
-	exit ${status:-${additionalSuccessStatus:-0}}
+	exit ${singleSuccessStatus:-${status:-${additionalSuccessStatus:-0}}}
 	;;
     *)	printf >&2 'ASSERT: Invalid strategy: %s\n' "$with"; exit 3;;
 esac

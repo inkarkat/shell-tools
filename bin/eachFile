@@ -162,6 +162,7 @@ with=
 isHeaderBasename=
 errorRedir='2>&1'
 typeset -a colorArg=()
+isSingleSuccess=
 additionalSuccessStatus=
 commands=
 betweenCommand=
@@ -284,6 +285,8 @@ do
 	--usage-redirect)
 			shift; usageRedirectCommand="$1"; shift;;
 
+	--single-success)
+			runWithPromptArgs+=("$1"); shift; isSingleSuccess=t;;
 	--status-99-is-noop)
 			runWithPromptArgs+=("$1"); shift; additionalSuccessStatus=99;;
 	--)		parseTail "$@"; set --; break;;
@@ -421,6 +424,7 @@ case "$with" in
 
 	status=
 	noopStatus=$EACHFILE_NOOP_EXIT
+	singleSuccessStatus=
 	: ${EACHFILE_HEADER_ID:="eachFile-$$-$RANDOM"}
 	exec 3<&0
 	while IFS=$'\n' read -r filespec || [ -n "$filespec" ]
@@ -471,12 +475,14 @@ case "$with" in
 
 	    reportProgress "$header"
 	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedFilespec" "$quotedTargetFilespec" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHFILE_HEADER_ID' -- '$header'}") <&3; exitStatus=$?
-	    if [ $exitStatus -gt ${status:--1} -a $exitStatus -ne ${additionalSuccessStatus:--1} ]; then
+	    if [ $exitStatus -eq 0 ] && [ "$isSingleSuccess" ]; then
+		singleSuccessStatus=0
+	    elif [ $exitStatus -gt ${status:--1} -a $exitStatus -ne ${additionalSuccessStatus:--1} ]; then
 		status=$exitStatus
 	    fi
 	    isFirst=
 	done < <(eval '$fileSource "${files[@]}"' "${fileProcessor:+|}" "$fileProcessor")
-	exit ${noopStatus:-${status:-${additionalSuccessStatus:-0}}}
+	exit ${noopStatus:-${singleSuccessStatus:-${status:-${additionalSuccessStatus:-0}}}}
 	;;
     *)	printf >&2 'ASSERT: Invalid strategy: %s\n' "$with"; exit 3;;
 esac
