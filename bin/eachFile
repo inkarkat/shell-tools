@@ -154,7 +154,7 @@ makeAbsolute()
     # absolute first.
     while IFS=$'\n' read -r filespec || [ -n "$filespec" ]
     do
-	realpath --no-symlinks -- "$filespec"
+	realpath --canonicalize-missing --no-symlinks -- "$filespec"
     done
 }
 typeset -a findArgs=()
