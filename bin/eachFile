@@ -2,6 +2,7 @@
 set -o pipefail
 shopt -qs extglob
 
+: ${EACHFILE_NO_FILE_EXIT_STATUS:=99}
 : ${EACHFILE_COMMAND_JOINER=;}
 : ${EACHFILE_EXEC_END=;}
 : ${EACHFILE_FILES_END=;}
@@ -21,9 +22,9 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" "[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] [[-1|--single] -d|--strip|-o|--rebase TARGETDIR|-b|--basename|-c|--splice INSERTION|-f|--default EXT|-m|--modify EXT|-a|--add EXT [...] [-v|--verbose]] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] | ([--] SIMPLECOMMAND [...]) [--] FILE [...] [-?|-h|--help]"
+    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" "[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] [[-1|--single] -d|--strip|-o|--rebase TARGETDIR|-b|--basename|-c|--splice INSERTION|-f|--default EXT|-m|--modify EXT|-a|--add EXT [...] [-v|--verbose]] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] | ([--] SIMPLECOMMAND [...]) --|FILE [FILE ...] [-?|-h|--help]"
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] --files FILE [...] ${EACHFILE_FILES_END}|--find-args FIND-ARGS [...] ${EACHFILE_FIND_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] [--] SIMPLECOMMAND [...]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] --files [FILE ...] ${EACHFILE_FILES_END}|--find-args FIND-ARGS [...] ${EACHFILE_FIND_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] [--] SIMPLECOMMAND [...]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "[...] (-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHFILE_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]) -f|--find FIND-ARGS ..."
 }
@@ -97,7 +98,7 @@ A warning is printed for FILEs that don't yield a different target filename.
     --exec CMD [...] ${EACHFILE_EXEC_END}	Execute CMD; all following arguments are taken to be
 			arguments to the CMD until an argument consisting of
 			'${EACHFILE_EXEC_END}' is encountered.
-    --files FILE [...] ${EACHFILE_FILES_END}
+    --files [FILE ...] ${EACHFILE_FILES_END}
 			Take the following FILE(s); i.e. all following
 			arguments until an argument consisting of
 			'${EACHFILE_FILES_END}' is encountered.
@@ -129,6 +130,7 @@ EXIT STATUS:
 Overall exit status is the highest status of all. If you specify any
 runWith[Prompt] argument, --worst-status needs to be explicitly passed.
     $EACHFILE_NOOP_EXIT	if no FILE needs an update (i.e. all target filenames are up to date).
+    $EACHFILE_NO_FILE_EXIT_STATUS	No files were passed / found.
 
 Example:
 HELPTEXT
@@ -141,6 +143,7 @@ isVerbose=
 isLocalDir=
 progressSink=
 isFixedNumberOfFiles=t
+hadFileArg=
 typeset -a files=()
 fileSource='printf %s\n'
 fileProcessor=
@@ -154,7 +157,7 @@ makeAbsolute()
     # absolute first.
     while IFS=$'\n' read -r filespec || [ -n "$filespec" ]
     do
-	realpath --no-symlinks -- "$filespec"
+	realpath --canonicalize-missing --no-symlinks -- "$filespec"
     done
 }
 typeset -a findArgs=()
@@ -202,7 +205,7 @@ parseTail()
     case "$1" in
 	--find|-f)
 	    shift; findArgs=("$@"); fileSource='finder'; isFixedNumberOfFiles=;;
-	--) shift;&
+	--) shift; hadFileArg=t;&
 	*)  files+=("$@");;
     esac
 }
@@ -231,10 +234,7 @@ do
 			    exit 2
 			fi >&2
 			shift
-			if [ ${#files[@]} -eq 0 ]; then
-			    echo 'ERROR: --files must be followed by at least one ARGUMENT.'; echo; printUsage "$0"
-			    exit 2
-			fi >&2
+			hadFileArg=t
 			;;
 	--find-args)	shift
 			while [ $# -gt 0 -a "$1" != "$EACHFILE_FIND_END" ]
@@ -316,6 +316,8 @@ elif [ ${#runWithPromptArgs[@]} -gt 0 -a "$with" = 'header' ]; then
     exit 2
 fi >&2
 if [ ${#files[@]} -eq 0 -a ${#findArgs[@]} -eq 0 ]; then
+    [ ! "$hadFileArg" ] || exit $EACHFILE_NO_FILE_EXIT_STATUS
+
     echo >&2 'ERROR: No FILE(s) passed.'
     echo >&2
     if [ "$usageRedirectCommand" ]; then
@@ -327,7 +329,7 @@ if [ ${#files[@]} -eq 0 -a ${#findArgs[@]} -eq 0 ]; then
 fi
 
 if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
-    typeset -a progressCountToArgs=(--count-to ${#arguments[@]}); [ "$isFixedNumberOfFiles" ] || progressCountToArgs=()
+    typeset -a progressCountToArgs=(--count-to ${#files[@]}); [ "$isFixedNumberOfFiles" ] || progressCountToArgs=()
     typeset -a progressNotificationCommand=(progressNotification --to "$progressSink" ${EACHFILE_FILE_WHAT:+--prepend-count "$EACHFILE_FILE_WHAT"} "${progressCountToArgs[@]}")
 fi
 
@@ -407,7 +409,10 @@ case "$with" in
 		printf '\n'
 		isFirst=
 	    done
-	} | ${with:?} "${commonArgs[@]}" "${runWithPromptArgs[@]}"
+	} | \
+	    RUNWITHPROMPT_NO_COMMAND_EXIT_STATUS=$EACHFILE_NO_FILE_EXIT_STATUS \
+	    RUNWITH_NO_COMMAND_EXIT_STATUS=$EACHFILE_NO_FILE_EXIT_STATUS \
+		${with:?} "${commonArgs[@]}" "${runWithPromptArgs[@]}"
 	;;
     header)
 	isHeader=t;&
@@ -483,7 +488,7 @@ case "$with" in
 	    fi
 	    isFirst=
 	done < <(eval '$fileSource "${files[@]}"' "${fileProcessor:+|}" "$fileProcessor")
-	exit ${noopStatus:-${singleSuccessStatus:-${status:-${additionalSuccessStatus:-0}}}}
+	exit ${noopStatus:-${singleSuccessStatus:-${status:-${additionalSuccessStatus:-$EACHFILE_NO_FILE_EXIT_STATUS}}}}
 	;;
     *)	printf >&2 'ASSERT: Invalid strategy: %s\n' "$with"; exit 3;;
 esac

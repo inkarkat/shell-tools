@@ -2,6 +2,7 @@
 set -o pipefail
 shopt -qs extglob
 
+: ${EACHDIR_NO_DIR_EXIT_STATUS:=99}
 : ${EACHDIR_COMMAND_JOINER=;}
 : ${EACHDIR_EXEC_END=;}
 : ${EACHDIR_DIRECTORIES_END=;}
@@ -17,9 +18,9 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" "[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [[--not] -P|--predicate-command \"COMMANDLINE\" [...]] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] | ([--] SIMPLECOMMAND [...]) [--] DIR [...] [-?|-h|--help]"
+    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" "[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [[--not] -P|--predicate-command \"COMMANDLINE\" [...]] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] | ([--] SIMPLECOMMAND [...]) --|DIR [DIR ...] [-?|-h|--help]"
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] --directories DIR [...] ${EACHDIR_DIRECTORIES_END}|--find-args FIND-ARGS [...] ${EACHDIR_FIND_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] [--] SIMPLECOMMAND [...]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] --directories [DIR ...] ${EACHDIR_DIRECTORIES_END}|--find-args FIND-ARGS [...] ${EACHDIR_FIND_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] [--] SIMPLECOMMAND [...]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "[...] (-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]) -f|--find FIND-ARGS ..."
 }
@@ -76,7 +77,7 @@ HELPTEXT
     --exec CMD [...] ${EACHDIR_EXEC_END}	Execute CMD; all following arguments are taken to be
 			arguments to the CMD until an argument consisting of
 			'${EACHDIR_EXEC_END}' is encountered.
-    --directories DIR [...] ${EACHDIR_DIRECTORIES_END}
+    --directories [DIR ...] ${EACHDIR_DIRECTORIES_END}
 			Take the following DIR(s); i.e. all following
 			arguments until an argument consisting of
 			'${EACHDIR_DIRECTORIES_END}' is encountered.
@@ -102,7 +103,8 @@ SEE ALSO:
 EXIT STATUS:
 Overall exit status is the highest status of all. If you specify any
 runWith[Prompt] argument, --worst-status needs to be explicitly passed.
-
+    $EACHDIR_NO_DIR_EXIT_STATUS	No directories were passed / found (or all were skipped by the
+	predicate).
 Example:
 HELPTEXT
     printf '%q %s\n' "$(basename "$1")" '--local-dir ping -c1 -q -- /var/htdocs/*.com'
@@ -111,9 +113,14 @@ HELPTEXT
 isLocalDir=
 progressSink=
 isFixedNumberOfDirs=t
+hadDirectoryArg=
 typeset -a directories=()
-dirSource='printf %s\n'
+dirSource=lister
 dirProcessor=
+lister()
+{
+    [ $# -eq 0 ] || printf '%s\n' "$@"
+}
 finder()
 {
     find "${findArgs[@]}"
@@ -124,7 +131,7 @@ makeAbsolute()
     # absolute first.
     while IFS=$'\n' read -r dirspec || [ -n "$dirspec" ]
     do
-	realpath --no-symlinks -- "$dirspec"
+	realpath --canonicalize-missing --no-symlinks -- "$dirspec"
     done
 }
 typeset -a findArgs=()
@@ -171,8 +178,8 @@ parseTail()
 
     case "$1" in
 	--find|-f)
-	    shift; findArgs=("$@"); dirSource='finder'; isFixedNumberOfDirs=;;
-	--) shift;&
+	    shift; findArgs=("$@"); dirSource=finder; isFixedNumberOfDirs=;;
+	--) shift; hadDirectoryArg=t;&
 	*)  directories+=("$@");;
     esac
 }
@@ -192,10 +199,7 @@ do
 			    exit 2
 			fi >&2
 			shift
-			if [ ${#directories[@]} -eq 0 ]; then
-			    echo 'ERROR: --directories must be followed by at least one ARGUMENT.'; echo; printUsage "$0"
-			    exit 2
-			fi >&2
+			hadDirectoryArg=t
 			;;
 	--find-args)	shift
 			while [ $# -gt 0 -a "$1" != "$EACHDIR_FIND_END" ]
@@ -212,9 +216,9 @@ do
 			    echo 'ERROR: --find-args must be followed by at least one ARGUMENT.'; echo; printUsage "$0"
 			    exit 2
 			fi >&2
-			dirSource='finder'; isFixedNumberOfDirs=
+			dirSource=finder; isFixedNumberOfDirs=
 			;;
-	--find|-f)	shift; findArgs=("$@"); set --; dirSource='finder'; isFixedNumberOfDirs=; break;;
+	--find|-f)	shift; findArgs=("$@"); set --; dirSource=finder; isFixedNumberOfDirs=; break;;
 	--exec)		shift
 			cmd=
 			while [ $# -gt 0 -a "$1" != "$EACHDIR_EXEC_END" ]
@@ -278,7 +282,9 @@ elif [ ${#runWithPromptArgs[@]} -gt 0 -a "$with" = 'header' ]; then
     exit 2
 fi >&2
 if [ ${#directories[@]} -eq 0 -a ${#findArgs[@]} -eq 0 ]; then
-    echo >&2 'ERROR: No DIR(s) passed.'
+    [ ! "$hadDirectoryArg" ] || exit $EACHDIR_NO_DIR_EXIT_STATUS
+
+    echo >&2 "ERROR: No DIR(s) passed (use -- or --directories [DIR ...] ${EACHDIR_DIRECTORIES_END} to accept no directories)."
     echo >&2
     if [ "$usageRedirectCommand" ]; then
 	"$usageRedirectCommand" --help
@@ -289,7 +295,7 @@ if [ ${#directories[@]} -eq 0 -a ${#findArgs[@]} -eq 0 ]; then
 fi
 
 if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
-    typeset progressCountToArgs=(--count-to ${#arguments[@]}); [ "$isFixedNumberOfDirs" ] || progressCountToArgs=()
+    typeset progressCountToArgs=(--count-to ${#directories[@]}); [ "$isFixedNumberOfDirs" ] || progressCountToArgs=()
     typeset -a progressNotificationCommand=(progressNotification --to "$progressSink" ${EACHDIR_DIR_WHAT:+--prepend-count "$EACHDIR_DIR_WHAT"} "${progressCountToArgs[@]}")
 fi
 
@@ -354,7 +360,10 @@ case "$with" in
 		printf '\n'
 		isFirst=
 	    done
-	} | ${with:?} "${commonArgs[@]}" "${runWithPromptArgs[@]}"
+	} | \
+	    RUNWITHPROMPT_NO_COMMAND_EXIT_STATUS=$EACHDIR_NO_DIR_EXIT_STATUS \
+	    RUNWITH_NO_COMMAND_EXIT_STATUS=$EACHDIR_NO_DIR_EXIT_STATUS \
+		${with:?} "${commonArgs[@]}" "${runWithPromptArgs[@]}"
 	;;
     header)
 	isHeader=t;&
@@ -412,7 +421,7 @@ case "$with" in
 	    fi
 	    isFirst=
 	done < <(eval '$dirSource "${directories[@]}"' "${dirProcessor:+|}" "$dirProcessor")
-	exit ${singleSuccessStatus:-${status:-${additionalSuccessStatus:-0}}}
+	exit ${singleSuccessStatus:-${status:-${additionalSuccessStatus:-$EACHDIR_NO_DIR_EXIT_STATUS}}}
 	;;
     *)	printf >&2 'ASSERT: Invalid strategy: %s\n' "$with"; exit 3;;
 esac
