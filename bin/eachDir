@@ -112,8 +112,12 @@ isLocalDir=
 progressSink=
 isFixedNumberOfDirs=t
 typeset -a directories=()
-dirSource='printf %s\n'
+dirSource=lister
 dirProcessor=
+lister()
+{
+    [ $# -eq 0 ] || printf '%s\n' "$@"
+}
 finder()
 {
     find "${findArgs[@]}"
