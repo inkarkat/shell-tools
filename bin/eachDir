@@ -175,7 +175,7 @@ parseTail()
 
     case "$1" in
 	--find|-f)
-	    shift; findArgs=("$@"); dirSource='finder'; isFixedNumberOfDirs=;;
+	    shift; findArgs=("$@"); dirSource=finder; isFixedNumberOfDirs=;;
 	--) shift;&
 	*)  directories+=("$@");;
     esac
@@ -216,9 +216,9 @@ do
 			    echo 'ERROR: --find-args must be followed by at least one ARGUMENT.'; echo; printUsage "$0"
 			    exit 2
 			fi >&2
-			dirSource='finder'; isFixedNumberOfDirs=
+			dirSource=finder; isFixedNumberOfDirs=
 			;;
-	--find|-f)	shift; findArgs=("$@"); set --; dirSource='finder'; isFixedNumberOfDirs=; break;;
+	--find|-f)	shift; findArgs=("$@"); set --; dirSource=finder; isFixedNumberOfDirs=; break;;
 	--exec)		shift
 			cmd=
 			while [ $# -gt 0 -a "$1" != "$EACHDIR_EXEC_END" ]
