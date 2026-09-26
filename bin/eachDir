@@ -17,9 +17,9 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" "[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [[--not] -P|--predicate-command \"COMMANDLINE\" [...]] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] | ([--] SIMPLECOMMAND [...]) [--] DIR [...] [-?|-h|--help]"
+    printf 'Usage: %q %s%s %s\n' "$(basename "$1")" '[-l|--local-dir]' "${hasProgressNotification:+ [--progress SINK]}" "[--with-[basename-]header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [[--not] -P|--predicate-command \"COMMANDLINE\" [...]] [--between-command BETWEEN-COMMAND] [--usage-redirect COMMAND] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] | ([--] SIMPLECOMMAND [...]) --|DIR [DIR ...] [-?|-h|--help]"
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] --directories DIR [...] ${EACHDIR_DIRECTORIES_END}|--find-args FIND-ARGS [...] ${EACHDIR_FIND_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] [--] SIMPLECOMMAND [...]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "[...] --directories [DIR ...] ${EACHDIR_DIRECTORIES_END}|--find-args FIND-ARGS [...] ${EACHDIR_FIND_END} -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] [--] SIMPLECOMMAND [...]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "[...] (-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${EACHDIR_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]) -f|--find FIND-ARGS ..."
 }
@@ -76,7 +76,7 @@ HELPTEXT
     --exec CMD [...] ${EACHDIR_EXEC_END}	Execute CMD; all following arguments are taken to be
 			arguments to the CMD until an argument consisting of
 			'${EACHDIR_EXEC_END}' is encountered.
-    --directories DIR [...] ${EACHDIR_DIRECTORIES_END}
+    --directories [DIR ...] ${EACHDIR_DIRECTORIES_END}
 			Take the following DIR(s); i.e. all following
 			arguments until an argument consisting of
 			'${EACHDIR_DIRECTORIES_END}' is encountered.
@@ -111,6 +111,7 @@ HELPTEXT
 isLocalDir=
 progressSink=
 isFixedNumberOfDirs=t
+hadDirectoryArg=
 typeset -a directories=()
 dirSource=lister
 dirProcessor=
@@ -176,7 +177,7 @@ parseTail()
     case "$1" in
 	--find|-f)
 	    shift; findArgs=("$@"); dirSource=finder; isFixedNumberOfDirs=;;
-	--) shift;&
+	--) shift; hadDirectoryArg=t;&
 	*)  directories+=("$@");;
     esac
 }
@@ -196,10 +197,7 @@ do
 			    exit 2
 			fi >&2
 			shift
-			if [ ${#directories[@]} -eq 0 ]; then
-			    echo 'ERROR: --directories must be followed by at least one ARGUMENT.'; echo; printUsage "$0"
-			    exit 2
-			fi >&2
+			hadDirectoryArg=t
 			;;
 	--find-args)	shift
 			while [ $# -gt 0 -a "$1" != "$EACHDIR_FIND_END" ]
@@ -282,7 +280,9 @@ elif [ ${#runWithPromptArgs[@]} -gt 0 -a "$with" = 'header' ]; then
     exit 2
 fi >&2
 if [ ${#directories[@]} -eq 0 -a ${#findArgs[@]} -eq 0 ]; then
-    echo >&2 'ERROR: No DIR(s) passed.'
+    [ ! "$hadDirectoryArg" ] || exit 0
+
+    echo >&2 "ERROR: No DIR(s) passed (use -- or --directories [DIR ...] ${EACHDIR_DIRECTORIES_END} to accept no directories)."
     echo >&2
     if [ "$usageRedirectCommand" ]; then
 	"$usageRedirectCommand" --help
