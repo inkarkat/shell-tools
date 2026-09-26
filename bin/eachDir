@@ -2,6 +2,7 @@
 set -o pipefail
 shopt -qs extglob
 
+: ${EACHDIR_NO_DIR_EXIT_STATUS:=99}
 : ${EACHDIR_COMMAND_JOINER=;}
 : ${EACHDIR_EXEC_END=;}
 : ${EACHDIR_DIRECTORIES_END=;}
@@ -102,7 +103,8 @@ SEE ALSO:
 EXIT STATUS:
 Overall exit status is the highest status of all. If you specify any
 runWith[Prompt] argument, --worst-status needs to be explicitly passed.
-
+    $EACHDIR_NO_DIR_EXIT_STATUS	No directories were passed / found (or all were skipped by the
+	predicate).
 Example:
 HELPTEXT
     printf '%q %s\n' "$(basename "$1")" '--local-dir ping -c1 -q -- /var/htdocs/*.com'
@@ -280,7 +282,7 @@ elif [ ${#runWithPromptArgs[@]} -gt 0 -a "$with" = 'header' ]; then
     exit 2
 fi >&2
 if [ ${#directories[@]} -eq 0 -a ${#findArgs[@]} -eq 0 ]; then
-    [ ! "$hadDirectoryArg" ] || exit 0
+    [ ! "$hadDirectoryArg" ] || exit $EACHDIR_NO_DIR_EXIT_STATUS
 
     echo >&2 "ERROR: No DIR(s) passed (use -- or --directories [DIR ...] ${EACHDIR_DIRECTORIES_END} to accept no directories)."
     echo >&2
@@ -358,7 +360,10 @@ case "$with" in
 		printf '\n'
 		isFirst=
 	    done
-	} | ${with:?} "${commonArgs[@]}" "${runWithPromptArgs[@]}"
+	} | \
+	    RUNWITHPROMPT_NO_COMMAND_EXIT_STATUS=$EACHDIR_NO_DIR_EXIT_STATUS \
+	    RUNWITH_NO_COMMAND_EXIT_STATUS=$EACHDIR_NO_DIR_EXIT_STATUS \
+		${with:?} "${commonArgs[@]}" "${runWithPromptArgs[@]}"
 	;;
     header)
 	isHeader=t;&
@@ -416,7 +421,7 @@ case "$with" in
 	    fi
 	    isFirst=
 	done < <(eval '$dirSource "${directories[@]}"' "${dirProcessor:+|}" "$dirProcessor")
-	exit ${singleSuccessStatus:-${status:-${additionalSuccessStatus:-0}}}
+	exit ${singleSuccessStatus:-${status:-${additionalSuccessStatus:-$EACHDIR_NO_DIR_EXIT_STATUS}}}
 	;;
     *)	printf >&2 'ASSERT: Invalid strategy: %s\n' "$with"; exit 3;;
 esac
