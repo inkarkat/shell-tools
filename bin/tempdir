@@ -126,7 +126,7 @@ cleanup()
 	[ $status $keepOnComparison 0 ] && return $status
     fi
 
-    ${DEBUG:+debugcommand --} rm -rf "$tmpDirspec" 2>/dev/null
+    ${DEBUG:+debugcommand --module cleanup --} rm -rf "$tmpDirspec" 2>/dev/null
 }
 
 tmpDirspec=

@@ -157,7 +157,7 @@ fi
 
 cleanup()
 {
-    [ ! -e "$tempFilespec" ] || ${DEBUG:+debugcommand --} rm -f -- "$tempFilespec" 2>/dev/null
+    [ ! -e "$tempFilespec" ] || ${DEBUG:+debugcommand --module cleanup --} rm -f -- "$tempFilespec" 2>/dev/null
 }
 
 if [ -z "$commands" ]; then
