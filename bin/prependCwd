@@ -1,0 +1,44 @@
+#!/bin/bash
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[-?|-h|--help]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Prepend the current working directory to each non-empty input line.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+Useful when iterating over multiple projects which output relative paths, but
+you collect the full output and need globally unique filespecs there.
+
+SEE ALSO:
+- withCwdPrependedToOutput takes commands and prepends the current working
+  directory to their output.
+HELPTEXT
+}
+
+case "$1" in
+    --help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+esac
+if [ $# -ne 0 ]; then
+    printUsage "$0" >&2
+    exit 2
+fi
+
+exec prefix --keep-indent --skip-empty -- "${PWD}/"

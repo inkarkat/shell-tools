@@ -40,6 +40,11 @@ you collect the full output and need globally unique filespecs there.
 			the COMMAND.
 HELPTEXT
     runWithPrompt --get-long-usage 2>/dev/null
+    cat <<HELPTEXT
+SEE ALSO:
+- prependCwd just prepends the current working directory to each line of its
+  input, without this command's command execution.
+HELPTEXT
 }
 
 isBare=
@@ -83,4 +88,4 @@ if [ -z "$commands" ]; then
     fi
 else
     eval "$commands"
-fi | prefix --keep-indent --skip-empty -- "${PWD}/"
+fi | prependCwd
