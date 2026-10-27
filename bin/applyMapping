@@ -1,0 +1,53 @@
+#!/bin/bash
+
+printUsage()
+{
+    cat <<HELPTEXT
+Read KEY VALUE pairs from the passed MAPPING-FILE and substitute each occurrence
+of KEY with the corresponding VALUE in FILE(s) / standard input.
+HELPTEXT
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-?|-h|--help] ...'
+    printf 'Usage: %q %s\n' "$(basename "$1")" 'MAPPING-FILE FILE [...]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" 'MAPPING-FILE [-] [FILE ...]'
+    printf 'Usage: cat MAPPING-FILE | %q %s\n' "$(basename "$1")" '- FILE [...]'
+}
+
+typeset -a awkArgs=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+	--field-separator|-F)
+			awkArgs+=("$1" "${2:?}"); shift; shift;;
+	--)		shift; break;;
+	-)		break;; # For supporting special - FILE without prior --
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -lt 1 ]; then
+    echo 'ERROR: No MAPPING-FILE passed.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+exec awk "${awkArgs[@]}" '
+NR == FNR {
+    if (NF >= 2) {
+	literalKey = gensub(/[][\\$*+?{}.|()^]/, "\\\\&", "g", $1)
+	$1 = ""; sub(OFS, "")
+	literalValue = gensub(/[\\&]/, "\\\\&", "g", $0)
+	keys[++keyNum] = literalKey
+	mapping[literalKey] = literalValue
+    }
+    next
+}
+{
+    for (i = 1; i <= keyNum; ++i) {
+	$0 = gensub(keys[i], mapping[keys[i]], "g", $0)
+    }
+    print
+}
+' "$@"
