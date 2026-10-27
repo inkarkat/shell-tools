@@ -25,3 +25,8 @@ A cat and a wolf.
 Is that a wolf?
 EOF
 }
+
+@test "failing COMMAND's exit status is returned" {
+    run -42 applyMapping --mapping-file "${BATS_TEST_DIRNAME}/mapping.tsv" --exec echo 'A dog and a fox.' \; --command '(exit 42)'
+    assert_output 'A cat and a wolf.'
+}

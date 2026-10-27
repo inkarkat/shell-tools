@@ -47,6 +47,11 @@ HELPDESCRIPTION
     --exec CMD [...] ${APPLYMAPPING_EXEC_END}	Execute CMD and substitute in its output; all following
 			arguments are taken to be arguments to the CMD until an
 			argument consisting of '${APPLYMAPPING_EXEC_END}' is encountered.
+EXIT STATUS:
+    0	Complete success.
+    2	Bad invocation, wrong or missing command-line arguments.
+    3	Internal error or failed assertion.
+    *	Any exit status from COMMAND(s).
 HELPTEXT
 }
 
