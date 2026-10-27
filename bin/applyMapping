@@ -36,11 +36,17 @@ fi >&2
 exec awk "${awkArgs[@]}" '
 NR == FNR {
     if (NF >= 2) {
-	literalKey = gensub(/[][\\$*+?{}.|()^]/, "\\\\&", "g", $1)
+	key = $1
 	$1 = ""; sub(OFS, "")
+	literalKey = gensub(/[][\\$*+?{}.|()^]/, "\\\\&", "g", key)
 	literalValue = gensub(/[\\&]/, "\\\\&", "g", $0)
-	keys[++keyNum] = literalKey
-	mapping[literalKey] = literalValue
+
+	if (literalKey in mapping) {
+	    print "Warning: Duplicate key: " key > "/dev/stderr"
+	} else {
+	    keys[++keyNum] = literalKey
+	    mapping[literalKey] = literalValue
+	}
     }
     next
 }

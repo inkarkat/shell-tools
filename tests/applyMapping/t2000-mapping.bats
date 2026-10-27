@@ -54,3 +54,26 @@ My cat is a good\&\bad cat\
 And X&Y and "cat" B-
 EOF
 }
+
+@test "prints warning with duplicate keys and uses the first" {
+    run -0 --separate-stderr applyMapping - "${BATS_TEST_DIRNAME}/input.txt" <<'EOF'
+dog	cat
+dog	mouse
+fox	FOX
+Fox	XXX
+the	a
+The	Da
+fox	???
+EOF
+    assert_output - <<'EOF'
+Da \quick\ `brown` FOX \\
+jumps over a **lazy** cat.
+XXXes and cats are ... animals.
+My cat is a good/bad cat.
+And [FOX] and "cat" A+
+EOF
+    output="$stderr" assert_output - <<'EOF'
+Warning: Duplicate key: dog
+Warning: Duplicate key: fox
+EOF
+}
