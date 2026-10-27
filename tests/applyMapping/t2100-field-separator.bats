@@ -10,7 +10,7 @@ EOF
 )"
 
 @test "apply mapping with default whitespace field separator" {
-    run -0 applyMapping - "${BATS_TEST_DIRNAME}/input.txt" <<<"$TAB_MAPPING"
+    run -0 applyMapping --mapping-file - --file "${BATS_TEST_DIRNAME}/input.txt" <<<"$TAB_MAPPING"
     assert_output - <<'EOF'
 The \quick\ `brown` fox \\
 jumps over the **lazy** cat.
@@ -21,7 +21,7 @@ EOF
 }
 
 @test "apply mapping with tab field separator" {
-    run -0 applyMapping -F $'\t' - "${BATS_TEST_DIRNAME}/input.txt" <<<"$TAB_MAPPING"
+    run -0 applyMapping -F $'\t' --mapping-file - --file "${BATS_TEST_DIRNAME}/input.txt" <<<"$TAB_MAPPING"
     assert_output - <<'EOF'
 The \quick\ `brown` fox \\
 jumps over the **lazy** cat.
@@ -32,7 +32,7 @@ EOF
 }
 
 @test "apply mapping with dash field separator" {
-    run -0 applyMapping -F - - "${BATS_TEST_DIRNAME}/input.txt" <<'EOF'
+    run -0 applyMapping -F - --mapping-file - --file "${BATS_TEST_DIRNAME}/input.txt" <<'EOF'
 dog-cat
  and -&
 /- <> 
@@ -47,7 +47,7 @@ EOF
 }
 
 @test "mapping lines without a separator are ignored" {
-    run -0 applyMapping -F $'\t' - "${BATS_TEST_DIRNAME}/input.txt" <<'EOF'
+    run -0 applyMapping -F $'\t' --mapping-file - --file "${BATS_TEST_DIRNAME}/input.txt" <<'EOF'
 dog	cat
 fox
 the	a
@@ -64,7 +64,7 @@ EOF
 }
 
 @test "mapping to empty string" {
-    run -0 applyMapping -F $'\t' - "${BATS_TEST_DIRNAME}/input.txt" <<'EOF'
+    run -0 applyMapping -F $'\t' --mapping-file - --file "${BATS_TEST_DIRNAME}/input.txt" <<'EOF'
 dog	cat
 fox	
 the	a

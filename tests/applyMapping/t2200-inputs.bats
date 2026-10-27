@@ -24,16 +24,18 @@ EOF
 }
 
 @test "mapping file and input from stdin" {
-    run -0 applyMapping "$MAPPING_FILE" - < "${BATS_TEST_DIRNAME}/input.txt"
+    run -0 applyMapping --mapping-file "$MAPPING_FILE" --stdin < "${BATS_TEST_DIRNAME}/input.txt"
     assert_mapped_output
 }
 
 @test "mapping file and input file" {
-    run -0 applyMapping "$MAPPING_FILE" "${BATS_TEST_DIRNAME}/input.txt"
+    run -0 applyMapping --mapping-file "$MAPPING_FILE" --file "${BATS_TEST_DIRNAME}/input.txt"
     assert_mapped_output
 }
 
 @test "mapping file and two input files" {
-    run -0 applyMapping "$MAPPING_FILE" <(head -n 2 -- "${BATS_TEST_DIRNAME}/input.txt") <(tail -n +3 -- "${BATS_TEST_DIRNAME}/input.txt")
+    run -0 applyMapping --mapping-file "$MAPPING_FILE" \
+	    --file <(head -n 2 -- "${BATS_TEST_DIRNAME}/input.txt") \
+	    --file <(tail -n +3 -- "${BATS_TEST_DIRNAME}/input.txt")
     assert_mapped_output
 }

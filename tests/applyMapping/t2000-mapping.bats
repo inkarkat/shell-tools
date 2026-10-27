@@ -3,7 +3,7 @@
 load fixture
 
 @test "apply single mapping" {
-    run -0 applyMapping - "${BATS_TEST_DIRNAME}/input.txt" <<<$'dog\tcat'
+    run -0 applyMapping --mapping-file - --file "${BATS_TEST_DIRNAME}/input.txt" <<<$'dog\tcat'
     assert_output - <<'EOF'
 The \quick\ `brown` fox \\
 jumps over the **lazy** cat.
@@ -14,7 +14,7 @@ EOF
 }
 
 @test "apply multiple mappings from top to bottom" {
-    run -0 applyMapping - "${BATS_TEST_DIRNAME}/input.txt" <<'EOF'
+    run -0 applyMapping --mapping-file - --file "${BATS_TEST_DIRNAME}/input.txt" <<'EOF'
 dog	cat
 the	a
 The	Da
@@ -32,7 +32,7 @@ EOF
 }
 
 @test "apply mappings with special regexp characters" {
-    run -0 applyMapping - "${BATS_TEST_DIRNAME}/input.txt" <<'EOF'
+    run -0 applyMapping --mapping-file - --file "${BATS_TEST_DIRNAME}/input.txt" <<'EOF'
 dog	cat
 the	a
 The	Da
@@ -56,7 +56,7 @@ EOF
 }
 
 @test "prints warning with duplicate keys and uses the first" {
-    run -0 --separate-stderr applyMapping - "${BATS_TEST_DIRNAME}/input.txt" <<'EOF'
+    run -0 --separate-stderr applyMapping --mapping-file - --file "${BATS_TEST_DIRNAME}/input.txt" <<'EOF'
 dog	cat
 dog	mouse
 fox	FOX
