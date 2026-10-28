@@ -43,8 +43,10 @@ getShortUsage()
 		printf %s "${usageSep}${hadTopic:+ }" "[--piece-info-extractor-command COMMANDLINE|--piece-info-extractor-exec CMD [...]${extractorMarker:+ [}${extractorMarker}${extractorMarker:+] [...]} ${EACHSPLIT_EXTRACTOR_END}]"; hadTopic=t;;&
 	    ''|piece-modifier)
 		printf %s "${usageSep}${hadTopic:+ }" "[--piece-modifier-command COMMANDLINE|--piece-modifier-exec CMD [...]${modifierMarker:+ [}${modifierMarker}${modifierMarker:+] [...]} ${EACHSPLIT_MODIFIER_END}]"; hadTopic=t;;&
+	    ''|iteration-options)
+		printf %s "${usageSep}${hadTopic:+ }" "${hasProgressNotification:+[--progress SINK] }[--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)]"; hadTopic=t;;&
 	    ''|iteration)
-		printf %s "${usageSep}${hadTopic:+ }" "${hasProgressNotification:+[--progress SINK] }[--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...]${identifierMarker:+ [${identifierMarker}]}${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--exec ...] | -- SIMPLECOMMAND [...]"; hadTopic=t;;&
+		printf %s "${usageSep}${hadTopic:+ }" "-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...]${identifierMarker:+ [${identifierMarker}]}${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--exec ...] | -- SIMPLECOMMAND [...]"; hadTopic=t;;&
 	    ''|consumer)
 		printf %s "${usageSep}${hadTopic:+ }" "-C|--consumer-command \"COMMANDLINE\" [-C ...] | --consumer-exec SIMPLECOMMAND [...]${mappingMarker:+ [${mappingMarker}]}${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--consumer-exec ...]"; hadTopic=t;;&
 	    ''|input)
@@ -115,7 +117,7 @@ HELPTEXT
 HELPTEXT
 		hadTopic=t
 		;;&
-	    ''|iteration)
+	    ''|iteration-options)
 		cat <<HELPTEXT
 ${hasProgressNotification:+    --progress SINK	Report the current piece through one of the SINKs of
 			the progressNotification command.
@@ -131,7 +133,10 @@ ${hasProgressNotification:+    --progress SINK	Report the current piece through 
 			each execution.
 HELPTEXT
     runWithPrompt --get-long-usage 2>/dev/null
-    cat <<HELPTEXT
+		hadTopic=t
+		;;&
+	    ''|iteration)
+		cat <<HELPTEXT
     --command|-c CMD	Execute CMD as a command-line. FILEs ${fileMarker:+either }are appended
 			${fileMarker:+or replace any $fileMarker marker }inside COMMANDLINE.${identifierMarker:+
 			Furthermore, ${identifierMarker} is replaced with the piece filename /
@@ -188,7 +193,7 @@ printShortUsage()
     # skim the long one.
     printf 'Usage: %q %s\n' "$(basename "$1")" "$(getShortUsage split piece-info piece-modifier) [-?|-h|--help] ..."
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "... $(getShortUsage iteration)"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... $(getShortUsage iteration-options iteration)"
     printf 'Usage: %q %s\n' "$(basename "$1")" "... $(getShortUsage consumer)"
     echo
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '...'
@@ -313,12 +318,12 @@ do
 	--file=*)	filespec="${1#--file=}"; shift; option input;;
 	-f*)		filespec="${1#-f}"; shift; option input;;
 
-	--progress)	shift; progressSink="$1"; shift; option iteration;;
-	--with-header)	shift; with=header; option iteration;;
+	--progress)	shift; progressSink="$1"; shift; option iteration-options;;
+	--with-header)	shift; with=header; option iteration-options;;
 	--separate-errors)
-			shift; errorRedir=''; option iteration;;
-	--no-color|--color=*)	colorArg=("$1"); shift; option iteration;;
-	--with-prompt)	shift; with=runWithPrompt; option iteration;;
+			shift; errorRedir=''; option iteration-options;;
+	--no-color|--color=*)	colorArg=("$1"); shift; option iteration-options;;
+	--with-prompt)	shift; with=runWithPrompt; option iteration-options;;
 
 	--piece-info-extractor-command)
 			shift; pieceInfoExtractorCommand+="${pieceInfoExtractorCommand:+ $EACHSPLIT_EXTRACTOR_JOINER }${1:?}"; shift; parameter piece-info;;
@@ -409,15 +414,15 @@ do
 			argCount $((originalArgNum - $#)) consumer
 			;;
 	--single-success)
-			commonArgs+=("$1"); shift; isSingleSuccess=t; option iteration;;
+			commonArgs+=("$1"); shift; isSingleSuccess=t; option iteration-options;;
 	--status-99-is-noop)
-			commonArgs+=("$1"); shift; additionalSuccessStatus=99; option iteration;;
+			commonArgs+=("$1"); shift; additionalSuccessStatus=99; option iteration-options;;
 	--)		endOfOptionsAndParameters; shift; break;;
 	-*)		if argCount=$(runWithPrompt --understands "$@"); then
 			    runWithPromptArgs+=("${@:1:argCount}")
 			    shift $argCount
 			    : ${with:=runWith}
-			    argCount $argCount iteration
+			    argCount $argCount iteration-options
 			elif [ $? -eq 2 ]; then
 			    exit 2
 			else
