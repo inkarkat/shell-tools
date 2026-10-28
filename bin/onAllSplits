@@ -148,5 +148,15 @@ export EACHSPLIT_GLOB_ESCAPED=t
 # all piece filespecs to be appended to COMMAND(s).
 export EACHSPLIT_MAPPING_MARKER_INTERPOLATE_SEPARATELY=t
 
+# We use applyMapping --command because concatenating everything is
+# straightforward and we ourselves might have been passed a complete
+# COMMANDLINE. However, the piece filespecs that are appended if no marker is
+# present are passed as separate arguments, i.e. --exec semantics. Even worse,
+# they are always appended, so actually SIMPLECOMMAND semantics.
+# As there's just a single --command, we can clear the command joiner so the
+# piece filespecs that are parsed as SIMPLECOMMAND are (in properly escaped
+# form) appended to the COMMANDLINE.
+export APPLYMAPPING_COMMAND_JOINER=''
+
 exec $ONALLSPLITS_EACHSPLIT "${eachSplitArgs[@]}" --consumer-exec \
-    applyMapping --mapping-file "$EACHSPLIT_MAPPING_MARKER" --command "$commands" "$EACHSPLIT_EXEC_END"
+    applyMapping --mapping-file "$EACHSPLIT_MAPPING_MARKER" --command "$commands" -- "$EACHSPLIT_EXEC_END"
