@@ -661,9 +661,10 @@ case "$with" in
 	    interpolatedConsumerCommands="$consumerCommands"
 	    interpolatedConsumerCommands="${interpolatedConsumerCommands//"$fileMarker"/$quotedPieceFileList}"
 	    interpolatedConsumerCommands="${interpolatedConsumerCommands//"$globMarker"/$quotedGlob}"
-	    interpolatedConsumerCommands="${interpolatedConsumerCommands//"$mappingMarker"/$quotedPieceInfoMapping}"
+	    [ "$EACHSPLIT_MAPPING_MARKER_INTERPOLATE_SEPARATELY" ] || interpolatedConsumerCommands="${interpolatedConsumerCommands//"$mappingMarker"/$quotedPieceInfoMapping}"
 	    printf -v quotedPieceFiles '%q ' "${pieceFiles[@]}"; quotedPieceFiles="${quotedPieceFiles% }"
 	    [ "$interpolatedConsumerCommands" = "$consumerCommands" ] || quotedPieceFiles=''
+	    [ "$EACHSPLIT_MAPPING_MARKER_INTERPOLATE_SEPARATELY" ] && interpolatedConsumerCommands="${interpolatedConsumerCommands//"$mappingMarker"/$quotedPieceInfoMapping}"
 	    eval "$interpolatedConsumerCommands" "$quotedPieceFiles" || exit $?
 	fi
 

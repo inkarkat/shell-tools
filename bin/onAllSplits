@@ -143,5 +143,10 @@ fi >&2
 # applyMapping will expand it. This flag allows this.
 export EACHSPLIT_GLOB_ESCAPED=t
 
+# We always pass $EACHSPLIT_MAPPING_MARKER for applyMapping, but if COMMAND(s)
+# don't contain $EACHSPLIT_FILE_MARKER or $EACHSPLIT_GLOB_MARKER, we still want
+# all piece filespecs to be appended to COMMAND(s).
+export EACHSPLIT_MAPPING_MARKER_INTERPOLATE_SEPARATELY=t
+
 exec $ONALLSPLITS_EACHSPLIT "${eachSplitArgs[@]}" --consumer-exec \
     applyMapping --mapping-file "$EACHSPLIT_MAPPING_MARKER" --command "$commands" "$EACHSPLIT_EXEC_END"
