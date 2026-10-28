@@ -21,7 +21,7 @@ EOF
     done
 }
 
-@test "split two-liners piece filespecs are inserted at {} marker" {
+@test "split two-liners piece catalog filespec is inserted at {} marker" {
     run -0 eachSplit --lines=2 --file "${BATS_TEST_DIRNAME}/inputs/two-liners.txt" --consumer-exec xargs --arg-file {} -d '\n' -n 1 grep -nh -e '^' -- \;
     assert_output - <<'EOF'
 1:The opener
