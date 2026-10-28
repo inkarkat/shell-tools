@@ -153,7 +153,7 @@ HELPTEXT
 	    ''|consumer)
 		cat <<HELPTEXT
     --consumer-command|-C CMD
-			Execute CMD once as a command-line to work on all split
+			Execute CMD as a command-line to work on all split
 			pieces at once. ${fileMarker:+Any $fileMarker marker is replaced with a
 			catalog file that lists all split piece filespecs.}
 			${globMarker:+Any $globMarker marker is replaced with a glob pattern that
@@ -163,7 +163,7 @@ HELPTEXT
 			extracted piece info.} ${fileMarker:+If no marker is given, }all
 			piece filespecs are directly appended to CMD.
     --consumer-exec CMD [...] ${EACHSPLIT_EXEC_END}
-			Execute CMD once as a command-line to work on all split
+			Execute CMD as a command-line to work on all split
 			pieces at once; all following arguments are taken to
 			be arguments to the CMD until an argument consisting of
 			'${EACHSPLIT_EXEC_END}' is encountered. ${fileMarker:+Any $fileMarker marker is replaced with a
@@ -222,6 +222,10 @@ HELPDESCRIPTION
     cat <<HELPTEXT
 SEE ALSO:
 - eachFile directly operates on individual files.
+- onAllSplits is a specialization towards consumption of all split pieces at
+  once, offering a more convenient interface for --consumer-{command,exec} and
+  automatically mapping the temporary piece filespecs back to the piece
+  identifier (if an extractor is provided)
 
 EXIT STATUS:
 Overall exit status is the highest status of all. If you specify any
