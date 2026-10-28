@@ -8,7 +8,6 @@ printUsage()
     eachSection --help 2>&1 | sed \
 	-e '1s#^.*$#Split standard input into sections separated by prompts (as created by a shell'\''s\nPS1) and execute COMMAND with each section file (which either is appended or\nreplaces any {} marker inside COMMANDLINE).#' \
 	-e '2b removeFirstParagraphLoop' \
-	-e 's/old term/new term/g' \
 	-e '/^ *\(--section-separator|-S\)/b removeOptionLoop' \
 	-e '/^Usage:$/N' -e '/\(^\|\n\)Usage: */{ s/\(^\|\n\)\(Usage: *\)\?\(\([^ |]\+ \)*\(| \)\?\)eachSection /\1\2\3[EACHPROMPT_PATTERN=REGEXP] '"$(basename "$1")"' /; s/ \[-S|--section-separator PATTERN\]//; }' \
 	-e b -e :removeFirstParagraphLoop -e '{ /\(^\|\n\)$/{ s/^\(.*\n\)\?//; b; }; N; b removeFirstParagraphLoop; }' \
