@@ -135,6 +135,13 @@ if [ -z "$commands" ]; then
     exit 2
 fi >&2
 
-EACHSPLIT_GLOB_ESCAPED=t \
-    exec $ONALLSPLITS_EACHSPLIT "${eachSplitArgs[@]}" --consumer-exec \
-	applyMapping --mapping-file "$EACHSPLIT_MAPPING_MARKER" --command "$commands" "$EACHSPLIT_EXEC_END"
+
+# An $EACHSPLIT_GLOB_MARKER is inserted literally into --command "$commands"
+# (actually --command $quotedCommands), so it would be expanded, and the
+# concatenation of the COMMAND and glob would vanish because 'nullglob' is set.
+# We need the glob to be inserted in escaped form, so only the eval() in
+# applyMapping will expand it. This flag allows this.
+export EACHSPLIT_GLOB_ESCAPED=t
+
+exec $ONALLSPLITS_EACHSPLIT "${eachSplitArgs[@]}" --consumer-exec \
+    applyMapping --mapping-file "$EACHSPLIT_MAPPING_MARKER" --command "$commands" "$EACHSPLIT_EXEC_END"
