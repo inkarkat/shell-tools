@@ -211,7 +211,7 @@ printLongUsage()
     # This is the long "man page" when launched with the help argument.
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
-Split standard input into pieces and execute COMMAND with each piece file
+$("${BASH_SOURCE[0]}" --get-usage-description) and execute COMMAND with each piece file
 (which ${fileMarker:+either }is appended${fileMarker:+ or replaces any $fileMarker marker} inside COMMANDLINE).
 HELPDESCRIPTION
     echo
@@ -276,6 +276,8 @@ do
 			shift; getShortUsage "$@"; exit $?;;
 	--get-long-usage)
 			shift; getLongUsage "$@"; exit $?;;
+	--get-usage-description)
+			shift; printf %s 'Split standard input into pieces'; exit 0;;
 	--understand-for)
 			shift; understandsSubtopics["$1"]=t; shift;;
 	--understands)	shift
