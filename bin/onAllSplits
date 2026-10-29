@@ -78,6 +78,11 @@ EXIT STATUS:
 HELPTEXT
 }
 
+understandsEachSplitArg()
+{
+    $ONALLSPLITS_EACHSPLIT --understand-for split --understand-for piece-info --understand-for piece-modifier --understand-for input --understands "$@"
+}
+
 typeset -a eachSplitArgs=()
 typeset -a applyMappingArgs=()
 commands=
@@ -85,6 +90,8 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--understands)	shift; understandsEachSplitArg "$@"; exit $?;;
+
 	--command|-c)	shift; commands+="${commands:+ $ONALLSPLITS_COMMAND_JOINER }$1"; shift;;
 	--exec)		shift
 			cmd=
@@ -109,7 +116,7 @@ do
 			commands+="${commands:+ $ONALLSPLITS_COMMAND_JOINER }${cmd}"
 			;;
 	--)		shift; break;;
-	-*)		if argCount=$($ONALLSPLITS_EACHSPLIT --understand-for split --understand-for piece-info --understand-for piece-modifier --understand-for input --understands "$@"); then
+	-*)		if argCount=$(understandsEachSplitArg "$@"); then
 			    eachSplitArgs+=("${@:1:argCount}")
 			    shift $argCount
 			elif [ $? -eq 2 ]; then
