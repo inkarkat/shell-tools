@@ -1,4 +1,16 @@
 #!/bin/bash
+shopt -qs extglob
+
+getUsage()
+{
+    local usageOption="${1:?}"; shift
+    for arg
+    do
+	[ "$arg" = split ] || set -- "$@" "$arg"
+	shift
+    done
+    eachSplit $usageOption "$@"
+}
 
 printUsage()
 {
@@ -15,8 +27,11 @@ printUsage()
 	-e '/^Example:$/N' -e '/\(^\|\n\)Example: */{ s/\(^\|\n\)\(Example: *\)\?eachSplit /\1\2'"$(basename "$1") /; }" \
 	-e b -e :removeOptionLoop -e '{ /\n *--splitter[^\n]*$/{ N; b removeOptionLoop; }; /\n *--[^\n]*$\|\n[^	 ]\|\n$/{ s/^\(.*\n\)\?//; b; }; N; b removeOptionLoop; }'
 }
+
 case "$1" in
     --help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+    --get-@(short|long)-usage)
+		    getUsage "$@"; exit $?;;
 esac
 
 exec eachSplit --splitter csplit --prefix=PREFIX OPTIONS FILE ARGS \; "$@"
