@@ -1,0 +1,5 @@
+#!/bin/bash
+
+ONALLSPLITS="$(basename -- "${BASH_SOURCE[0]}")" \
+ONALLSPLITS_EACHSPLIT=eachCsplit \
+    exec onAllSplits "$@"
