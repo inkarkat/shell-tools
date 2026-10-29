@@ -586,9 +586,9 @@ case "$with" in
 	[ ${#runWithPromptArgs[@]} -eq 0 ] && runWithPromptArgs=(--worst-status)
 	{
 	    if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
-		printf ' exec 4> >('
+		printf ' exec 3> >('
 		printf '%q ' "${progressNotificationCommand[@]}"
-		printf '2>/dev/null); reportProgress() { trap "reportProgress() { :; }; trap PIPE" PIPE; printf %%s\\\\n "$*" >&4 2>/dev/null; }\n'
+		printf '2>/dev/null); reportProgress() { trap "reportProgress() { :; }; trap PIPE" PIPE; printf %%s\\\\n "$*" >&3 2>/dev/null; }\n'
 	    fi
 
 	    for pieceFile in "${pieceFiles[@]}"
@@ -616,11 +616,11 @@ case "$with" in
 	isHeader=t;&
     '')
 	if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
-	    exec 4> >("${progressNotificationCommand[@]}" 2>/dev/null)
+	    exec 3> >("${progressNotificationCommand[@]}" 2>/dev/null)
 	    reportProgress()
 	    {
 		trap 'reportProgress() { :; }; trap PIPE' PIPE
-		printf '%s\n' "$*" >&4 2>/dev/null  # Silence "printf: write error: Broken pipe"
+		printf '%s\n' "$*" >&3 2>/dev/null  # Silence "printf: write error: Broken pipe"
 	    }
 	else
 	    reportProgress() { :; }
@@ -631,7 +631,7 @@ case "$with" in
 	pieceFileList="${tempDirspec}/${EACHSPLIT_FILE_PREFIX/-/.}list"
 	pieceInfoMapping="${tempDirspec}/${EACHSPLIT_FILE_PREFIX/-/.}info.tsv"
 	: ${EACHSPLIT_HEADER_ID:="eachSplit-$$-$RANDOM"}
-	exec 3<&0
+	exec 4<&0
 	for pieceFile in "${pieceFiles[@]}"
 	do
 	    pieceInfo="$(getPieceInfo "$pieceFile")"
@@ -650,7 +650,7 @@ case "$with" in
 	    interpolatedCommands="${interpolatedCommands//"$identifierMarker"/$quotedPieceInfo}"
 
 	    reportProgress "$pieceInfo"
-	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedPieceFile" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHSPLIT_HEADER_ID' -- '$pieceInfo'}") <&3; exitStatus=$?
+	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedPieceFile" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHSPLIT_HEADER_ID' -- '$pieceInfo'}") <&4; exitStatus=$?
 	    if [ $exitStatus -eq 0 ] && [ "$isSingleSuccess" ]; then
 		singleSuccessStatus=0
 	    elif [ $exitStatus -gt ${status:--1} -a $exitStatus -ne ${additionalSuccessStatus:--1} ]; then

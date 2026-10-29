@@ -154,8 +154,8 @@ if [ ${#files[@]} -gt 0 ]; then
 else
     case "${mapDescriptors[0]}${mapDescriptors[1]}" in
 	1)  eval "$commands" | map -;;
-	2)  { eval "$commands"  3>&1 1>&2 2>&3 3>&- | map -; } 3>&1 1>&2 2>&3 3>&-;;
-	12) { eval "$commands" 3>&1 1>&2 2>&3 3>&- | map -; } 3>&1 1>&2 2>&3 3>&- | map -;;
+	2)  { eval "$commands" 6>&1 1>&2 2>&6 6>&- | map -; } 6>&1 1>&2 2>&6 6>&-;;
+	12) { eval "$commands" 6>&1 1>&2 2>&6 6>&- | map -; } 6>&1 1>&2 2>&6 6>&- | map -;;
 	*)  printf >&2 'ASSERT: Invalid mapDescriptors: %s\n' "${mapDescriptors[*]}"; exit 3;;
     esac
 fi
