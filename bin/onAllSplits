@@ -16,7 +16,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, they can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "$($ONALLSPLITS_EACHSPLIT --get-short-usage split piece-info piece-modifier) [-?|-h|--help] ..."
+    printf 'Usage: %q %s\n' "$(basename "$1")" "$($ONALLSPLITS_EACHSPLIT --get-short-usage split piece-info piece-modifier) $(applyMapping --get-short-usage command-outputs) [-?|-h|--help] ..."
     echo
     [ ! "$ONALLSPLITS_FILE_INPUT" ] || printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "... ${ONALLSPLITS_SHORT_ARGS:--c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${ONALLSPLITS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]}"
     printf 'Usage: %q %s\n' "$(basename "$1")" "... $($ONALLSPLITS_EACHSPLIT --get-short-usage input)... ${ONALLSPLITS_SHORT_ARGS:--c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${ONALLSPLITS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]}"
@@ -63,6 +63,7 @@ HELPDESCRIPTION
 HELPTEXT
     fi
     $ONALLSPLITS_EACHSPLIT --get-long-usage split piece-info piece-modifier ${ONALLSPLITS_FILE_INPUT:+input}
+    applyMapping --get-long-usage command-outputs
     echo
     cat <<HELPTEXT
 SEE ALSO:
@@ -78,6 +79,7 @@ HELPTEXT
 }
 
 typeset -a eachSplitArgs=()
+typeset -a applyMappingArgs=()
 commands=
 while [ $# -ne 0 ]
 do
@@ -109,6 +111,11 @@ do
 	--)		shift; break;;
 	-*)		if argCount=$($ONALLSPLITS_EACHSPLIT --understand-for split --understand-for piece-info --understand-for piece-modifier --understand-for input --understands "$@"); then
 			    eachSplitArgs+=("${@:1:argCount}")
+			    shift $argCount
+			elif [ $? -eq 2 ]; then
+			    exit 2
+			elif argCount=$(applyMapping --understand-for command-outputs --understands "$@"); then
+			    applyMappingArgs+=("${@:1:argCount}")
 			    shift $argCount
 			elif [ $? -eq 2 ]; then
 			    exit 2
@@ -163,4 +170,4 @@ export EACHSPLIT_MAPPING_MARKER_INTERPOLATE_SEPARATELY=t
 export APPLYMAPPING_COMMAND_JOINER=''
 
 exec $ONALLSPLITS_EACHSPLIT "${eachSplitArgs[@]}" --consumer-exec \
-    applyMapping --field-separator $'\t' --mapping-file "$EACHSPLIT_MAPPING_MARKER" --command "$commands" "$EACHSPLIT_EXEC_END"
+    applyMapping "${applyMappingArgs[@]}" --field-separator $'\t' --mapping-file "$EACHSPLIT_MAPPING_MARKER" --command "$commands" "$EACHSPLIT_EXEC_END"

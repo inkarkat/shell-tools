@@ -6,14 +6,90 @@ ${DEBUG:+eval $(debugtrace -o $- -- "$@")}
 : ${APPLYMAPPING_COMMAND_JOINER=;}
 : ${APPLYMAPPING_EXEC_END=;}
 
+getShortUsage()
+{
+    local usageSep
+    [ $# -gt 0 ] || set -- ''
+    while [ $# -gt 0 ]
+    do
+	local hadTopic=
+	case "$1" in
+	    ''|mapping)
+		printf %s "${usageSep}${hadTopic:+ }" '-m|--mapping-file MAPPING-FILE|- [-F|--field-separator FS]'; hadTopic=t;;&
+	    ''|command-outputs)
+		printf %s "${usageSep}${hadTopic:+ }" '[-1|--stdout|-2|--stderr]'; hadTopic=t;;&
+	    ''|commands)
+		printf %s "${usageSep}${hadTopic:+ }" "-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${APPLYMAPPING_EXEC_END} [--exec ...]"; hadTopic=t;;&
+	    ''|inputs)
+		printf %s "${usageSep}${hadTopic:+ }" '-f|--file FILE [-f ...]'; hadTopic=t;;&
+	    ''|stdin)
+		printf %s "${usageSep}${hadTopic:+ }" '--stdin'; hadTopic=t;;&
+	    *)  [ "$hadTopic" ] || { echo "ERROR: Unknown short usage topic \"$1\"!" >&2; return 2; };;
+	esac
+	shift; usageSep=' '
+    done
+}
+getLongUsage()
+{
+    [ $# -gt 0 ] || set -- ''
+    while [ $# -gt 0 ]
+    do
+	local topic="$1"; shift
+	local hadTopic=
+	#local optionName="${1:?}"; shift
+	#local description="$1"; shift
+	case "$topic" in
+	    ''|mapping)
+		cat <<HELPTEXT
+    --mapping-file|-m MAPPING-FILE
+			Read KEY VALUE pairs from the passed MAPPING-FILE.
+    --field-separator|-F FS
+			Use FS as the input field separator (as with AWK).
+HELPTEXT
+		hadTopic=t
+		;;&
+	    ''|command-outputs)
+		cat <<HELPTEXT
+    --stdout|-1		Only substitute in standard output.
+    --stderr|-2		Only substitute in error output.
+HELPTEXT
+		hadTopic=t
+		;;&
+	    ''|commands)
+		cat <<HELPTEXT
+    --command|-c CMD	Execute CMD as a command-line and substitute in its
+			output.
+    --exec CMD [...] ${APPLYMAPPING_EXEC_END}	Execute CMD and substitute in its output; all following
+			arguments are taken to be arguments to the CMD until an
+			argument consisting of '${APPLYMAPPING_EXEC_END}' is encountered.
+HELPTEXT
+		hadTopic=t
+		;;&
+	    ''|inputs)
+		cat <<HELPTEXT
+    --file|-f FILE	Substitute in passed FILE(s).
+HELPTEXT
+		hadTopic=t
+		;;&
+	    ''|stdin)
+		cat <<HELPTEXT
+    --stdin		Substitute in standard input instead of FILE(s) or
+			COMMAND output.
+HELPTEXT
+		hadTopic=t
+		;;&
+	    *)  [ "$hadTopic" ] || { echo "ERROR: Unknown long usage topic \"$topic\"!" >&2; return 2; };;
+	esac
+    done
+}
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" '-m|--mapping-file MAPPING-FILE|- [-F|--field-separator FS] [-?|-h|--help] ...'
-    printf 'Usage: %q %s\n' "$(basename "$1")" "... [-1|--stdout|-2|--stderr] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${APPLYMAPPING_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]"
-    printf 'Usage: %q %s\n' "$(basename "$1")" '... -f|--file FILE [-f ...]'
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '... --stdin'
+    printf 'Usage: %q %s\n' "$(basename "$1")" "$(getShortUsage mapping) [-?|-h|--help] ..."
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... $(getShortUsage command-outputs commands) | [--] SIMPLECOMMAND [...]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... $(getShortUsage inputs)"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "... $(getShortUsage stdin)"
 }
 printUsage()
 {
@@ -33,20 +109,8 @@ HELPDESCRIPTION
     echo
     printShortUsage "$1"
     echo
+    getLongUsage
     cat <<HELPTEXT
-    --mapping-file|-m MAPPING-FILE
-			Read KEY VALUE pairs from the passed MAPPING-FILE.
-    --field-separator|-F FS
-			Use FS as the input field separator (as with AWK).
-    --stdout|-1		Only substitute in standard output.
-    --stderr|-2		Only substitute in error output.
-    --stdin		Substitute in standard input instead of FILE(s) or
-			COMMAND output.
-    --command|-c CMD	Execute CMD as a command-line and substitute in its
-			output.
-    --exec CMD [...] ${APPLYMAPPING_EXEC_END}	Execute CMD and substitute in its output; all following
-			arguments are taken to be arguments to the CMD until an
-			argument consisting of '${APPLYMAPPING_EXEC_END}' is encountered.
 EXIT STATUS:
     0	Complete success.
     2	Bad invocation, wrong or missing command-line arguments.
@@ -60,21 +124,51 @@ typeset -a awkArgs=()
 typeset -a files=()
 commands=
 typeset -a mapDescriptors=()
+option() { :; }
+parameter() { :; }
+parameterToSep() { :; }
+argCount() { :; }
+endOfOptionsAndParameters() { :; }
+noUnderstand() { :; }
+typeset -A understandsSubtopics=()
+isUnderstandSubtopic() {
+    [ $# -gt 0 -a ${#understandsSubtopics[@]} -gt 0 ] || return 0
+    local subtopic; for subtopic
+    do
+	[ "${understandsSubtopics["$subtopic"]}" ] && return 0
+    done
+    return 1
+}
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
-	--mapping-file|-m)
-			shift; mappingFilespec="${1:?}"; shift;;
-	--field-separator|-F)
-			awkArgs+=("$1" "${2:?}"); shift; shift;;
-	--stdin)	shift; files+=(-);;
-	--file|-f)	shift; files+=("${1:?}"); shift;;
+	--get-short-usage)
+			shift; getShortUsage "$@"; exit $?;;
+	--get-long-usage)
+			shift; getLongUsage "$@"; exit $?;;
+	--understand-for)
+			shift; understandsSubtopics["$1"]=t; shift;;
+	--understands)	shift
+			option() { isUnderstandSubtopic "$@" || exit 1; printf 1; exit 0; }
+			parameter() { isUnderstandSubtopic "$@" || exit 1; printf 2; exit 0; }
+			parameterToSep() { argCount "$@"; }
+			argCount() { local argCount="${1:?}"; shift; isUnderstandSubtopic "$@" || exit 1; printf $argCount; exit 0; }
+			endOfOptionsAndParameters() { exit 99; }
+			noUnderstand() { exit 1; }
+			;;
 
-	--stdout|-1)	shift; mapDescriptors[0]=1;;
-	--stderr|-2)	shift; mapDescriptors[1]=2;;
-	--command|-c)	shift; commands+="${commands:+ $APPLYMAPPING_COMMAND_JOINER }$1"; shift;;
-	--exec)		shift
+	--mapping-file|-m)
+			shift; mappingFilespec="${1:?}"; shift; parameter mapping;;
+	--field-separator|-F)
+			awkArgs+=("$1" "${2:?}"); shift; shift; parameter mapping;;
+	--stdin)	shift; files+=(-); option stdin;;
+	--file|-f)	shift; files+=("${1:?}"); shift; parameter inputs;;
+
+	--stdout|-1)	shift; mapDescriptors[0]=1; option command-outputs;;
+	--stderr|-2)	shift; mapDescriptors[1]=2; option command-outputs;;
+	--command|-c)	shift; commands+="${commands:+ $APPLYMAPPING_COMMAND_JOINER }$1"; shift; parameter commands;;
+	--exec)		originalArgNum=$#; shift
 			cmd=
 			while [ $# -gt 0 -a "$1" != "$APPLYMAPPING_EXEC_END" ]
 			do
@@ -88,11 +182,12 @@ do
 			fi >&2
 			shift
 			commands+="${commands:+ $APPLYMAPPING_COMMAND_JOINER }${cmd}"
+			argCount $((originalArgNum - $#)) commands
 			;;
-	--)		shift; break;;
-	-)		break;; # For supporting special - FILE without prior --
-	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
-	*)		break;;
+	--)		endOfOptionsAndParameters; shift; break;;
+	-)		endOfOptionsAndParameters; break;; # For supporting special - FILE without prior --
+	-*)		noUnderstand; { echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		endOfOptionsAndParameters; break;;
     esac
 done
 if [ $# -ne 0 ]; then
