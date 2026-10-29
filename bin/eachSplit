@@ -6,10 +6,12 @@ ${DEBUG:+eval $(debugtrace -o $- -- "$@")}
 
 : ${EACHSPLIT_COMMAND_JOINER=;}
 : ${EACHSPLIT_EXEC_END=;}
-: ${EACHSPLIT_FILE_MARKER='{}'}
-fileMarker="$EACHSPLIT_FILE_MARKER"; unset EACHSPLIT_FILE_MARKER
 : ${EACHSPLIT_IDENTIFIER_MARKER='{I}'}
 identifierMarker="$EACHSPLIT_IDENTIFIER_MARKER"; unset EACHSPLIT_IDENTIFIER_MARKER
+: ${EACHSPLIT_CATALOG_MARKER='{C}'}
+catalogMarker="$EACHSPLIT_CATALOG_MARKER"; unset EACHSPLIT_CATALOG_MARKER
+: ${EACHSPLIT_FILE_MARKER='{}'}
+fileMarker="$EACHSPLIT_FILE_MARKER"; unset EACHSPLIT_FILE_MARKER
 # EACHSPLIT_GLOB_ESCAPED    # Set to 1|t|true to use an escaped \* glob instead of * (e.g. to pass the COMMAND along via --command COMMAND).
 : ${EACHSPLIT_GLOB_MARKER='{G}'}
 globMarker="$EACHSPLIT_GLOB_MARKER"; unset EACHSPLIT_GLOB_MARKER
@@ -48,7 +50,7 @@ getShortUsage()
 	    ''|iteration)
 		printf %s "${usageSep}${hadTopic:+ }" "-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...]${identifierMarker:+ [${identifierMarker}]}${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--exec ...] | -- SIMPLECOMMAND [...]"; hadTopic=t;;&
 	    ''|consumer)
-		printf %s "${usageSep}${hadTopic:+ }" "-C|--consumer-command \"COMMANDLINE\" [-C ...] | --consumer-exec SIMPLECOMMAND [...]${mappingMarker:+ [${mappingMarker}]}${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--consumer-exec ...]"; hadTopic=t;;&
+		printf %s "${usageSep}${hadTopic:+ }" "-C|--consumer-command \"COMMANDLINE\" [-C ...] | --consumer-exec SIMPLECOMMAND [...]${catalogMarker:+ [${catalogMarker}]}${globMarker:+ [${globMarker}]}${mappingMarker:+ [${mappingMarker}]}${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--consumer-exec ...]"; hadTopic=t;;&
 	    ''|input)
 		printf %s "${usageSep}${hadTopic:+ }" '-f|--file FILE'; hadTopic=t;;&
 	    *)  [ "$hadTopic" ] || { echo "ERROR: Unknown short usage topic \"$1\"!" >&2; return 2; };;
@@ -154,26 +156,28 @@ HELPTEXT
 		cat <<HELPTEXT
     --consumer-command|-C CMD
 			Execute CMD as a command-line to work on all split
-			pieces at once. ${fileMarker:+Any $fileMarker marker is replaced with a
-			catalog file that lists all split piece filespecs.}
-			${globMarker:+Any $globMarker marker is replaced with a glob pattern that
-			matches all split piece filespecs.}
-			${mappingMarker:+Any $mappingMarker marker is replaced with a mapping file that maps
+			pieces at once. ${catalogMarker:+Any $catalogMarker marker is replaced with a
+			catalog file that lists all split piece filespecs.}${globMarker:+
+			Any $globMarker marker is replaced with a glob pattern that
+			matches all split piece filespecs.}${mappingMarker:+
+			Any $mappingMarker marker is replaced with a mapping file that maps
 			each split piece filespec to the corresponding
-			extracted piece info.} ${fileMarker:+If no marker is given, }all
-			piece filespecs are directly appended to CMD.
+			extracted piece info. }All piece filespecs ${fileMarker:+either }are
+			appended if no marker is given${fileMarker:+ or replace any $fileMarker marker
+			inside CMD}.
     --consumer-exec CMD [...] ${EACHSPLIT_EXEC_END}
 			Execute CMD as a command-line to work on all split
 			pieces at once; all following arguments are taken to
 			be arguments to the CMD until an argument consisting of
-			'${EACHSPLIT_EXEC_END}' is encountered. ${fileMarker:+Any $fileMarker marker is replaced with a
-			catalog file that lists all split piece filespecs.}
-			${globMarker:+Any $globMarker marker is replaced with a glob pattern that
-			matches all split piece filespecs.}
-			${mappingMarker:+Any $mappingMarker marker is replaced with a mapping file that maps
+			'${EACHSPLIT_EXEC_END}' is encountered. ${catalogMarker:+Any $catalogMarker marker is replaced with a
+			catalog file that lists all split piece filespecs.}${globMarker:+
+			Any $globMarker marker is replaced with a glob pattern that
+			matches all split piece filespecs.}${mappingMarker:+
+			Any $mappingMarker marker is replaced with a mapping file that maps
 			each split piece filespec to the corresponding
-			extracted piece info.} ${fileMarker:+If no marker is given, }all
-			piece filespecs are directly appended to CMD.
+			extracted piece info. }All piece filespecs ${fileMarker:+either }are
+			appended if no marker is given${fileMarker:+ or replace any $fileMarker marker
+			inside CMD}.
 HELPTEXT
 		hadTopic=t
 		;;&
@@ -398,6 +402,7 @@ do
 	--consumer-exec)
 			originalArgNum=$#; shift
 			cmd=
+			printf -v escapedCatalogMarker %q "$catalogMarker"
 			printf -v escapedFileMarker %q "$fileMarker"
 			printf -v escapedGlobMarker %q "$globMarker"
 			printf -v escapedMappingMarker %q "$mappingMarker"
@@ -405,6 +410,7 @@ do
 			do
 			    printf -v quotedArg %q "$1"
 			    # %q escapes {}, {G}, and {M}, we don't want that to have it interpolated later.
+			    quotedArg="${quotedArg//"$escapedCatalogMarker"/$catalogMarker}"
 			    quotedArg="${quotedArg//"$escapedFileMarker"/$fileMarker}"
 			    quotedArg="${quotedArg//"$escapedGlobMarker"/$globMarker}"
 			    quotedArg="${quotedArg//"$escapedMappingMarker"/$mappingMarker}"
@@ -655,14 +661,15 @@ case "$with" in
 	if [ ${#pieceFiles[@]} -gt 0 -a -n "$consumerCommands" ] \
 	    && [ ${singleSuccessStatus:-${status:-${additionalSuccessStatus:-0}}} -eq 0 -o ${status:-${additionalSuccessStatus:-0}} -eq ${additionalSuccessStatus:-0} ]
 	then
+	    printf -v quotedPieceFiles '%q ' "${pieceFiles[@]}"; quotedPieceFiles="${quotedPieceFiles% }"
 	    printf -v quotedPieceFileList '%q' "$pieceFileList"
 	    printf -v quotedGlob '%q/%q%s*' "$tempDirspec" "$EACHSPLIT_FILE_PREFIX" "${EACHSPLIT_GLOB_ESCAPED:+\\}"
 	    printf -v quotedPieceInfoMapping '%q' "$pieceInfoMapping"
 	    interpolatedConsumerCommands="$consumerCommands"
-	    interpolatedConsumerCommands="${interpolatedConsumerCommands//"$fileMarker"/$quotedPieceFileList}"
+	    interpolatedConsumerCommands="${interpolatedConsumerCommands//"$catalogMarker"/$quotedPieceFileList}"
+	    interpolatedConsumerCommands="${interpolatedConsumerCommands//"$fileMarker"/$quotedPieceFiles}"
 	    interpolatedConsumerCommands="${interpolatedConsumerCommands//"$globMarker"/$quotedGlob}"
 	    [ "$EACHSPLIT_MAPPING_MARKER_INTERPOLATE_SEPARATELY" ] || interpolatedConsumerCommands="${interpolatedConsumerCommands//"$mappingMarker"/$quotedPieceInfoMapping}"
-	    printf -v quotedPieceFiles '%q ' "${pieceFiles[@]}"; quotedPieceFiles="${quotedPieceFiles% }"
 	    [ "$interpolatedConsumerCommands" = "$consumerCommands" ] || quotedPieceFiles=''
 	    [ "$EACHSPLIT_MAPPING_MARKER_INTERPOLATE_SEPARATELY" ] && interpolatedConsumerCommands="${interpolatedConsumerCommands//"$mappingMarker"/$quotedPieceInfoMapping}"
 	    eval "$interpolatedConsumerCommands" "$quotedPieceFiles" || exit $?

@@ -6,6 +6,7 @@
 : ${ONALLSPLITS_EXEC_END=;}
 
 : ${EACHSPLIT_EXEC_END=;}
+: ${EACHSPLIT_CATALOG_MARKER='{C}'}
 : ${EACHSPLIT_FILE_MARKER='{}'}
 : ${EACHSPLIT_GLOB_MARKER='{G}'}
 : ${EACHSPLIT_MAPPING_MARKER='{M}'}
@@ -44,22 +45,21 @@ HELPDESCRIPTION
     else
 	cat <<HELPTEXT
     --command|-c CMD	Execute CMD as a command-line to work on all split
-			pieces at once. ${EACHSPLIT_FILE_MARKER:+Any $EACHSPLIT_FILE_MARKER marker is replaced with a
+			pieces at once. ${EACHSPLIT_CATALOG_MARKER:+Any $EACHSPLIT_CATALOG_MARKER marker is replaced with a
 			catalog file that lists all split piece filespecs.}
 			${EACHSPLIT_GLOB_MARKER:+Any $EACHSPLIT_GLOB_MARKER marker is replaced with a glob pattern that
-			matches all split piece filespecs.}
-			${EACHSPLIT_FILE_MARKER:+If no marker is given, }all piece filespecs are directly
-			appended to CMD.
-    --exec CMD [...] ${EACHSPLIT_EXEC_END}
-			Execute CMD as a command-line to work on all split
+			matches all split piece filespecs. }All piece filespecs
+			${EACHSPLIT_FILE_MARKER:+either }are appended if no marker is given${EACHSPLIT_FILE_MARKER:+ or replace any
+			$EACHSPLIT_FILE_MARKER marker inside CMD}.
+    --exec CMD [...] ${EACHSPLIT_EXEC_END}	Execute CMD as a command-line to work on all split
 			pieces at once; all following arguments are taken to
 			be arguments to the CMD until an argument consisting of
-			'${EACHSPLIT_EXEC_END}' is encountered. ${EACHSPLIT_FILE_MARKER:+Any $EACHSPLIT_FILE_MARKER marker is replaced with a
+			'${EACHSPLIT_EXEC_END}' is encountered. ${EACHSPLIT_CATALOG_MARKER:+Any $EACHSPLIT_CATALOG_MARKER marker is replaced with a
 			catalog file that lists all split piece filespecs.}
 			${EACHSPLIT_GLOB_MARKER:+Any $EACHSPLIT_GLOB_MARKER marker is replaced with a glob pattern that
-			matches all split piece filespecs.}
-			${EACHSPLIT_FILE_MARKER:+If no marker is given, }all piece filespecs are directly
-			appended to CMD.
+			matches all split piece filespecs. }All piece filespecs
+			${EACHSPLIT_FILE_MARKER:+either }are appended if no marker is given${EACHSPLIT_FILE_MARKER:+ or replace any
+			$EACHSPLIT_FILE_MARKER marker inside CMD}.
 HELPTEXT
     fi
     $ONALLSPLITS_EACHSPLIT --get-long-usage split piece-info piece-modifier ${ONALLSPLITS_FILE_INPUT:+input}
@@ -86,12 +86,14 @@ do
 	--command|-c)	shift; commands+="${commands:+ $ONALLSPLITS_COMMAND_JOINER }$1"; shift;;
 	--exec)		shift
 			cmd=
+			printf -v escapedCatalogMarker %q "$EACHSPLIT_CATALOG_MARKER"
 			printf -v escapedFileMarker %q "$EACHSPLIT_FILE_MARKER"
 			printf -v escapedGlobMarker %q "$EACHSPLIT_GLOB_MARKER"
 			while [ $# -gt 0 -a "$1" != "$ONALLSPLITS_EXEC_END" ]
 			do
 			    printf -v quotedArg %q "$1"
 			    # %q escapes {} and {G}, we don't want that to have it interpolated later.
+			    quotedArg="${quotedArg//"$escapedCatalogMarker"/$EACHSPLIT_CATALOG_MARKER}"
 			    quotedArg="${quotedArg//"$escapedFileMarker"/$EACHSPLIT_FILE_MARKER}"
 			    quotedArg="${quotedArg//"$escapedGlobMarker"/$EACHSPLIT_GLOB_MARKER}"
 			    cmd+="${cmd:+ }${quotedArg}"
@@ -121,9 +123,11 @@ if [ $# -ne 0 ]; then
     # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
     # undo the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"; quotedSimpleCommand="${quotedSimpleCommand% }"
+    printf -v escapedCatalogMarker %q "$EACHSPLIT_CATALOG_MARKER"
     printf -v escapedFileMarker %q "$EACHSPLIT_FILE_MARKER"
     printf -v escapedGlobMarker %q "$EACHSPLIT_GLOB_MARKER"
-    # %q escapes {} and {G}, we don't want that to have it interpolated later.
+    # %q escapes {C}, {}, and {G}, we don't want that to have it interpolated later.
+    quotedSimpleCommand="${quotedSimpleCommand//"$escapedCatalogMarker"/$EACHSPLIT_CATALOG_MARKER}"
     quotedSimpleCommand="${quotedSimpleCommand//"$escapedFileMarker"/$EACHSPLIT_FILE_MARKER}"
     quotedSimpleCommand="${quotedSimpleCommand//"$escapedGlobMarker"/$EACHSPLIT_GLOB_MARKER}"
     commands+="${commands:+ $ONALLSPLITS_COMMAND_JOINER }${quotedSimpleCommand}"
