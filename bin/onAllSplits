@@ -16,17 +16,17 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, they can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "$($ONALLSPLITS_EACHSPLIT --get-short-usage split piece-info piece-modifier) $(applyMapping --get-short-usage command-outputs) [-?|-h|--help] ..."
+    printf 'Usage: %q %s\n' "${ONALLSPLITS:-$(basename "$1")}" "$($ONALLSPLITS_EACHSPLIT --get-short-usage split piece-info piece-modifier) $(applyMapping --get-short-usage command-outputs) [-?|-h|--help] ..."
     echo
-    [ ! "$ONALLSPLITS_FILE_INPUT" ] || printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "... ${ONALLSPLITS_SHORT_ARGS:--c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${ONALLSPLITS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]}"
-    printf 'Usage: %q %s\n' "$(basename "$1")" "... $($ONALLSPLITS_EACHSPLIT --get-short-usage input)... ${ONALLSPLITS_SHORT_ARGS:--c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${ONALLSPLITS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]}"
+    [ ! "$ONALLSPLITS_FILE_INPUT" ] || printf 'Usage: cat FILE [...] | %q %s\n' "${ONALLSPLITS:-$(basename "$1")}" "... ${ONALLSPLITS_SHORT_ARGS:--c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${ONALLSPLITS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]}"
+    printf 'Usage: %q %s\n' "${ONALLSPLITS:-$(basename "$1")}" "... $($ONALLSPLITS_EACHSPLIT --get-short-usage input)... ${ONALLSPLITS_SHORT_ARGS:--c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${ONALLSPLITS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]}"
 }
 printUsage()
 {
     # This is the short help when launched with no or incorrect arguments.
     # It is printed to stderr to avoid accidental processing.
     printShortUsage "$1" >&2
-    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+    printf >&2 '\nTry %q --help for more information.\n' "${ONALLSPLITS:-$(basename "$1")}"
 }
 printLongUsage()
 {
