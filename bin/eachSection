@@ -68,7 +68,7 @@ HELPTEXT
 printUsage()
 {
     eachSplit --help 2>&1 | sed \
-	-e '1s#^.*$#Split standard input into sections separated by PATTERN (two or three dashes by\ndefault) and execute COMMAND with each section file (which either is appended or\nreplaces any {} marker inside COMMANDLINE).#' \
+	-e "1s#^.*\$#$("${BASH_SOURCE[0]}" --get-usage-description) and execute COMMAND with each section file (which either is appended or\nreplaces any {} marker inside COMMANDLINE).#" \
 	-e '2b removeFirstParagraphLoop' \
 	-e ':start' \
 	"${sedTranslatePiecesArgs[@]}" \
@@ -143,6 +143,8 @@ do
 			shift; getShortUsage "$@"; exit $?;;
 	--get-long-usage)
 			shift; getLongUsage "$@"; exit $?;;
+	--get-usage-description)
+			shift; printf %s 'Split standard input into sections separated by PATTERN (two or three dashes by\ndefault)'; exit 0;;
 	--understand-for)
 			understandsArgs+=("$1" "${2?}"); shift; understandsSubtopics["$1"]=t; shift;;
 	--understands)	shift

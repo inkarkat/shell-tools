@@ -6,10 +6,13 @@ ${DEBUG:+eval $(debugtrace -o $- -- "$@")}
 
 : ${EACHSPLIT_COMMAND_JOINER=;}
 : ${EACHSPLIT_EXEC_END=;}
-: ${EACHSPLIT_FILE_MARKER='{}'}
-fileMarker="$EACHSPLIT_FILE_MARKER"; unset EACHSPLIT_FILE_MARKER
 : ${EACHSPLIT_IDENTIFIER_MARKER='{I}'}
 identifierMarker="$EACHSPLIT_IDENTIFIER_MARKER"; unset EACHSPLIT_IDENTIFIER_MARKER
+: ${EACHSPLIT_CATALOG_MARKER='{C}'}
+catalogMarker="$EACHSPLIT_CATALOG_MARKER"; unset EACHSPLIT_CATALOG_MARKER
+: ${EACHSPLIT_FILE_MARKER='{}'}
+fileMarker="$EACHSPLIT_FILE_MARKER"; unset EACHSPLIT_FILE_MARKER
+# EACHSPLIT_GLOB_ESCAPED    # Set to 1|t|true to use an escaped \* glob instead of * (e.g. to pass the COMMAND along via --command COMMAND).
 : ${EACHSPLIT_GLOB_MARKER='{G}'}
 globMarker="$EACHSPLIT_GLOB_MARKER"; unset EACHSPLIT_GLOB_MARKER
 : ${EACHSPLIT_MAPPING_MARKER='{M}'}
@@ -42,10 +45,12 @@ getShortUsage()
 		printf %s "${usageSep}${hadTopic:+ }" "[--piece-info-extractor-command COMMANDLINE|--piece-info-extractor-exec CMD [...]${extractorMarker:+ [}${extractorMarker}${extractorMarker:+] [...]} ${EACHSPLIT_EXTRACTOR_END}]"; hadTopic=t;;&
 	    ''|piece-modifier)
 		printf %s "${usageSep}${hadTopic:+ }" "[--piece-modifier-command COMMANDLINE|--piece-modifier-exec CMD [...]${modifierMarker:+ [}${modifierMarker}${modifierMarker:+] [...]} ${EACHSPLIT_MODIFIER_END}]"; hadTopic=t;;&
+	    ''|iteration-options)
+		printf %s "${usageSep}${hadTopic:+ }" "${hasProgressNotification:+[--progress SINK] }[--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)]"; hadTopic=t;;&
 	    ''|iteration)
-		printf %s "${usageSep}${hadTopic:+ }" "${hasProgressNotification:+[--progress SINK] }[--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...]${identifierMarker:+ [${identifierMarker}]}${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--exec ...] | -- SIMPLECOMMAND [...]"; hadTopic=t;;&
+		printf %s "${usageSep}${hadTopic:+ }" "-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...]${identifierMarker:+ [${identifierMarker}]}${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--exec ...] | -- SIMPLECOMMAND [...]"; hadTopic=t;;&
 	    ''|consumer)
-		printf %s "${usageSep}${hadTopic:+ }" "-C|--consumer-command \"COMMANDLINE\" [-C ...] | --consumer-exec SIMPLECOMMAND [...]${mappingMarker:+ [${mappingMarker}]}${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--consumer-exec ...]"; hadTopic=t;;&
+		printf %s "${usageSep}${hadTopic:+ }" "-C|--consumer-command \"COMMANDLINE\" [-C ...] | --consumer-exec SIMPLECOMMAND [...]${catalogMarker:+ [${catalogMarker}]}${globMarker:+ [${globMarker}]}${mappingMarker:+ [${mappingMarker}]}${fileMarker:+ [}${fileMarker}${fileMarker:+] [...]} ${EACHSPLIT_EXEC_END} [--consumer-exec ...]"; hadTopic=t;;&
 	    ''|input)
 		printf %s "${usageSep}${hadTopic:+ }" '-f|--file FILE'; hadTopic=t;;&
 	    *)  [ "$hadTopic" ] || { echo "ERROR: Unknown short usage topic \"$1\"!" >&2; return 2; };;
@@ -114,7 +119,7 @@ HELPTEXT
 HELPTEXT
 		hadTopic=t
 		;;&
-	    ''|iteration)
+	    ''|iteration-options)
 		cat <<HELPTEXT
 ${hasProgressNotification:+    --progress SINK	Report the current piece through one of the SINKs of
 			the progressNotification command.
@@ -130,7 +135,10 @@ ${hasProgressNotification:+    --progress SINK	Report the current piece through 
 			each execution.
 HELPTEXT
     runWithPrompt --get-long-usage 2>/dev/null
-    cat <<HELPTEXT
+		hadTopic=t
+		;;&
+	    ''|iteration)
+		cat <<HELPTEXT
     --command|-c CMD	Execute CMD as a command-line. FILEs ${fileMarker:+either }are appended
 			${fileMarker:+or replace any $fileMarker marker }inside COMMANDLINE.${identifierMarker:+
 			Furthermore, ${identifierMarker} is replaced with the piece filename /
@@ -147,27 +155,29 @@ HELPTEXT
 	    ''|consumer)
 		cat <<HELPTEXT
     --consumer-command|-C CMD
-			Execute CMD once as a command-line to work on all split
-			pieces at once. ${fileMarker:+Any $fileMarker marker is replaced with a
-			catalog file that lists all split piece filespecs.}
-			${globMarker:+Any $globMarker marker is replaced with a glob pattern that
-			matches all split piece filespecs.}
-			${mappingMarker:+Any $mappingMarker marker is replaced with a mapping file that maps
+			Execute CMD as a command-line to work on all split
+			pieces at once. ${catalogMarker:+Any $catalogMarker marker is replaced with a
+			catalog file that lists all split piece filespecs.}${globMarker:+
+			Any $globMarker marker is replaced with a glob pattern that
+			matches all split piece filespecs.}${mappingMarker:+
+			Any $mappingMarker marker is replaced with a mapping file that maps
 			each split piece filespec to the corresponding
-			extracted piece info.} ${fileMarker:+If no marker is given, }all
-			piece filespecs are directly appended to CMD.
+			extracted piece info. }All piece filespecs ${fileMarker:+either }are
+			appended if no marker is given${fileMarker:+ or replace any $fileMarker marker
+			inside CMD}.
     --consumer-exec CMD [...] ${EACHSPLIT_EXEC_END}
-			Execute CMD once as a command-line to work on all split
+			Execute CMD as a command-line to work on all split
 			pieces at once; all following arguments are taken to
 			be arguments to the CMD until an argument consisting of
-			'${EACHSPLIT_EXEC_END}' is encountered. ${fileMarker:+Any $fileMarker marker is replaced with a
-			catalog file that lists all split piece filespecs.}
-			${globMarker:+Any $globMarker marker is replaced with a glob pattern that
-			matches all split piece filespecs.}
-			${mappingMarker:+Any $mappingMarker marker is replaced with a mapping file that maps
+			'${EACHSPLIT_EXEC_END}' is encountered. ${catalogMarker:+Any $catalogMarker marker is replaced with a
+			catalog file that lists all split piece filespecs.}${globMarker:+
+			Any $globMarker marker is replaced with a glob pattern that
+			matches all split piece filespecs.}${mappingMarker:+
+			Any $mappingMarker marker is replaced with a mapping file that maps
 			each split piece filespec to the corresponding
-			extracted piece info.} ${fileMarker:+If no marker is given, }all
-			piece filespecs are directly appended to CMD.
+			extracted piece info. }All piece filespecs ${fileMarker:+either }are
+			appended if no marker is given${fileMarker:+ or replace any $fileMarker marker
+			inside CMD}.
 HELPTEXT
 		hadTopic=t
 		;;&
@@ -187,7 +197,7 @@ printShortUsage()
     # skim the long one.
     printf 'Usage: %q %s\n' "$(basename "$1")" "$(getShortUsage split piece-info piece-modifier) [-?|-h|--help] ..."
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "... $(getShortUsage iteration)"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... $(getShortUsage iteration-options iteration)"
     printf 'Usage: %q %s\n' "$(basename "$1")" "... $(getShortUsage consumer)"
     echo
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '...'
@@ -205,7 +215,7 @@ printLongUsage()
     # This is the long "man page" when launched with the help argument.
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
-Split standard input into pieces and execute COMMAND with each piece file
+$("${BASH_SOURCE[0]}" --get-usage-description) and execute COMMAND with each piece file
 (which ${fileMarker:+either }is appended${fileMarker:+ or replaces any $fileMarker marker} inside COMMANDLINE).
 HELPDESCRIPTION
     echo
@@ -216,6 +226,10 @@ HELPDESCRIPTION
     cat <<HELPTEXT
 SEE ALSO:
 - eachFile directly operates on individual files.
+- onAllSplits is a specialization towards consumption of all split pieces at
+  once, offering a more convenient interface for --consumer-{command,exec} and
+  automatically mapping the temporary piece filespecs back to the piece
+  identifier (if an extractor is provided)
 
 EXIT STATUS:
 Overall exit status is the highest status of all. If you specify any
@@ -270,6 +284,8 @@ do
 			shift; getShortUsage "$@"; exit $?;;
 	--get-long-usage)
 			shift; getLongUsage "$@"; exit $?;;
+	--get-usage-description)
+			shift; printf %s 'Split standard input into pieces'; exit 0;;
 	--understand-for)
 			shift; understandsSubtopics["$1"]=t; shift;;
 	--understands)	shift
@@ -312,12 +328,12 @@ do
 	--file=*)	filespec="${1#--file=}"; shift; option input;;
 	-f*)		filespec="${1#-f}"; shift; option input;;
 
-	--progress)	shift; progressSink="$1"; shift; option iteration;;
-	--with-header)	shift; with=header; option iteration;;
+	--progress)	shift; progressSink="$1"; shift; option iteration-options;;
+	--with-header)	shift; with=header; option iteration-options;;
 	--separate-errors)
-			shift; errorRedir=''; option iteration;;
-	--no-color|--color=*)	colorArg=("$1"); shift; option iteration;;
-	--with-prompt)	shift; with=runWithPrompt; option iteration;;
+			shift; errorRedir=''; option iteration-options;;
+	--no-color|--color=*)	colorArg=("$1"); shift; option iteration-options;;
+	--with-prompt)	shift; with=runWithPrompt; option iteration-options;;
 
 	--piece-info-extractor-command)
 			shift; pieceInfoExtractorCommand+="${pieceInfoExtractorCommand:+ $EACHSPLIT_EXTRACTOR_JOINER }${1:?}"; shift; parameter piece-info;;
@@ -386,13 +402,15 @@ do
 	--consumer-exec)
 			originalArgNum=$#; shift
 			cmd=
+			printf -v escapedCatalogMarker %q "$catalogMarker"
 			printf -v escapedFileMarker %q "$fileMarker"
 			printf -v escapedGlobMarker %q "$globMarker"
 			printf -v escapedMappingMarker %q "$mappingMarker"
 			while [ $# -gt 0 -a "$1" != "$EACHSPLIT_EXEC_END" ]
 			do
 			    printf -v quotedArg %q "$1"
-			    # %q escapes {} and {M}, we don't want that to have it interpolated later.
+			    # %q escapes {}, {G}, and {M}, we don't want that to have it interpolated later.
+			    quotedArg="${quotedArg//"$escapedCatalogMarker"/$catalogMarker}"
 			    quotedArg="${quotedArg//"$escapedFileMarker"/$fileMarker}"
 			    quotedArg="${quotedArg//"$escapedGlobMarker"/$globMarker}"
 			    quotedArg="${quotedArg//"$escapedMappingMarker"/$mappingMarker}"
@@ -408,15 +426,15 @@ do
 			argCount $((originalArgNum - $#)) consumer
 			;;
 	--single-success)
-			commonArgs+=("$1"); shift; isSingleSuccess=t; option iteration;;
+			commonArgs+=("$1"); shift; isSingleSuccess=t; option iteration-options;;
 	--status-99-is-noop)
-			commonArgs+=("$1"); shift; additionalSuccessStatus=99; option iteration;;
+			commonArgs+=("$1"); shift; additionalSuccessStatus=99; option iteration-options;;
 	--)		endOfOptionsAndParameters; shift; break;;
 	-*)		if argCount=$(runWithPrompt --understands "$@"); then
 			    runWithPromptArgs+=("${@:1:argCount}")
 			    shift $argCount
 			    : ${with:=runWith}
-			    argCount $argCount iteration
+			    argCount $argCount iteration-options
 			elif [ $? -eq 2 ]; then
 			    exit 2
 			else
@@ -568,9 +586,9 @@ case "$with" in
 	[ ${#runWithPromptArgs[@]} -eq 0 ] && runWithPromptArgs=(--worst-status)
 	{
 	    if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
-		printf ' exec 4> >('
+		printf ' exec 3> >('
 		printf '%q ' "${progressNotificationCommand[@]}"
-		printf '2>/dev/null); reportProgress() { trap "reportProgress() { :; }; trap PIPE" PIPE; printf %%s\\\\n "$*" >&4 2>/dev/null; }\n'
+		printf '2>/dev/null); reportProgress() { trap "reportProgress() { :; }; trap PIPE" PIPE; printf %%s\\\\n "$*" >&3 2>/dev/null; }\n'
 	    fi
 
 	    for pieceFile in "${pieceFiles[@]}"
@@ -598,11 +616,11 @@ case "$with" in
 	isHeader=t;&
     '')
 	if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
-	    exec 4> >("${progressNotificationCommand[@]}" 2>/dev/null)
+	    exec 3> >("${progressNotificationCommand[@]}" 2>/dev/null)
 	    reportProgress()
 	    {
 		trap 'reportProgress() { :; }; trap PIPE' PIPE
-		printf '%s\n' "$*" >&4 2>/dev/null  # Silence "printf: write error: Broken pipe"
+		printf '%s\n' "$*" >&3 2>/dev/null  # Silence "printf: write error: Broken pipe"
 	    }
 	else
 	    reportProgress() { :; }
@@ -613,7 +631,7 @@ case "$with" in
 	pieceFileList="${tempDirspec}/${EACHSPLIT_FILE_PREFIX/-/.}list"
 	pieceInfoMapping="${tempDirspec}/${EACHSPLIT_FILE_PREFIX/-/.}info.tsv"
 	: ${EACHSPLIT_HEADER_ID:="eachSplit-$$-$RANDOM"}
-	exec 3<&0
+	exec 4<&0
 	for pieceFile in "${pieceFiles[@]}"
 	do
 	    pieceInfo="$(getPieceInfo "$pieceFile")"
@@ -632,7 +650,7 @@ case "$with" in
 	    interpolatedCommands="${interpolatedCommands//"$identifierMarker"/$quotedPieceInfo}"
 
 	    reportProgress "$pieceInfo"
-	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedPieceFile" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHSPLIT_HEADER_ID' -- '$pieceInfo'}") <&3; exitStatus=$?
+	    (eval "${isHeader:+{}" "$interpolatedCommands" "$quotedPieceFile" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$EACHSPLIT_HEADER_ID' -- '$pieceInfo'}") <&4; exitStatus=$?
 	    if [ $exitStatus -eq 0 ] && [ "$isSingleSuccess" ]; then
 		singleSuccessStatus=0
 	    elif [ $exitStatus -gt ${status:--1} -a $exitStatus -ne ${additionalSuccessStatus:--1} ]; then
@@ -643,15 +661,17 @@ case "$with" in
 	if [ ${#pieceFiles[@]} -gt 0 -a -n "$consumerCommands" ] \
 	    && [ ${singleSuccessStatus:-${status:-${additionalSuccessStatus:-0}}} -eq 0 -o ${status:-${additionalSuccessStatus:-0}} -eq ${additionalSuccessStatus:-0} ]
 	then
+	    printf -v quotedPieceFiles '%q ' "${pieceFiles[@]}"; quotedPieceFiles="${quotedPieceFiles% }"
 	    printf -v quotedPieceFileList '%q' "$pieceFileList"
-	    printf -v quotedGlob '%q/%q*' "$tempDirspec" "$EACHSPLIT_FILE_PREFIX"
+	    printf -v quotedGlob '%q/%q%s*' "$tempDirspec" "$EACHSPLIT_FILE_PREFIX" "${EACHSPLIT_GLOB_ESCAPED:+\\}"
 	    printf -v quotedPieceInfoMapping '%q' "$pieceInfoMapping"
 	    interpolatedConsumerCommands="$consumerCommands"
-	    interpolatedConsumerCommands="${interpolatedConsumerCommands//"$fileMarker"/$quotedPieceFileList}"
+	    interpolatedConsumerCommands="${interpolatedConsumerCommands//"$catalogMarker"/$quotedPieceFileList}"
+	    interpolatedConsumerCommands="${interpolatedConsumerCommands//"$fileMarker"/$quotedPieceFiles}"
 	    interpolatedConsumerCommands="${interpolatedConsumerCommands//"$globMarker"/$quotedGlob}"
-	    interpolatedConsumerCommands="${interpolatedConsumerCommands//"$mappingMarker"/$quotedPieceInfoMapping}"
-	    printf -v quotedPieceFiles '%q ' "${pieceFiles[@]}"; quotedPieceFiles="${quotedPieceFiles% }"
+	    [ "$EACHSPLIT_MAPPING_MARKER_INTERPOLATE_SEPARATELY" ] || interpolatedConsumerCommands="${interpolatedConsumerCommands//"$mappingMarker"/$quotedPieceInfoMapping}"
 	    [ "$interpolatedConsumerCommands" = "$consumerCommands" ] || quotedPieceFiles=''
+	    [ "$EACHSPLIT_MAPPING_MARKER_INTERPOLATE_SEPARATELY" ] && interpolatedConsumerCommands="${interpolatedConsumerCommands//"$mappingMarker"/$quotedPieceInfoMapping}"
 	    eval "$interpolatedConsumerCommands" "$quotedPieceFiles" || exit $?
 	fi
 

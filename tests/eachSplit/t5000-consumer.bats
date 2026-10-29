@@ -22,7 +22,21 @@ EOF
 }
 
 @test "split two-liners piece filespecs are inserted at {} marker" {
-    run -0 eachSplit --lines=2 --file "${BATS_TEST_DIRNAME}/inputs/two-liners.txt" --consumer-exec xargs --arg-file {} -d '\n' -n 1 grep -nh -e '^' -- \;
+    run -0 eachSplit --lines=2 --file "${BATS_TEST_DIRNAME}/inputs/two-liners.txt" --consumer-exec grep -nh -e '^' -- {} \;
+    assert_output - <<'EOF'
+1:The opener
+2:Is a simple one.
+1:Secondary
+2:Is the next one.
+1:Third
+2:Aller guten Dinge sind drei.
+1:Last
+2:but not least.
+EOF
+}
+
+@test "split two-liners piece catalog filespec is inserted at {C} marker" {
+    run -0 eachSplit --lines=2 --file "${BATS_TEST_DIRNAME}/inputs/two-liners.txt" --consumer-exec xargs --arg-file '{C}' -d '\n' -n 1 grep -nh -e '^' -- \;
     assert_output - <<'EOF'
 1:The opener
 2:Is a simple one.
@@ -85,7 +99,7 @@ EOF
     assert_line -n 5 -e '^grep: .*/piece-ad: No such file or directory$'
 }
 
-@test "split two-liners, remove some pieces, then consumer command is run on a glob of the remaining pieces" {
+@test "split two-liners, remove some pieces, then consumer-exec is run on a glob of the remaining pieces" {
     run -0 eachSplit --lines=2 --file "${BATS_TEST_DIRNAME}/inputs/two-liners.txt" --consumer-exec grep -nh -e '^' -- '{G}' \;  --command 'grep -q -e "^T" {} || rm -- {}'
     assert_output - <<'EOF'
 1:The opener
@@ -93,6 +107,29 @@ EOF
 1:Third
 2:Aller guten Dinge sind drei.
 EOF
+}
+
+@test "split two-liners, remove some pieces, then consumer-command is run on a glob of the remaining pieces" {
+    run -0 eachSplit --lines=2 --file "${BATS_TEST_DIRNAME}/inputs/two-liners.txt" --consumer-command "grep -nh -e '^' -- {G}" --command 'grep -q -e "^T" {} || rm -- {}'
+    assert_output - <<'EOF'
+1:The opener
+2:Is a simple one.
+1:Third
+2:Aller guten Dinge sind drei.
+EOF
+}
+
+@test "EACHSPLIT_GLOB_ESCAPED flag can be used to escape globbing in consumer command" {
+    run -0 eachSplit --lines=2 --file "${BATS_TEST_DIRNAME}/inputs/two-liners.txt" --consumer-command 'for f in {G}; do basename "$f"; done'
+    assert_output - <<'EOF'
+piece-aa
+piece-ab
+piece-ac
+piece-ad
+EOF
+
+    EACHSPLIT_GLOB_ESCAPED=t run -0 eachSplit --lines=2 --file "${BATS_TEST_DIRNAME}/inputs/two-liners.txt" --consumer-command 'for f in {G}; do basename "$f"; done'
+    assert_output 'piece-*'
 }
 
 @test "split two-liners, when the command on some pieces fails, the consumer command is not run at all" {

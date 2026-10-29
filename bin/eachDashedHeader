@@ -3,7 +3,7 @@
 printUsage()
 {
     eachHeader --help 2>&1 | sed \
-	-e '1s#^.*$#Split standard input into sections separated by dashed "-- header lines -----"\n(as created by the HEADER_STYLE=dashed-line [with]Header commands) and execute\nCOMMAND with each section file (which either is appended or replaces any {}\nmarker inside COMMANDLINE).#' \
+	-e "1s#^.*\$#$("${BASH_SOURCE[0]}" --get-usage-description) and execute\nCOMMAND with each section file (which either is appended or replaces any {}\nmarker inside COMMANDLINE).#" \
 	-e '2b removeFirstParagraphLoop' \
 	-e '/^Usage:$/N' -e '/\(^\|\n\)Usage: */{ s/\(^\|\n\)\(Usage: *\)\?\(\([^ |]\+ \)*\(| \)\?\)eachHeader /\1\2\3'"$(basename "$1")"' /; s/ \[EACHHEADER_STYLE=dashed-line\]//; }' \
 	-e b -e :removeFirstParagraphLoop -e '{ /\(^\|\n\)$/{ s/^\(.*\n\)\?//; b; }; N; b removeFirstParagraphLoop; }' \
@@ -11,6 +11,8 @@ printUsage()
 }
 case "$1" in
     --help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+    --get-usage-description)
+			shift; printf %s 'Split standard input into sections separated by dashed "-- header lines -----"\n(as created by the HEADER_STYLE=dashed-line [with]Header commands)'; exit 0;;
 esac
 
 EACHHEADER_STYLE=dashed-line \

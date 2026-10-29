@@ -1,0 +1,173 @@
+#!/bin/bash
+
+: ${ONALLSPLITS_FILE_INPUT=t}	# Whether to accept --file FILE input.
+: ${ONALLSPLITS_EACHSPLIT:=eachSplit}
+: ${ONALLSPLITS_COMMAND_JOINER=;}
+: ${ONALLSPLITS_EXEC_END=;}
+
+: ${EACHSPLIT_EXEC_END=;}
+: ${EACHSPLIT_CATALOG_MARKER='{C}'}
+: ${EACHSPLIT_FILE_MARKER='{}'}
+: ${EACHSPLIT_GLOB_MARKER='{G}'}
+: ${EACHSPLIT_MAPPING_MARKER='{M}'}
+: ${EACHSPLIT_NO_PIECE_STATUS:=99}
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, they can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" "$($ONALLSPLITS_EACHSPLIT --get-short-usage split piece-info piece-modifier) $(applyMapping --get-short-usage command-outputs) [-?|-h|--help] ..."
+    echo
+    [ ! "$ONALLSPLITS_FILE_INPUT" ] || printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "... ${ONALLSPLITS_SHORT_ARGS:--c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${ONALLSPLITS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]}"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... $($ONALLSPLITS_EACHSPLIT --get-short-usage input)... ${ONALLSPLITS_SHORT_ARGS:--c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${ONALLSPLITS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]}"
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+$($ONALLSPLITS_EACHSPLIT --get-usage-description) and ${ONALLSPLITS_WHAT:-execute CMD to work on them.}
+The temporary piece filespecs will be mapped back to the piece identifier (if an
+extractor is provided).
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    if [ -n "${ONALLSPLITS_LONG_ARGS+t}" ]; then
+	[ -z "$ONALLSPLITS_LONG_ARGS" ] || printf '%s\n' "$ONALLSPLITS_LONG_ARGS"
+    else
+	cat <<HELPTEXT
+    --command|-c CMD	Execute CMD as a command-line to work on all split
+			pieces at once. ${EACHSPLIT_CATALOG_MARKER:+Any $EACHSPLIT_CATALOG_MARKER marker is replaced with a
+			catalog file that lists all split piece filespecs.}
+			${EACHSPLIT_GLOB_MARKER:+Any $EACHSPLIT_GLOB_MARKER marker is replaced with a glob pattern that
+			matches all split piece filespecs. }All piece filespecs
+			${EACHSPLIT_FILE_MARKER:+either }are appended if no marker is given${EACHSPLIT_FILE_MARKER:+ or replace any
+			$EACHSPLIT_FILE_MARKER marker inside CMD}.
+    --exec CMD [...] ${EACHSPLIT_EXEC_END}	Execute CMD as a command-line to work on all split
+			pieces at once; all following arguments are taken to
+			be arguments to the CMD until an argument consisting of
+			'${EACHSPLIT_EXEC_END}' is encountered. ${EACHSPLIT_CATALOG_MARKER:+Any $EACHSPLIT_CATALOG_MARKER marker is replaced with a
+			catalog file that lists all split piece filespecs.}
+			${EACHSPLIT_GLOB_MARKER:+Any $EACHSPLIT_GLOB_MARKER marker is replaced with a glob pattern that
+			matches all split piece filespecs. }All piece filespecs
+			${EACHSPLIT_FILE_MARKER:+either }are appended if no marker is given${EACHSPLIT_FILE_MARKER:+ or replace any
+			$EACHSPLIT_FILE_MARKER marker inside CMD}.
+HELPTEXT
+    fi
+    $ONALLSPLITS_EACHSPLIT --get-long-usage split piece-info piece-modifier ${ONALLSPLITS_FILE_INPUT:+input}
+    applyMapping --get-long-usage command-outputs
+    echo
+    cat <<HELPTEXT
+SEE ALSO:
+- $ONALLSPLITS_EACHSPLIT is the underlying command that can also execute
+  commands on each split piece individually.
+
+EXIT STATUS:
+    0	Complete success.
+    2	Bad invocation, wrong or missing command-line arguments.
+    $EACHSPLIT_NO_PIECE_STATUS	No pieces were found.
+    *	Any exit status from COMMAND(s).
+HELPTEXT
+}
+
+typeset -a eachSplitArgs=()
+typeset -a applyMappingArgs=()
+commands=
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--command|-c)	shift; commands+="${commands:+ $ONALLSPLITS_COMMAND_JOINER }$1"; shift;;
+	--exec)		shift
+			cmd=
+			printf -v escapedCatalogMarker %q "$EACHSPLIT_CATALOG_MARKER"
+			printf -v escapedFileMarker %q "$EACHSPLIT_FILE_MARKER"
+			printf -v escapedGlobMarker %q "$EACHSPLIT_GLOB_MARKER"
+			while [ $# -gt 0 -a "$1" != "$ONALLSPLITS_EXEC_END" ]
+			do
+			    printf -v quotedArg %q "$1"
+			    # %q escapes {} and {G}, we don't want that to have it interpolated later.
+			    quotedArg="${quotedArg//"$escapedCatalogMarker"/$EACHSPLIT_CATALOG_MARKER}"
+			    quotedArg="${quotedArg//"$escapedFileMarker"/$EACHSPLIT_FILE_MARKER}"
+			    quotedArg="${quotedArg//"$escapedGlobMarker"/$EACHSPLIT_GLOB_MARKER}"
+			    cmd+="${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${ONALLSPLITS_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			commands+="${commands:+ $ONALLSPLITS_COMMAND_JOINER }${cmd}"
+			;;
+	--)		shift; break;;
+	-*)		if argCount=$($ONALLSPLITS_EACHSPLIT --understand-for split --understand-for piece-info --understand-for piece-modifier --understand-for input --understands "$@"); then
+			    eachSplitArgs+=("${@:1:argCount}")
+			    shift $argCount
+			elif [ $? -eq 2 ]; then
+			    exit 2
+			elif argCount=$(applyMapping --understand-for command-outputs --understands "$@"); then
+			    applyMappingArgs+=("${@:1:argCount}")
+			    shift $argCount
+			elif [ $? -eq 2 ]; then
+			    exit 2
+			else
+			    { echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2
+			fi
+			;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    # Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+    # undo the effects of eval.
+    printf -v quotedSimpleCommand '%q ' "$@"; quotedSimpleCommand="${quotedSimpleCommand% }"
+    printf -v escapedCatalogMarker %q "$EACHSPLIT_CATALOG_MARKER"
+    printf -v escapedFileMarker %q "$EACHSPLIT_FILE_MARKER"
+    printf -v escapedGlobMarker %q "$EACHSPLIT_GLOB_MARKER"
+    # %q escapes {C}, {}, and {G}, we don't want that to have it interpolated later.
+    quotedSimpleCommand="${quotedSimpleCommand//"$escapedCatalogMarker"/$EACHSPLIT_CATALOG_MARKER}"
+    quotedSimpleCommand="${quotedSimpleCommand//"$escapedFileMarker"/$EACHSPLIT_FILE_MARKER}"
+    quotedSimpleCommand="${quotedSimpleCommand//"$escapedGlobMarker"/$EACHSPLIT_GLOB_MARKER}"
+    commands+="${commands:+ $ONALLSPLITS_COMMAND_JOINER }${quotedSimpleCommand}"
+fi
+if [ -z "$commands" ]; then
+    echo "ERROR: No COMMAND(s) specified; need to pass -c|--command \"COMMANDLINE\", or --exec SIMPLECOMMAND [...] $ONALLSPLITS_EXEC_END or SIMPLECOMMAND."
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+
+# An $EACHSPLIT_GLOB_MARKER is inserted literally into --command "$commands"
+# (actually --command $quotedCommands), so it would be expanded, and the
+# concatenation of the COMMAND and glob would vanish because 'nullglob' is set.
+# We need the glob to be inserted in escaped form, so only the eval() in
+# applyMapping will expand it. This flag allows this.
+export EACHSPLIT_GLOB_ESCAPED=t
+
+# We always pass $EACHSPLIT_MAPPING_MARKER for applyMapping, but if COMMAND(s)
+# don't contain $EACHSPLIT_FILE_MARKER or $EACHSPLIT_GLOB_MARKER, we still want
+# all piece filespecs to be appended to COMMAND(s).
+export EACHSPLIT_MAPPING_MARKER_INTERPOLATE_SEPARATELY=t
+
+# We use applyMapping --command because concatenating everything is
+# straightforward and we ourselves might have been passed a complete
+# COMMANDLINE. However, the piece filespecs that are appended if no marker is
+# present are passed as separate arguments, i.e. --exec semantics. Even worse,
+# they are always appended, so actually SIMPLECOMMAND semantics.
+# As there's just a single --command, we can clear the command joiner so the
+# piece filespecs that are parsed as SIMPLECOMMAND are (in properly escaped
+# form) appended to the COMMANDLINE.
+export APPLYMAPPING_COMMAND_JOINER=''
+
+exec $ONALLSPLITS_EACHSPLIT "${eachSplitArgs[@]}" --consumer-exec \
+    applyMapping "${applyMappingArgs[@]}" --field-separator $'\t' --mapping-file "$EACHSPLIT_MAPPING_MARKER" --command "$commands" "$EACHSPLIT_EXEC_END"
