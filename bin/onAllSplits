@@ -163,4 +163,4 @@ export EACHSPLIT_MAPPING_MARKER_INTERPOLATE_SEPARATELY=t
 export APPLYMAPPING_COMMAND_JOINER=''
 
 exec $ONALLSPLITS_EACHSPLIT "${eachSplitArgs[@]}" --consumer-exec \
-    applyMapping --mapping-file "$EACHSPLIT_MAPPING_MARKER" --command "$commands" "$EACHSPLIT_EXEC_END"
+    applyMapping --field-separator $'\t' --mapping-file "$EACHSPLIT_MAPPING_MARKER" --command "$commands" "$EACHSPLIT_EXEC_END"
