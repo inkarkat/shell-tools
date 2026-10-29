@@ -1,0 +1,4 @@
+#!/bin/sh
+
+COMMANDONALLSPLITS_ONALLSPLITS=onAllHeaders \
+    exec commandOnAllSplits "$@"
