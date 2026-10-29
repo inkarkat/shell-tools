@@ -9,7 +9,7 @@ getUsage()
 	[ "$arg" = split ] || set -- "$@" "$arg"
 	shift
     done
-    eachSplit $usageOption "$@"
+    [ $# -eq 0 ] || eachSplit $usageOption "$@"
 }
 
 printUsage()
@@ -31,7 +31,7 @@ printUsage()
 case "$1" in
     --help|-h|-\?)	shift; printUsage "$0"; exit 0;;
     --get-@(short|long)-usage)
-		    getUsage "$@"; exit $?;;
+			getUsage "$@"; exit $?;;
 esac
 
 exec eachSplit --splitter csplit --prefix=PREFIX OPTIONS FILE ARGS \; "$@"
