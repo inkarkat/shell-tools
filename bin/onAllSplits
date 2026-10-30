@@ -18,7 +18,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, they can
     # skim the long one.
-    printf 'Usage: %q %s\n' "${ONALLSPLITS:-$(basename "$1")}" "$($ONALLSPLITS_EACHSPLIT --get-short-usage split piece-info piece-modifier) $(applyMapping --get-short-usage command-outputs) [-?|-h|--help] ..."
+    printf 'Usage: %q %s\n' "${ONALLSPLITS:-$(basename "$1")}" "$($ONALLSPLITS_EACHSPLIT --get-short-usage splitter split piece-info piece-modifier) $(applyMapping --get-short-usage command-outputs) [-?|-h|--help] ..."
     echo
     [ ! "$ONALLSPLITS_FILE_INPUT" ] || printf 'Usage: cat FILE [...] | %q %s\n' "${ONALLSPLITS:-$(basename "$1")}" "... ${ONALLSPLITS_SHORT_ARGS:--c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${ONALLSPLITS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]}"
     printf 'Usage: %q %s\n' "${ONALLSPLITS:-$(basename "$1")}" "... $($ONALLSPLITS_EACHSPLIT --get-short-usage input)... ${ONALLSPLITS_SHORT_ARGS:--c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${ONALLSPLITS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]}"
@@ -64,7 +64,7 @@ HELPDESCRIPTION
 			$EACHSPLIT_FILE_MARKER marker inside CMD}.
 HELPTEXT
     fi
-    $ONALLSPLITS_EACHSPLIT --get-long-usage split piece-info piece-modifier ${ONALLSPLITS_FILE_INPUT:+input}
+    $ONALLSPLITS_EACHSPLIT --get-long-usage splitter split piece-info piece-modifier ${ONALLSPLITS_FILE_INPUT:+input}
     applyMapping --get-long-usage command-outputs
     echo
     cat <<HELPTEXT
@@ -82,7 +82,7 @@ HELPTEXT
 
 understandsEachSplitArg()
 {
-    $ONALLSPLITS_EACHSPLIT --understand-for split --understand-for piece-info --understand-for piece-modifier --understand-for input --understands "$@"
+    $ONALLSPLITS_EACHSPLIT --understand-for splitter --understand-for split --understand-for piece-info --understand-for piece-modifier --understand-for input --understands "$@"
 }
 
 typeset -a eachSplitArgs=()
