@@ -1,0 +1,16 @@
+Is a simple one.
+~/tmp/test                                        |14-Sep-2026 18:30:11 !17401
+Is the next one
+
+and has more text.
+~/tmp/test                                        |14-Sep-2026 18:45:04 !17402
+$ motd
+Aller
+guten
+Dinge
+sind
+drei.
+~/tmp/test                                        |14-Sep-2026 19:28:35 !17403
+$ cat /etc/motd
+Last but not least.
+~/tmp/test                                        |14-Sep-2026 19:31:54 !17404
