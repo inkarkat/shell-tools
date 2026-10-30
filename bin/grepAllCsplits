@@ -1,0 +1,5 @@
+#!/bin/bash
+
+COMMANDONALLSPLITS="$(basename -- "${BASH_SOURCE[0]}")" \
+GREPALLSPLITS_COMMANDONALLSPLITS=commandOnAllCsplits \
+    exec grepAllSplits "$@"

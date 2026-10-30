@@ -39,8 +39,10 @@ getShortUsage()
     do
 	local hadTopic=
 	case "$1" in
+	    ''|splitter)
+		printf %s "${usageSep}${hadTopic:+ }" "[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}] [SPLIT-OPTIONS ...]"; hadTopic=t;;&
 	    ''|split)
-		printf %s "${usageSep}${hadTopic:+ }" "[--splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}] [SPLIT-OPTIONS ...] [--elide-first] [--elide-empty-first] [--elide-last] [--elide-empty-last]"; hadTopic=t;;&
+		printf %s "${usageSep}${hadTopic:+ }" "[--elide-first] [--elide-empty-first] [--elide-last] [--elide-empty-last]"; hadTopic=t;;&
 	    ''|piece-info)
 		printf %s "${usageSep}${hadTopic:+ }" "[--piece-info-extractor-command COMMANDLINE|--piece-info-extractor-exec CMD [...]${extractorMarker:+ [}${extractorMarker}${extractorMarker:+] [...]} ${EACHSPLIT_EXTRACTOR_END}]"; hadTopic=t;;&
 	    ''|piece-modifier)
@@ -66,13 +68,18 @@ getLongUsage()
 	local topic="$1"; shift
 	local hadTopic=
 	case "$topic" in
-	    ''|split)
+	    ''|splitter)
 		cat <<HELPTEXT
     --splitter SPLIT-COMMAND OPTIONS FILE PREFIX ARGS ${EACHSPLIT_SPLITTER_END}
 			Use a different split command; OPTIONS, FILE, PREFIX,
 			and ARGS are replaced by the passed SPLIT-OPTIONS, input
 			file, output directory + file prefix, and trailing ARGS
 			respectively.
+HELPTEXT
+		hadTopic=t
+		;;&
+	    ''|split)
+		cat <<HELPTEXT
     --elide-first	Skip the first piece file.
     --elide-empty-first	If the splitter creates an empty first file, remove it
 			before iteration.
@@ -195,7 +202,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, they can
     # skim the long one.
-    printf 'Usage: %q %s\n' "$(basename "$1")" "$(getShortUsage split piece-info piece-modifier) [-?|-h|--help] ..."
+    printf 'Usage: %q %s\n' "$(basename "$1")" "$(getShortUsage splitter split piece-info piece-modifier) [-?|-h|--help] ..."
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "... $(getShortUsage iteration-options iteration)"
     printf 'Usage: %q %s\n' "$(basename "$1")" "... $(getShortUsage consumer)"
@@ -313,7 +320,7 @@ do
 			    echo 'ERROR: --splitter must be followed by at least one ARGUMENT.'; echo; printUsage "$0"
 			    exit 2
 			fi >&2
-			argCount $((originalArgNum - $#)) split
+			argCount $((originalArgNum - $#)) splitter
 			;;
 	--elide-first)
 			shift; isElideFirst=t; option split;;

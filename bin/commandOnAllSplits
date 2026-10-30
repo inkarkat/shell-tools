@@ -1,0 +1,48 @@
+#!/bin/bash
+
+${DEBUG:+eval $(debugtrace -o $- -- "$@")}
+
+: ${COMMANDONALLSPLITS_ONALLSPLITS:=onAllSplits}
+
+isHelp=
+typeset -a onAllSplitsArgs=()
+typeset -a commandArgs=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	onAllSplitsArgs+=("$1") ; shift; isHelp=t;;
+	--)		[ "$ONALLSPLITS_PARSE_PLAIN_ARGS" ] && shift	# For eachCsplit, the -- is needed to separate CSPLIT-OPTIONS from COMMAND-ARGS; do not add this to COMMAND-ARGS.
+			break
+			;;
+	*)		if { [ "$ONALLSPLITS_PARSE_PLAIN_ARGS" ] || [[ "$1" =~ ^- ]]; } \
+			    && argCount=$($COMMANDONALLSPLITS_ONALLSPLITS --understands "$@")
+			then
+			    onAllSplitsArgs+=("${@:1:argCount}")
+			    shift $argCount
+			elif [ $? -eq 2 ]; then
+			    exit 2
+			else
+			    commandArgs+=("$1"); shift
+			fi
+			;;
+    esac
+done
+
+commandOnAllSplitsCommand="${COMMANDONALLSPLITS_COMMAND:-COMMANDONALLSPLITS-COMMAND}"
+
+: ${COMMANDONALLSPLITS:=COMMANDONALLSPLITS_COMMAND=COMMAND $(basename -- "${BASH_SOURCE[0]}")}
+: ${ONALLSPLITS_WHAT:=execute ${commandOnAllSplitsCommand} to work on them.}
+export ONALLSPLITS_WHAT
+: ${ONALLSPLITS_SHORT_ARGS:=[${commandOnAllSplitsCommand^^}-ARGS ...]}
+export ONALLSPLITS_SHORT_ARGS
+: ${ONALLSPLITS_LONG_ARGS:=}
+export ONALLSPLITS_LONG_ARGS
+
+if [ -z "$COMMANDONALLSPLITS_COMMAND" ] && [ ! "$isHelp" ]; then
+    echo >&2 "ERROR: COMMANDONALLSPLITS_COMMAND is not set."
+    exit 2
+fi
+
+${DEBUG:+eval $(debugtrace --point main -o $- --)}
+ONALLSPLITS="$COMMANDONALLSPLITS" \
+    exec $COMMANDONALLSPLITS_ONALLSPLITS "${onAllSplitsArgs[@]}" -- $COMMANDONALLSPLITS_COMMAND "${commandArgs[@]}" "$@"

@@ -1,0 +1,5 @@
+#!/bin/sh
+
+COMMANDONALLSPLITS_ONALLSPLITS=onAllCsplits \
+ONALLSPLITS_PARSE_PLAIN_ARGS=t \
+    exec commandOnAllSplits "$@"

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+${DEBUG:+eval $(debugtrace -o $- -- "$@")}
+
 : ${ONALLSPLITS_FILE_INPUT=t}	# Whether to accept --file FILE input.
 : ${ONALLSPLITS_EACHSPLIT:=eachSplit}
 : ${ONALLSPLITS_COMMAND_JOINER=;}
@@ -16,7 +18,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, they can
     # skim the long one.
-    printf 'Usage: %q %s\n' "${ONALLSPLITS:-$(basename "$1")}" "$($ONALLSPLITS_EACHSPLIT --get-short-usage split piece-info piece-modifier) $(applyMapping --get-short-usage command-outputs) [-?|-h|--help] ..."
+    printf 'Usage: %q %s\n' "${ONALLSPLITS:-$(basename "$1")}" "$($ONALLSPLITS_EACHSPLIT --get-short-usage splitter split piece-info piece-modifier) $(applyMapping --get-short-usage command-outputs) [-?|-h|--help] ..."
     echo
     [ ! "$ONALLSPLITS_FILE_INPUT" ] || printf 'Usage: cat FILE [...] | %q %s\n' "${ONALLSPLITS:-$(basename "$1")}" "... ${ONALLSPLITS_SHORT_ARGS:--c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${ONALLSPLITS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]}"
     printf 'Usage: %q %s\n' "${ONALLSPLITS:-$(basename "$1")}" "... $($ONALLSPLITS_EACHSPLIT --get-short-usage input)... ${ONALLSPLITS_SHORT_ARGS:--c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${ONALLSPLITS_EXEC_END} [--exec ...] | [--] SIMPLECOMMAND [...]}"
@@ -62,7 +64,7 @@ HELPDESCRIPTION
 			$EACHSPLIT_FILE_MARKER marker inside CMD}.
 HELPTEXT
     fi
-    $ONALLSPLITS_EACHSPLIT --get-long-usage split piece-info piece-modifier ${ONALLSPLITS_FILE_INPUT:+input}
+    $ONALLSPLITS_EACHSPLIT --get-long-usage splitter split piece-info piece-modifier ${ONALLSPLITS_FILE_INPUT:+input}
     applyMapping --get-long-usage command-outputs
     echo
     cat <<HELPTEXT
@@ -78,6 +80,11 @@ EXIT STATUS:
 HELPTEXT
 }
 
+understandsEachSplitArg()
+{
+    $ONALLSPLITS_EACHSPLIT --understand-for splitter --understand-for split --understand-for piece-info --understand-for piece-modifier --understand-for input --understands "$@"
+}
+
 typeset -a eachSplitArgs=()
 typeset -a applyMappingArgs=()
 commands=
@@ -85,6 +92,8 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--understands)	shift; understandsEachSplitArg "$@"; exit $?;;
+
 	--command|-c)	shift; commands+="${commands:+ $ONALLSPLITS_COMMAND_JOINER }$1"; shift;;
 	--exec)		shift
 			cmd=
@@ -109,7 +118,7 @@ do
 			commands+="${commands:+ $ONALLSPLITS_COMMAND_JOINER }${cmd}"
 			;;
 	--)		shift; break;;
-	-*)		if argCount=$($ONALLSPLITS_EACHSPLIT --understand-for split --understand-for piece-info --understand-for piece-modifier --understand-for input --understands "$@"); then
+	-*)		if argCount=$(understandsEachSplitArg "$@"); then
 			    eachSplitArgs+=("${@:1:argCount}")
 			    shift $argCount
 			elif [ $? -eq 2 ]; then
@@ -123,7 +132,17 @@ do
 			    { echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2
 			fi
 			;;
-	*)		break;;
+	*)		if [ "$ONALLSPLITS_PARSE_PLAIN_ARGS" ] \
+			    && argCount=$(understandsEachSplitArg "$@")
+			then
+			    eachSplitArgs+=("${@:1:argCount}")
+			    shift $argCount
+			elif [ $? -eq 2 ]; then
+			    exit 2
+			else
+			    break
+			fi
+			;;
     esac
 done
 if [ $# -ne 0 ]; then
@@ -169,5 +188,6 @@ export EACHSPLIT_MAPPING_MARKER_INTERPOLATE_SEPARATELY=t
 # form) appended to the COMMANDLINE.
 export APPLYMAPPING_COMMAND_JOINER=''
 
+${DEBUG:+eval $(debugtrace --point main -o $- --)}
 exec $ONALLSPLITS_EACHSPLIT "${eachSplitArgs[@]}" --consumer-exec \
     applyMapping "${applyMappingArgs[@]}" --field-separator $'\t' --mapping-file "$EACHSPLIT_MAPPING_MARKER" --command "$commands" "$EACHSPLIT_EXEC_END"

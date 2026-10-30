@@ -1,15 +1,26 @@
 #!/bin/bash
 shopt -qs extglob
 
-getUsage()
+getShortUsage()
 {
-    local usageOption="${1:?}"; shift
     for arg
     do
-	[ "$arg" = split ] || set -- "$@" "$arg"
-	shift
+        [ "$arg" = splitter ] \
+	    && printf %s "[CSPLIT-OPTIONS ...] " \
+	    || set -- "$@" "$arg"
+        shift
     done
-    eachSplit $usageOption "$@"
+    [ $# -eq 0 ] || eachSplit --get-short-usage "$@"
+}
+
+getLongUsage()
+{
+    for arg
+    do
+        [ "$arg" = splitter ] || set -- "$@" "$arg"
+        shift
+    done
+    [ $# -eq 0 ] || eachSplit --get-long-usage "$@"
 }
 
 printUsage()
@@ -30,8 +41,10 @@ printUsage()
 
 case "$1" in
     --help|-h|-\?)	shift; printUsage "$0"; exit 0;;
-    --get-@(short|long)-usage)
-		    getUsage "$@"; exit $?;;
+    --get-short-usage)
+		    shift; getShortUsage "$@"; exit $?;;
+    --get-long-usage)
+		    shift; getLongUsage "$@"; exit $?;;
 esac
 
 exec eachSplit --splitter csplit --prefix=PREFIX OPTIONS FILE ARGS \; "$@"
