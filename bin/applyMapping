@@ -17,7 +17,7 @@ getShortUsage()
 	    ''|mapping)
 		printf %s "${usageSep}${hadTopic:+ }" '-m|--mapping-file MAPPING-FILE|- [-F|--field-separator FS]'; hadTopic=t;;&
 	    ''|command-outputs)
-		printf %s "${usageSep}${hadTopic:+ }" '[-1|--stdout|-2|--stderr]'; hadTopic=t;;&
+		printf %s "${usageSep}${hadTopic:+ }" '[-1|--stdout|-2|--stderr] [-u|--unbuffered]'; hadTopic=t;;&
 	    ''|commands)
 		printf %s "${usageSep}${hadTopic:+ }" "-c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${APPLYMAPPING_EXEC_END} [--exec ...]"; hadTopic=t;;&
 	    ''|inputs)
@@ -36,8 +36,6 @@ getLongUsage()
     do
 	local topic="$1"; shift
 	local hadTopic=
-	#local optionName="${1:?}"; shift
-	#local description="$1"; shift
 	case "$topic" in
 	    ''|mapping)
 		cat <<HELPTEXT
@@ -52,6 +50,7 @@ HELPTEXT
 		cat <<HELPTEXT
     --stdout|-1		Only substitute in standard output.
     --stderr|-2		Only substitute in error output.
+    --unbuffered|-u	Immediately output each line.
 HELPTEXT
 		hadTopic=t
 		;;&
@@ -121,6 +120,7 @@ HELPTEXT
 
 mappingFilespec=
 typeset -a awkArgs=()
+isBuffered=t; [ -t 1 ] && isBuffered=
 typeset -a files=()
 commands=
 typeset -a mapDescriptors=()
@@ -167,6 +167,8 @@ do
 
 	--stdout|-1)	shift; mapDescriptors[0]=1; option command-outputs;;
 	--stderr|-2)	shift; mapDescriptors[1]=2; option command-outputs;;
+	--unbuffered|-u)
+			shift; isBuffered=; option command-outputs;;
 	--command|-c)	shift; commands+="${commands:+ $APPLYMAPPING_COMMAND_JOINER }$1"; shift; parameter commands;;
 	--exec)		originalArgNum=$#; shift
 			cmd=
@@ -216,7 +218,9 @@ fi >&2
 
 map()
 {
-    awk "${awkArgs[@]}" '
+    awk \
+	-v "isBuffered=$isBuffered" \
+	"${awkArgs[@]}" '
 NR == FNR {
     if (NF >= 2) {
 	key = $1
@@ -238,6 +242,7 @@ NR == FNR {
 	$0 = gensub(keys[i], mapping[keys[i]], "g", $0)
     }
     print
+    if (! isBuffered) fflush()
 }
 ' "$mappingFilespec" "$@"
 }
