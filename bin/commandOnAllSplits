@@ -1,5 +1,7 @@
 #!/bin/bash
 
+${DEBUG:+eval $(debugtrace -o $- -- "$@")}
+
 : ${COMMANDONALLSPLITS_ONALLSPLITS:=onAllSplits}
 
 isHelp=
@@ -38,5 +40,6 @@ if [ -z "$COMMANDONALLSPLITS_COMMAND" ] && [ ! "$isHelp" ]; then
     exit 2
 fi
 
+${DEBUG:+eval $(debugtrace --point main -o $- --)}
 ONALLSPLITS="$COMMANDONALLSPLITS" \
     exec $COMMANDONALLSPLITS_ONALLSPLITS "${onAllSplitsArgs[@]}" -- $COMMANDONALLSPLITS_COMMAND "${commandArgs[@]}" "$@"

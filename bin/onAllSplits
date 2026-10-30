@@ -1,5 +1,7 @@
 #!/bin/bash
 
+${DEBUG:+eval $(debugtrace -o $- -- "$@")}
+
 : ${ONALLSPLITS_FILE_INPUT=t}	# Whether to accept --file FILE input.
 : ${ONALLSPLITS_EACHSPLIT:=eachSplit}
 : ${ONALLSPLITS_COMMAND_JOINER=;}
@@ -176,5 +178,6 @@ export EACHSPLIT_MAPPING_MARKER_INTERPOLATE_SEPARATELY=t
 # form) appended to the COMMANDLINE.
 export APPLYMAPPING_COMMAND_JOINER=''
 
+${DEBUG:+eval $(debugtrace --point main -o $- --)}
 exec $ONALLSPLITS_EACHSPLIT "${eachSplitArgs[@]}" --consumer-exec \
     applyMapping "${applyMappingArgs[@]}" --field-separator $'\t' --mapping-file "$EACHSPLIT_MAPPING_MARKER" --command "$commands" "$EACHSPLIT_EXEC_END"
