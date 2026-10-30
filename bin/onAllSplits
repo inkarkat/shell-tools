@@ -132,7 +132,17 @@ do
 			    { echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2
 			fi
 			;;
-	*)		break;;
+	*)		if [ "$ONALLSPLITS_PARSE_PLAIN_ARGS" ] \
+			    && argCount=$(understandsEachSplitArg "$@")
+			then
+			    eachSplitArgs+=("${@:1:argCount}")
+			    shift $argCount
+			elif [ $? -eq 2 ]; then
+			    exit 2
+			else
+			    break
+			fi
+			;;
     esac
 done
 if [ $# -ne 0 ]; then

@@ -11,8 +11,12 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	onAllSplitsArgs+=("$1") ; shift; isHelp=t;;
-	--)		break;;
-	-*)		if argCount=$($COMMANDONALLSPLITS_ONALLSPLITS --understands "$@"); then
+	--)		[ "$ONALLSPLITS_PARSE_PLAIN_ARGS" ] && shift	# For eachCsplit, the -- is needed to separate CSPLIT-OPTIONS from COMMAND-ARGS; do not add this to COMMAND-ARGS.
+			break
+			;;
+	*)		if { [ "$ONALLSPLITS_PARSE_PLAIN_ARGS" ] || [[ "$1" =~ ^- ]]; } \
+			    && argCount=$($COMMANDONALLSPLITS_ONALLSPLITS --understands "$@")
+			then
 			    onAllSplitsArgs+=("${@:1:argCount}")
 			    shift $argCount
 			elif [ $? -eq 2 ]; then
@@ -21,7 +25,6 @@ do
 			    commandArgs+=("$1"); shift
 			fi
 			;;
-	*)		commandArgs+=("$1"); shift;;
     esac
 done
 
